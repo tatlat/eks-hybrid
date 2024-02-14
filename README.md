@@ -11,12 +11,12 @@ To initialize a node:
 nodeadm init
 ```
 
-> [!NOTE]
+> **Note**
 > This happens automatically, via a `systemd` service, on AL2023-based EKS AMI's.
 
 ---
 
-## Configuration source
+## Configuration
 
 `nodeadm` uses a YAML configuration schema that will look familiar to Kubernetes users.
 
