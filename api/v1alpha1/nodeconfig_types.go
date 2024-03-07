@@ -33,6 +33,7 @@ type NodeConfigSpec struct {
 	Containerd ContainerdOptions `json:"containerd,omitempty"`
 	Instance   InstanceOptions   `json:"instance,omitempty"`
 	Kubelet    KubeletOptions    `json:"kubelet,omitempty"`
+	Hybrid     *HybridOptions    `json:"hybrid,omitempty"`
 }
 
 // ClusterDetails contains the coordinates of your EKS cluster.
@@ -98,3 +99,49 @@ const (
 	// LocalStorageMount will mount each local disk individually
 	LocalStorageMount LocalStorageStrategy = "Mount"
 )
+
+// HybridOptions defines the options specific to hybrid node enrollment.
+type HybridOptions struct {
+	// NodeName is the name the node will adopt.
+	NodeName string `json:"nodeName,omitempty"`
+
+	// Region is an AWS region (e.g. us-east-1) used to retrieve regional artifacts.
+	Region string `json:"region,omitempty"`
+
+	// IP is the IP address to use for the node.
+	IP string `json:"ip,omitempty"`
+
+	// IAMRolesAnywhere includes IAM Roles Anywhere specific configuration and is mutually exclusive
+	// with SSM.
+	IAMRolesAnywhere *IAMRolesAnywhere `json:"iamRolesAnywhere,omitempty"`
+
+	// SSM includes Systems Manager specific configuration and is mutually exclusive with
+	// IAMRolesAnywhere.
+	SSM *SSM `json:"ssm,omitempty"`
+}
+
+// IsHybridNode returns true when the nc.Hybrid configuration is non-nil.
+func (nc NodeConfig) IsHybridNode() bool {
+	return nc.Spec.Hybrid != nil
+}
+
+// IAMRolesAnywhere defines IAM Roles Anywhere specific configuration.
+type IAMRolesAnywhere struct {
+	// TrustAnchorARN is the ARN of the trust anchor.
+	TrustAnchorARN string `json:"trustAnchorArn,omitempty"`
+
+	// ProfileARN is the ARN of the profile linked with the Hybrid IAM Role.
+	ProfileARN string `json:"profileArn,omitempty"`
+
+	// RoleARN is the role to assume when retrieving temporary credentials.
+	RoleARN string `json:"roleArn,omitempty"`
+}
+
+// SSM defines Systems MAnager specific configuration.
+type SSM struct {
+	// ActivationToken is the token generated when creating an SSM activation.
+	ActivationToken string `json:"activationToken,omitempty"`
+
+	// ActivationToken is the ID generated when creating an SSM activation.
+	ActivationID string `json:"activationId,omitempty"`
+}
