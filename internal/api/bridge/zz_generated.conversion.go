@@ -187,7 +187,6 @@ func Convert_api_ContainerdOptions_To_v1alpha1_ContainerdOptions(in *api.Contain
 func autoConvert_v1alpha1_HybridOptions_To_api_HybridOptions(in *v1alpha1.HybridOptions, out *api.HybridOptions, s conversion.Scope) error {
 	out.NodeName = in.NodeName
 	out.Region = in.Region
-	out.IP = in.IP
 	out.IAMRolesAnywhere = (*api.IAMRolesAnywhere)(unsafe.Pointer(in.IAMRolesAnywhere))
 	out.SSM = (*api.SSM)(unsafe.Pointer(in.SSM))
 	return nil
@@ -201,7 +200,6 @@ func Convert_v1alpha1_HybridOptions_To_api_HybridOptions(in *v1alpha1.HybridOpti
 func autoConvert_api_HybridOptions_To_v1alpha1_HybridOptions(in *api.HybridOptions, out *v1alpha1.HybridOptions, s conversion.Scope) error {
 	out.NodeName = in.NodeName
 	out.Region = in.Region
-	out.IP = in.IP
 	out.IAMRolesAnywhere = (*v1alpha1.IAMRolesAnywhere)(unsafe.Pointer(in.IAMRolesAnywhere))
 	out.SSM = (*v1alpha1.SSM)(unsafe.Pointer(in.SSM))
 	return nil

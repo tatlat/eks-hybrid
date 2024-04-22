@@ -46,7 +46,6 @@ _Appears in:_
 | --- | --- |
 | `nodeName` _string_ | NodeName is the name the node will adopt. |
 | `region` _string_ | Region is an AWS region (e.g. us-east-1) used to retrieve regional artifacts. |
-| `ip` _string_ | IP is the IP address to use for the node. |
 | `iamRolesAnywhere` _[IAMRolesAnywhere](#iamrolesanywhere)_ | IAMRolesAnywhere includes IAM Roles Anywhere specific configuration and is mutually exclusive with SSM. |
 | `ssm` _[SSM](#ssm)_ | SSM includes Systems Manager specific configuration and is mutually exclusive with IAMRolesAnywhere. |
 

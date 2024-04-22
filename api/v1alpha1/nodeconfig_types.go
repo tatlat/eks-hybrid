@@ -108,9 +108,6 @@ type HybridOptions struct {
 	// Region is an AWS region (e.g. us-east-1) used to retrieve regional artifacts.
 	Region string `json:"region,omitempty"`
 
-	// IP is the IP address to use for the node.
-	IP string `json:"ip,omitempty"`
-
 	// IAMRolesAnywhere includes IAM Roles Anywhere specific configuration and is mutually exclusive
 	// with SSM.
 	IAMRolesAnywhere *IAMRolesAnywhere `json:"iamRolesAnywhere,omitempty"`

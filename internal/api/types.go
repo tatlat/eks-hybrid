@@ -109,7 +109,6 @@ const (
 type HybridOptions struct {
 	NodeName         string            `json:"nodeName,omitempty"`
 	Region           string            `json:"region,omitempty"`
-	IP               string            `json:"ip,omitempty"`
 	IAMRolesAnywhere *IAMRolesAnywhere `json:"iamRolesAnywhere,omitempty"`
 	SSM              *SSM              `json:"ssm,omitempty"`
 }
