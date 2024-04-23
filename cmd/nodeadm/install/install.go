@@ -68,7 +68,7 @@ func (c *installCmd) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 
 	// Ensure hybrid configuration
 
-	zap.L().Info("Validating configuration")
+	log.Info("Validating configuration")
 	if err := api.ValidateNodeConfig(nodeCfg); err != nil {
 		return err
 	}
