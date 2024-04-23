@@ -11,7 +11,6 @@ const BinPath = "/etc/eks/image-credential-provider/image-credential-provider"
 
 // Source represents a source that serves a image-credential-provider binary.
 type Source interface {
-	// GetImageCredentialProvider retrieves the image-credential-provider binary.
 	GetImageCredentialProvider(context.Context) (artifact.Source, error)
 }
 

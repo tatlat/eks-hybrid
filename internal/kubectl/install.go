@@ -11,7 +11,6 @@ const BinPath = "/usr/local/bin/kubectl"
 
 // Source represents a source that serves a kubectl binary.
 type Source interface {
-	// GetKubectl retrieves the kubectl binary.
 	GetKubectl(context.Context) (artifact.Source, error)
 }
 

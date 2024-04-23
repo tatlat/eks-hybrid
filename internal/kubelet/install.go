@@ -19,7 +19,6 @@ var kubeletUnitFile []byte
 
 // Source represents a source that serves a kubelet binary.
 type Source interface {
-	// GetKubelet retrieves the kubelet.
 	GetKubelet(context.Context) (artifact.Source, error)
 }
 
