@@ -86,6 +86,10 @@ func (r Release) GetKubelet(ctx context.Context) (artifact.Source, error) {
 	obj, err := r.Client.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(r.getKey("kubelet")),
+	}, func(o *s3.Options) {
+		// TODO(chrisdoherty) Investigate alternatives that optimize for geographical location.
+		// Buckets aren't replicated so we need to use the right region for querying S3.
+		o.Region = "us-west-2"
 	})
 	if err != nil {
 		return artifact.Source{}, err
@@ -99,6 +103,10 @@ func (r Release) GetKubectl(ctx context.Context) (artifact.Source, error) {
 	obj, err := r.Client.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(r.getKey("kubectl")),
+	}, func(o *s3.Options) {
+		// TODO(chrisdoherty) Investigate alternatives that optimize for geographical location.
+		// Buckets aren't replicated so we need to use the right region for querying S3.
+		o.Region = "us-west-2"
 	})
 	if err != nil {
 		return artifact.Source{}, err
@@ -112,6 +120,10 @@ func (r Release) GetIAMAuthenticator(ctx context.Context) (artifact.Source, erro
 	obj, err := r.Client.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(r.getKey("aws-iam-authenticator")),
+	}, func(o *s3.Options) {
+		// TODO(chrisdoherty) Investigate alternatives that optimize for geographical location.
+		// Buckets aren't replicated so we need to use the right region for querying S3.
+		o.Region = "us-west-2"
 	})
 	if err != nil {
 		return artifact.Source{}, err
@@ -125,6 +137,10 @@ func (r Release) GetImageCredentialProvider(ctx context.Context) (artifact.Sourc
 	obj, err := r.Client.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(r.getKey("ecr-credental-provider")),
+	}, func(o *s3.Options) {
+		// TODO(chrisdoherty) Investigate alternatives that optimize for geographical location.
+		// Buckets aren't replicated so we need to use the right region for querying S3.
+		o.Region = "us-west-2"
 	})
 	if err != nil {
 		return artifact.Source{}, err
