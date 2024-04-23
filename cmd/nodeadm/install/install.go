@@ -124,7 +124,7 @@ func (c *installCmd) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return err
 	}
 
-	if err := iamrolesanywhere.Install(context.Background(), signingHelper, latest); err != nil {
+	if err := iamrolesanywhere.Install(ctx, signingHelper, latest); err != nil {
 		return err
 	}
 
