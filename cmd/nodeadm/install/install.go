@@ -61,11 +61,6 @@ func (c *installCmd) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	}
 	log.Info("Loaded configuration", zap.Reflect("config", nodeCfg))
 
-	log.Info("Enriching configuration")
-	if err := enrichConfig(log, nodeCfg); err != nil {
-		return err
-	}
-
 	// Ensure hybrid configuration
 
 	log.Info("Validating configuration")
@@ -128,16 +123,5 @@ func (c *installCmd) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return err
 	}
 
-	return nil
-}
-
-// Various initializations and verifications of the NodeConfig and
-// perform in-place updates when allowed by the user
-func enrichConfig(log *zap.Logger, cfg *api.NodeConfig) error {
-	instanceDetails := api.InstanceDetails{
-		Region: cfg.Spec.Hybrid.Region,
-	}
-	cfg.Status.Instance = instanceDetails
-	log.Info("Instance details populated", zap.Reflect("details", instanceDetails))
 	return nil
 }
