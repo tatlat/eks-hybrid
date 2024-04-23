@@ -16,7 +16,6 @@ import (
 	"github.com/awslabs/amazon-eks-ami/nodeadm/internal/aws/eks"
 	"github.com/awslabs/amazon-eks-ami/nodeadm/internal/cli"
 	"github.com/awslabs/amazon-eks-ami/nodeadm/internal/configprovider"
-	"github.com/awslabs/amazon-eks-ami/nodeadm/internal/hybrid"
 	"github.com/awslabs/amazon-eks-ami/nodeadm/internal/iamrolesanywhere"
 	"github.com/awslabs/amazon-eks-ami/nodeadm/internal/imagecredentialprovider"
 	"github.com/awslabs/amazon-eks-ami/nodeadm/internal/kubectl"
@@ -74,7 +73,7 @@ func (c *installCmd) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return err
 	}
 
-	if err := hybrid.EnsureAWSConfig(hybrid.AWSConfig{
+	if err := iamrolesanywhere.EnsureAWSConfig(iamrolesanywhere.AWSConfig{
 		TrustAnchorARN: nodeCfg.Spec.Hybrid.IAMRolesAnywhere.TrustAnchorARN,
 		ProfileARN:     nodeCfg.Spec.Hybrid.IAMRolesAnywhere.ProfileARN,
 		RoleARN:        nodeCfg.Spec.Hybrid.IAMRolesAnywhere.RoleARN,
@@ -89,7 +88,7 @@ func (c *installCmd) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	log.Info("Loading configuration")
 	awsCfg, err := config.LoadDefaultConfig(ctx,
 		config.WithSharedConfigFiles([]string{c.awsConfig}),
-		config.WithSharedConfigProfile(hybrid.ProfileName))
+		config.WithSharedConfigProfile(iamrolesanywhere.ProfileName))
 	if err != nil {
 		return err
 	}

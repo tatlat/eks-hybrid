@@ -1,4 +1,4 @@
-package hybrid
+package iamrolesanywhere
 
 import (
 	"bytes"
@@ -9,8 +9,6 @@ import (
 	"os"
 	"path"
 	"text/template"
-
-	"go.uber.org/multierr"
 )
 
 const (
@@ -28,6 +26,7 @@ var rawAWSConfigTpl = fmt.Sprintf(unformattedRawAWSConfigTpl, ProfileName)
 
 var awsConfigTpl = template.Must(template.New("").Parse(rawAWSConfigTpl))
 
+// AWSConfig defines the data for configuring IAM Roles Anywhere AWS Configuration files.
 type AWSConfig struct {
 	// TrustAnchorARN is the ARN of the trust anchor for IAM Roles Anywhere.
 	TrustAnchorARN string
@@ -87,7 +86,7 @@ func validateAWSConfig(cfg AWSConfig) error {
 		errs = append(errs, errors.New("Region cannot be empty"))
 	}
 
-	return multierr.Combine(errs...)
+	return errors.Join(errs...)
 }
 
 func configFileExists(cfg AWSConfig) (bool, error) {
