@@ -30,7 +30,12 @@ func (src signingHelperSource) GetSigningHelper(ctx context.Context) (artifact.S
 	}
 
 	url := fmt.Sprintf("https://rolesanywhere.amazonaws.com/releases/%v/X86_64/Linux/aws_signing_helper", signingHelperVersion)
-	resp, err := src.client.Get(url)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return artifact.Source{}, err
+	}
+
+	resp, err := src.client.Do(req)
 	if err != nil {
 		return artifact.Source{}, err
 	}
