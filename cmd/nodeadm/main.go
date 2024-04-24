@@ -21,7 +21,7 @@ func main() {
 	cmds := []cli.Command{
 		config.NewConfigCommand(),
 		initcmd.NewInitCommand(),
-		install.NewInstallCommand(),
+		install.NewCommand(),
 	}
 
 	for _, cmd := range cmds {

@@ -6,9 +6,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/config"
-	awseks "github.com/aws/aws-sdk-go-v2/service/eks"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/aws/smithy-go/ptr"
 	"github.com/integrii/flaggy"
 	"go.uber.org/zap"
 
@@ -22,26 +20,30 @@ import (
 	"github.com/awslabs/amazon-eks-ami/nodeadm/internal/kubelet"
 )
 
-func NewInstallCommand() cli.Command {
-	install := installCmd{}
-	install.cmd = flaggy.NewSubcommand("install")
-	install.cmd.Description = "Install components required to join an EKS cluster"
-	install.cmd.String(&install.kubernetesVersion, "k", "kubernetes-version", "the kubernetes major and minor version to install")
-	install.cmd.String(&install.awsConfig, "", "aws-config", "the aws config path")
-	return &install
+func NewCommand() cli.Command {
+	cmd := command{}
+
+	fc := flaggy.NewSubcommand("install")
+	fc.Description = "Install components required to join an EKS cluster"
+	fc.AddPositionalValue(&cmd.kubernetesVersion, "KUBERNETES_VERSION", 1, true, "The major[.minor[.patch]] version of Kubernetes to install")
+	fc.String(&cmd.awsConfig, "", "aws-config", "An aws config path to use for hybrid configuration (/etc/aws/hybrid/config)")
+
+	cmd.flaggy = fc
+
+	return &cmd
 }
 
-type installCmd struct {
-	cmd               *flaggy.Subcommand
+type command struct {
+	flaggy            *flaggy.Subcommand
 	kubernetesVersion string
 	awsConfig         string
 }
 
-func (c *installCmd) Flaggy() *flaggy.Subcommand {
-	return c.cmd
+func (c *command) Flaggy() *flaggy.Subcommand {
+	return c.flaggy
 }
 
-func (c *installCmd) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
+func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	root, err := cli.IsRunningAsRoot()
 	if err != nil {
 		return err
@@ -88,17 +90,8 @@ func (c *installCmd) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return err
 	}
 
-	eksClient := awseks.NewFromConfig(awsCfg)
-	clstr, err := eksClient.DescribeCluster(ctx, &awseks.DescribeClusterInput{
-		Name: ptr.String(nodeCfg.Spec.Cluster.Name),
-	})
-	if err != nil {
-		return err
-	}
-
 	// Create a Source for all EKS managed artifacts.
-	latest, err := eks.FindLatestRelease(ctx, s3.NewFromConfig(awsCfg),
-		*clstr.Cluster.Version)
+	latest, err := eks.FindLatestRelease(ctx, s3.NewFromConfig(awsCfg), c.kubernetesVersion)
 	if err != nil {
 		return err
 	}
