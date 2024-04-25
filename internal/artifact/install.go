@@ -7,10 +7,14 @@ import (
 	"path"
 )
 
+// DefaultDirPerms are the permissions assigned to a directory when an Install* func is called
+// and it has to create the parent directories for the destination.
+const DefaultDirPerms = fs.ModeDir | 0755
+
 // InstallFile installs src to dst with perms permissions. It ensures any base paths exist
 // before installing.
-func InstallFile(dst string, src Source, perms fs.FileMode) error {
-	if err := os.MkdirAll(path.Dir(dst), fs.ModeDir|0775); err != nil {
+func InstallFile(dst string, src io.Reader, perms fs.FileMode) error {
+	if err := os.MkdirAll(path.Dir(dst), DefaultDirPerms); err != nil {
 		return err
 	}
 

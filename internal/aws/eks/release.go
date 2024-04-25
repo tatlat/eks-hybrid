@@ -2,8 +2,10 @@ package eks
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
+	"io"
 	"runtime"
 	"strings"
 
@@ -82,73 +84,68 @@ func FindLatestRelease(ctx context.Context, client S3ObjectReader, version strin
 }
 
 // GetKubelet satisfies kubelet.Source.
-func (r Release) GetKubelet(ctx context.Context) (artifact.Source, error) {
-	obj, err := r.Client.GetObject(ctx, &s3.GetObjectInput{
-		Bucket: aws.String(bucket),
-		Key:    aws.String(r.getKey("kubelet")),
-	}, func(o *s3.Options) {
-		// TODO(chrisdoherty) Investigate alternatives that optimize for geographical location.
-		// Buckets aren't replicated so we need to use the right region for querying S3.
-		o.Region = "us-west-2"
-	})
-	if err != nil {
-		return artifact.Source{}, err
-	}
-
-	return artifact.Source{ReadCloser: obj.Body}, nil
+func (r Release) GetKubelet(ctx context.Context) (io.ReadCloser, error) {
+	return r.getSource(ctx, "kubelet")
 }
 
 // GetKubectl satisfies kubectl.Source.
-func (r Release) GetKubectl(ctx context.Context) (artifact.Source, error) {
-	obj, err := r.Client.GetObject(ctx, &s3.GetObjectInput{
-		Bucket: aws.String(bucket),
-		Key:    aws.String(r.getKey("kubectl")),
-	}, func(o *s3.Options) {
-		// TODO(chrisdoherty) Investigate alternatives that optimize for geographical location.
-		// Buckets aren't replicated so we need to use the right region for querying S3.
-		o.Region = "us-west-2"
-	})
-	if err != nil {
-		return artifact.Source{}, err
-	}
-
-	return artifact.Source{ReadCloser: obj.Body}, nil
+func (r Release) GetKubectl(ctx context.Context) (io.ReadCloser, error) {
+	return r.getSource(ctx, "kubectl")
 }
 
 // GetIAMAuthenticator satisfies iamrolesanywhere.IAMAuthenticatorSource.
-func (r Release) GetIAMAuthenticator(ctx context.Context) (artifact.Source, error) {
-	obj, err := r.Client.GetObject(ctx, &s3.GetObjectInput{
-		Bucket: aws.String(bucket),
-		Key:    aws.String(r.getKey("aws-iam-authenticator")),
-	}, func(o *s3.Options) {
-		// TODO(chrisdoherty) Investigate alternatives that optimize for geographical location.
-		// Buckets aren't replicated so we need to use the right region for querying S3.
-		o.Region = "us-west-2"
-	})
-	if err != nil {
-		return artifact.Source{}, err
-	}
-
-	return artifact.Source{ReadCloser: obj.Body}, nil
+func (r Release) GetIAMAuthenticator(ctx context.Context) (io.ReadCloser, error) {
+	return r.getSource(ctx, "aws-iam-authenticator")
 }
 
 // GetImageCredentialProvider satisfies imagecredentialprovider.Source.
-func (r Release) GetImageCredentialProvider(ctx context.Context) (artifact.Source, error) {
-	obj, err := r.Client.GetObject(ctx, &s3.GetObjectInput{
+func (r Release) GetImageCredentialProvider(ctx context.Context) (io.ReadCloser, error) {
+	return r.getSource(ctx, "ecr-credental-provider")
+}
+
+func (r Release) getSource(ctx context.Context, filename string) (io.ReadCloser, error) {
+	obj, err := r.getObject(ctx, filename)
+	if err != nil {
+		return nil, err
+	}
+
+	digest := sha256.New()
+	cs, err := r.getObject(ctx, fmt.Sprintf("%v.sha256", filename))
+	if err != nil {
+		// Ensure we don't leak file handles.
+		obj.Body.Close()
+		return nil, err
+	}
+	defer cs.Body.Close()
+
+	expect, err := artifact.ParseGNUChecksum(cs.Body)
+	if err != nil {
+		// Ensure we don't leak file handles.
+		obj.Body.Close()
+		return nil, err
+	}
+
+	return toReadCloser(artifact.WithChecksum(obj.Body, digest, expect), obj.Body), nil
+}
+
+func (r Release) getObject(ctx context.Context, filename string) (*s3.GetObjectOutput, error) {
+	return r.Client.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(bucket),
-		Key:    aws.String(r.getKey("ecr-credental-provider")),
+		Key:    aws.String(r.getKey(filename)),
 	}, func(o *s3.Options) {
 		// TODO(chrisdoherty) Investigate alternatives that optimize for geographical location.
 		// Buckets aren't replicated so we need to use the right region for querying S3.
 		o.Region = "us-west-2"
 	})
-	if err != nil {
-		return artifact.Source{}, err
-	}
-
-	return artifact.Source{ReadCloser: obj.Body}, nil
 }
 
 func (r Release) getKey(artifact string) string {
 	return fmt.Sprintf("%v/%v/bin/linux/%v/%v", r.Version, r.ReleaseDate, runtime.GOARCH, artifact)
+}
+
+func toReadCloser(r io.Reader, c io.Closer) io.ReadCloser {
+	return struct {
+		io.Reader
+		io.Closer
+	}{r, c}
 }

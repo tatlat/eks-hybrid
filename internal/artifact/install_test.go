@@ -13,8 +13,7 @@ import (
 func TestInstallFile(t *testing.T) {
 	srcData := []byte("hello, world!")
 	tmp := t.TempDir()
-	buf := bytes.NewBuffer(srcData)
-	src := artifact.NopSourceCloser(buf)
+	src := bytes.NewBuffer(srcData)
 	dst := filepath.Join(tmp, "file")
 	perms := fs.FileMode(0644)
 
@@ -44,8 +43,7 @@ func TestInstallFile(t *testing.T) {
 
 func TestInstallFile_FileExists(t *testing.T) {
 	tmp := t.TempDir()
-	buf := bytes.NewBufferString("hello, world!")
-	src := artifact.NopSourceCloser(buf)
+	src := bytes.NewBufferString("hello, world!")
 	dst := filepath.Join(tmp, "file")
 	perms := fs.FileMode(0644)
 
@@ -61,8 +59,7 @@ func TestInstallFile_FileExists(t *testing.T) {
 
 func TestInstallFile_DirNotExists(t *testing.T) {
 	tmp := t.TempDir()
-	buf := bytes.NewBufferString("hello, world!")
-	src := artifact.NopSourceCloser(buf)
+	src := bytes.NewBufferString("hello, world!")
 	dir := filepath.Join(tmp, "nonexistent")
 	dst := filepath.Join(dir, "file")
 	perms := fs.FileMode(0644)
@@ -81,7 +78,7 @@ func TestInstallFile_DirNotExists(t *testing.T) {
 		t.Fatalf("%v is not a direcftory", dir)
 	}
 
-	if info.Mode() != fs.ModeDir|0775 {
-		t.Fatalf("expected dir with %v permissions; received %v", fs.ModeDir|0775, info.Mode())
+	if info.Mode() != artifact.DefaultDirPerms {
+		t.Fatalf("Expected dir with %v permissions; received %v", artifact.DefaultDirPerms, info.Mode())
 	}
 }

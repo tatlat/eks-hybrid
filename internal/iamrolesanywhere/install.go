@@ -2,6 +2,7 @@ package iamrolesanywhere
 
 import (
 	"context"
+	"io"
 
 	"github.com/awslabs/amazon-eks-ami/nodeadm/internal/artifact"
 )
@@ -14,12 +15,12 @@ const IAMAuthenticatorBinPath = "/usr/local/bin/aws-iam-authenticator"
 
 // IAMAuthenticatorSource retrieves the aws-iam-authenticator binary.
 type IAMAuthenticatorSource interface {
-	GetIAMAuthenticator(context.Context) (artifact.Source, error)
+	GetIAMAuthenticator(context.Context) (io.ReadCloser, error)
 }
 
 // SigningHelperSource retrieves the aws_signing_helper binary.
 type SigningHelperSource interface {
-	GetSigningHelper(context.Context) (artifact.Source, error)
+	GetSigningHelper(context.Context) (io.ReadCloser, error)
 }
 
 // Install installs the aws_signing_helper and aws-iam-authenticator on the system at
@@ -31,7 +32,11 @@ func InstallIAMAuthenticator(ctx context.Context, iamAuthSrc IAMAuthenticatorSou
 	}
 	defer authenticator.Close()
 
-	return artifact.InstallFile(IAMAuthenticatorBinPath, authenticator, 0755)
+	if err := artifact.InstallFile(IAMAuthenticatorBinPath, authenticator, 0755); err != nil {
+		return err
+	}
+
+	return artifact.VerifyChecksum(authenticator)
 }
 
 func InstallSigningHelper(ctx context.Context, signingHelperSrc SigningHelperSource) error {
@@ -41,5 +46,9 @@ func InstallSigningHelper(ctx context.Context, signingHelperSrc SigningHelperSou
 	}
 	defer signingHelper.Close()
 
-	return artifact.InstallFile(SigningHelperBinPath, signingHelper, 0755)
+	if err := artifact.InstallFile(SigningHelperBinPath, signingHelper, 0755); err != nil {
+		return err
+	}
+
+	return artifact.VerifyChecksum(signingHelper)
 }
