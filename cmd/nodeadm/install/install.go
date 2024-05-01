@@ -2,6 +2,8 @@ package install
 
 import (
 	"context"
+	"errors"
+	"io/fs"
 	"net/http"
 	"time"
 
@@ -100,7 +102,7 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	httpClient := http.Client{Timeout: 120 * time.Second}
 	signingHelper := iamrolesanywhere.SigningHelper(httpClient)
 
-	if err := iamrolesanywhere.InstallSigningHelper(ctx, signingHelper); err != nil {
+	if err := iamrolesanywhere.InstallSigningHelper(ctx, signingHelper); err != nil && !errors.Is(err, fs.ErrExist) {
 		return err
 	}
 
@@ -110,19 +112,19 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return err
 	}
 
-	if err := kubelet.Install(ctx, latest); err != nil {
+	if err := kubelet.Install(ctx, latest); err != nil && !errors.Is(err, fs.ErrExist) {
 		return err
 	}
 
-	if err := kubectl.Install(ctx, latest); err != nil {
+	if err := kubectl.Install(ctx, latest); err != nil && !errors.Is(err, fs.ErrExist) {
 		return err
 	}
 
-	if err := imagecredentialprovider.Install(ctx, latest); err != nil {
+	if err := imagecredentialprovider.Install(ctx, latest); err != nil && !errors.Is(err, fs.ErrExist) {
 		return err
 	}
 
-	if err := iamrolesanywhere.InstallIAMAuthenticator(ctx, latest); err != nil {
+	if err := iamrolesanywhere.InstallIAMAuthenticator(ctx, latest); err != nil && !errors.Is(err, fs.ErrExist) {
 		return err
 	}
 
