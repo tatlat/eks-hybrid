@@ -89,7 +89,6 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 
 	ctx := context.Background()
 
-	log.Info("Loading configuration")
 	awsCfg, err := config.LoadDefaultConfig(ctx,
 		config.WithSharedConfigFiles([]string{c.awsConfig}),
 		config.WithSharedConfigProfile(iamrolesanywhere.ProfileName))
@@ -102,6 +101,7 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	httpClient := http.Client{Timeout: 120 * time.Second}
 	signingHelper := iamrolesanywhere.SigningHelper(httpClient)
 
+	log.Info("Installing AWS signing helper...")
 	if err := iamrolesanywhere.InstallSigningHelper(ctx, signingHelper); err != nil && !errors.Is(err, fs.ErrExist) {
 		return err
 	}
@@ -112,18 +112,22 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return err
 	}
 
+	log.Info("Installing kubelet...")
 	if err := kubelet.Install(ctx, latest); err != nil && !errors.Is(err, fs.ErrExist) {
 		return err
 	}
 
+	log.Info("Installing kubectl...")
 	if err := kubectl.Install(ctx, latest); err != nil && !errors.Is(err, fs.ErrExist) {
 		return err
 	}
 
+	log.Info("Installing image credential provider...")
 	if err := imagecredentialprovider.Install(ctx, latest); err != nil && !errors.Is(err, fs.ErrExist) {
 		return err
 	}
 
+	log.Info("Installing IAM authenticator...")
 	if err := iamrolesanywhere.InstallIAMAuthenticator(ctx, latest); err != nil && !errors.Is(err, fs.ErrExist) {
 		return err
 	}

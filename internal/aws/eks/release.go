@@ -150,5 +150,5 @@ func (r Release) GetImageCredentialProvider(ctx context.Context) (artifact.Sourc
 }
 
 func (r Release) getKey(artifact string) string {
-	return fmt.Sprintf("%v/%v/linux/%v/%v", r.Version, r.ReleaseDate, runtime.GOARCH, artifact)
+	return fmt.Sprintf("%v/%v/bin/linux/%v/%v", r.Version, r.ReleaseDate, runtime.GOARCH, artifact)
 }
