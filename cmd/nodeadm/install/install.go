@@ -95,15 +95,20 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return err
 	}
 
+	// Install the signing helper first because we need to auth when retrieving EKS artifacts
+	// via S3 APIs.
+	httpClient := http.Client{Timeout: 120 * time.Second}
+	signingHelper := iamrolesanywhere.SigningHelper(httpClient)
+
+	if err := iamrolesanywhere.InstallSigningHelper(ctx, signingHelper); err != nil {
+		return err
+	}
+
 	// Create a Source for all EKS managed artifacts.
 	latest, err := eks.FindLatestRelease(ctx, s3.NewFromConfig(awsCfg), c.kubernetesVersion)
 	if err != nil {
 		return err
 	}
-
-	// Create a Source for retrieving the signing helper.
-	httpClient := http.Client{Timeout: 120 * time.Second}
-	signingHelper := iamrolesanywhere.SigningHelper(httpClient)
 
 	if err := kubelet.Install(ctx, latest); err != nil {
 		return err
@@ -117,7 +122,7 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return err
 	}
 
-	if err := iamrolesanywhere.Install(ctx, signingHelper, latest); err != nil {
+	if err := iamrolesanywhere.InstallIAMAuthenticator(ctx, latest); err != nil {
 		return err
 	}
 

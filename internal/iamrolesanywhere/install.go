@@ -24,17 +24,7 @@ type SigningHelperSource interface {
 
 // Install installs the aws_signing_helper and aws-iam-authenticator on the system at
 // SigningHelperBinPath and IAMAuthenticatorBinPath respectively.
-func Install(ctx context.Context, signingHelperSrc SigningHelperSource, iamAuthSrc IAMAuthenticatorSource) error {
-	signingHelper, err := signingHelperSrc.GetSigningHelper(ctx)
-	if err != nil {
-		return err
-	}
-	defer signingHelper.Close()
-
-	if err := artifact.InstallFile(SigningHelperBinPath, signingHelper, 0755); err != nil {
-		return err
-	}
-
+func InstallIAMAuthenticator(ctx context.Context, iamAuthSrc IAMAuthenticatorSource) error {
 	authenticator, err := iamAuthSrc.GetIAMAuthenticator(ctx)
 	if err != nil {
 		return err
@@ -42,4 +32,14 @@ func Install(ctx context.Context, signingHelperSrc SigningHelperSource, iamAuthS
 	defer authenticator.Close()
 
 	return artifact.InstallFile(IAMAuthenticatorBinPath, authenticator, 0755)
+}
+
+func InstallSigningHelper(ctx context.Context, signingHelperSrc SigningHelperSource) error {
+	signingHelper, err := signingHelperSrc.GetSigningHelper(ctx)
+	if err != nil {
+		return err
+	}
+	defer signingHelper.Close()
+
+	return artifact.InstallFile(SigningHelperBinPath, signingHelper, 0755)
 }
