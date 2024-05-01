@@ -52,6 +52,11 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return cli.ErrMustRunAsRoot
 	}
 
+	// Apply defaults
+	if c.awsConfig == "" {
+		c.awsConfig = iamrolesanywhere.DefaultAWSConfigPath
+	}
+
 	log.Info("Loading configuration", zap.String("configSource", opts.ConfigSource))
 	provider, err := configprovider.BuildConfigProvider(opts.ConfigSource)
 	if err != nil {
