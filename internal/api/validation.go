@@ -20,5 +20,17 @@ func ValidateNodeConfig(cfg *NodeConfig) error {
 			return fmt.Errorf("CIDR is missing in cluster configuration")
 		}
 	}
+	// Validate all hybrid node configuration
+	if cfg.IsHybridNode() {
+		if cfg.Spec.Hybrid.Region == "" {
+			return fmt.Errorf("Region is missing in hybrid configuration")
+		}
+		if cfg.Spec.Hybrid.IAMRolesAnywhere == nil && cfg.Spec.Hybrid.SSM == nil {
+			return fmt.Errorf("Either IAMRolesAnywhere or SSM must be provided for hybrid node configuration")
+		}
+		if cfg.Spec.Hybrid.IAMRolesAnywhere != nil && cfg.Spec.Hybrid.SSM != nil {
+			return fmt.Errorf("Only one of IAMRolesAnywhere or SSM must be provided for hybrid node configuration")
+		}
+	}
 	return nil
 }

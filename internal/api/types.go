@@ -117,6 +117,11 @@ func (nc NodeConfig) IsHybridNode() bool {
 	return nc.Spec.Hybrid != nil
 }
 
+func (nc NodeConfig) IsOutpostNode() bool {
+	enabled := nc.Spec.Cluster.EnableOutpost
+	return enabled != nil && *enabled
+}
+
 type IAMRolesAnywhere struct {
 	TrustAnchorARN string `json:"trustAnchorArn,omitempty"`
 	ProfileARN     string `json:"profileArn,omitempty"`

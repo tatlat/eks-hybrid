@@ -92,9 +92,6 @@ spec:
                         description: TrustAnchorARN is the ARN of the trust anchor.
                         type: string
                     type: object
-                  ip:
-                    description: IP is the IP address to use for the node.
-                    type: string
                   nodeName:
                     description: NodeName is the name the node will adopt.
                     type: string

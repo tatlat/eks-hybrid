@@ -19,10 +19,11 @@ const (
 
 var (
 	//go:embed kubeconfig.template.yaml
-	kubeconfigTemplateData  string
-	kubeconfigTemplate      = template.Must(template.New(kubeconfigFile).Parse(kubeconfigTemplateData))
-	kubeconfigPath          = path.Join(kubeconfigRoot, kubeconfigFile)
-	kubeconfigBootstrapPath = path.Join(kubeconfigRoot, kubeconfigBootstrapFile)
+	kubeconfigTemplateData string
+	//go:embed hybrid-kubeconfig.template.yaml
+	hybridKubeconfigTemplateData string
+	kubeconfigPath               = path.Join(kubeconfigRoot, kubeconfigFile)
+	kubeconfigBootstrapPath      = path.Join(kubeconfigRoot, kubeconfigBootstrapFile)
 )
 
 func (k *kubelet) writeKubeconfig(cfg *api.NodeConfig) error {
@@ -30,7 +31,7 @@ func (k *kubelet) writeKubeconfig(cfg *api.NodeConfig) error {
 	if err != nil {
 		return err
 	}
-	if enabled := cfg.Spec.Cluster.EnableOutpost; enabled != nil && *enabled {
+	if cfg.IsOutpostNode() {
 		// kubelet bootstrap kubeconfig uses aws-iam-authenticator with cluster id to authenticate to cluster
 		//   - if "aws eks describe-cluster" is bypassed, for local outpost, the value of CLUSTER_NAME parameter will be cluster id.
 		//   - otherwise, the cluster id will use the id returned by "aws eks describe-cluster".
@@ -47,22 +48,45 @@ type kubeconfigTemplateVars struct {
 	Region            string
 	APIServerEndpoint string
 	CaCertPath        string
+	SessionName       string
+	AssumeRole        string
 }
 
-func generateKubeconfig(cfg *api.NodeConfig) ([]byte, error) {
-	cluster := cfg.Spec.Cluster.Name
-	if enabled := cfg.Spec.Cluster.EnableOutpost; enabled != nil && *enabled {
-		cluster = cfg.Spec.Cluster.ID
-	}
-
-	config := kubeconfigTemplateVars{
-		Cluster:           cluster,
+func newKubeconfigTemplateVars(cfg *api.NodeConfig) *kubeconfigTemplateVars {
+	return &kubeconfigTemplateVars{
+		Cluster:           cfg.Spec.Cluster.Name,
 		Region:            cfg.Status.Instance.Region,
 		APIServerEndpoint: cfg.Spec.Cluster.APIServerEndpoint,
 		CaCertPath:        caCertificatePath,
 	}
+}
+
+func (kct *kubeconfigTemplateVars) withOutpostVars(cfg *api.NodeConfig) {
+	kct.Cluster = cfg.Spec.Cluster.ID
+}
+
+func (kct *kubeconfigTemplateVars) withHybridVars(cfg *api.NodeConfig) {
+	kct.Region = cfg.Spec.Hybrid.Region
+	kct.SessionName = cfg.Spec.Hybrid.NodeName
+	kct.AssumeRole = cfg.Spec.Hybrid.IAMRolesAnywhere.RoleARN
+}
+
+func generateKubeconfig(cfg *api.NodeConfig) ([]byte, error) {
+	config := newKubeconfigTemplateVars(cfg)
+	if cfg.IsOutpostNode() {
+		config.withOutpostVars(cfg)
+	}
+	if cfg.IsHybridNode() {
+		config.withHybridVars(cfg)
+	}
 
 	var buf bytes.Buffer
+	var kubeconfigTemplate *template.Template
+	if cfg.IsHybridNode() {
+		kubeconfigTemplate = template.Must(template.New(kubeconfigFile).Parse(hybridKubeconfigTemplateData))
+	} else {
+		kubeconfigTemplate = template.Must(template.New(kubeconfigFile).Parse(kubeconfigTemplateData))
+	}
 	if err := kubeconfigTemplate.Execute(&buf, config); err != nil {
 		return nil, err
 	}

@@ -116,3 +116,26 @@ func TestProviderID(t *testing.T) {
 		}
 	}
 }
+
+func TestHybridCloudProvider(t *testing.T) {
+	nodeConfig := api.NodeConfig{
+		Spec: api.NodeConfigSpec{
+			Hybrid: &api.HybridOptions{
+				NodeName: "dummy-hybrid",
+				Region:   "us-west-2",
+				IAMRolesAnywhere: &api.IAMRolesAnywhere{
+					TrustAnchorARN: "arn:aws:iam::222211113333:role/AmazonEKSConnectorAgentRole",
+					ProfileARN:     "dummy-profile-arn",
+					RoleARN:        "dummy-assume-role-arn",
+				},
+			},
+		},
+	}
+	expectedProviderId := getHybridProviderId(nodeConfig.Spec.Hybrid.NodeName)
+	kubeletArgs := make(map[string]string)
+	kubeletConfig := defaultKubeletSubConfig()
+	kubeletConfig.withHybridCloudProvider(&nodeConfig, kubeletArgs)
+	assert.Equal(t, kubeletArgs["cloud-provider"], "")
+	assert.Equal(t, kubeletArgs["hostname-override"], nodeConfig.Spec.Hybrid.NodeName)
+	assert.Equal(t, *kubeletConfig.ProviderID, expectedProviderId)
+}

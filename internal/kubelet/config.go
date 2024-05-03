@@ -257,6 +257,15 @@ func (ksc *kubeletConfig) withCloudProvider(kubeletVersion string, cfg *api.Node
 	}
 }
 
+// withHybridCloudProvider sets the cloud-provider to "" and sets the appropriate provider-id for the node
+func (ksc *kubeletConfig) withHybridCloudProvider(cfg *api.NodeConfig, flags map[string]string) {
+	flags["cloud-provider"] = ""
+	// provider ID needs to be specified when the cloud provider is external or empty string
+	ksc.ProviderID = ptr.String(getHybridProviderId(cfg.Spec.Hybrid.NodeName))
+	// hostname is overriden to the node name provided in the spec
+	flags["hostname-override"] = cfg.Spec.Hybrid.NodeName
+}
+
 // When the DefaultReservedResources flag is enabled, override the kubelet
 // config with reserved cgroup values on behalf of the user
 func (ksc *kubeletConfig) withDefaultReservedResources(cfg *api.NodeConfig) {
@@ -307,16 +316,21 @@ func (k *kubelet) GenerateKubeletConfig(cfg *api.NodeConfig) (*kubeletConfig, er
 	if err := kubeletConfig.withOutpostSetup(cfg); err != nil {
 		return nil, err
 	}
-	if err := kubeletConfig.withNodeIp(cfg, k.flags); err != nil {
-		return nil, err
-	}
 	if err := kubeletConfig.withPodInfraContainerImage(cfg, kubeletVersion, k.flags); err != nil {
 		return nil, err
 	}
 
 	kubeletConfig.withVersionToggles(kubeletVersion, k.flags)
-	kubeletConfig.withCloudProvider(kubeletVersion, cfg, k.flags)
-	kubeletConfig.withDefaultReservedResources(cfg)
+
+	if cfg.IsHybridNode() {
+		kubeletConfig.withHybridCloudProvider(cfg, k.flags)
+	} else {
+		if err := kubeletConfig.withNodeIp(cfg, k.flags); err != nil {
+			return nil, err
+		}
+		kubeletConfig.withCloudProvider(kubeletVersion, cfg, k.flags)
+		kubeletConfig.withDefaultReservedResources(cfg)
+	}
 
 	return &kubeletConfig, nil
 }
@@ -405,6 +419,10 @@ func (k *kubelet) writeKubeletConfigToDir(cfg *api.NodeConfig) error {
 
 func getProviderId(availabilityZone, instanceId string) string {
 	return fmt.Sprintf("aws:///%s/%s", availabilityZone, instanceId)
+}
+
+func getHybridProviderId(nodeName string) string {
+	return fmt.Sprintf("aws-external:///%s", nodeName)
 }
 
 // Get the IP of the node depending on the ipFamily configured for the cluster

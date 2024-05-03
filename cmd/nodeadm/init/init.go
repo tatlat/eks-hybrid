@@ -109,14 +109,18 @@ func (c *initCmd) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	}
 
 	if !slices.Contains(c.skipPhases, runPhase) {
-		log.Info("Setting up system aspects...")
-		for _, aspect := range aspects {
-			nameField := zap.String("name", aspect.Name())
-			log.Info("Setting up system aspect..", nameField)
-			if err := aspect.Setup(nodeConfig); err != nil {
-				return err
+		// Aspects are not required for hybrid nodes
+		// Setting up aspects fall under user responsibility for hybrid nodes
+		if !nodeConfig.IsHybridNode() {
+			log.Info("Setting up system aspects...")
+			for _, aspect := range aspects {
+				nameField := zap.String("name", aspect.Name())
+				log.Info("Setting up system aspect..", nameField)
+				if err := aspect.Setup(nodeConfig); err != nil {
+					return err
+				}
+				log.Info("Set up system aspect", nameField)
 			}
-			log.Info("Set up system aspect", nameField)
 		}
 		for _, daemon := range daemons {
 			if len(c.daemons) > 0 && !slices.Contains(c.daemons, daemon.Name()) {
@@ -145,22 +149,29 @@ func (c *initCmd) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 // Various initializations and verifications of the NodeConfig and
 // perform in-place updates when allowed by the user
 func enrichConfig(log *zap.Logger, cfg *api.NodeConfig) error {
-	log.Info("Fetching instance details..")
-	imdsClient := imds.New(imds.Options{})
-	awsConfig, err := config.LoadDefaultConfig(context.TODO(), config.WithClientLogMode(aws.LogRetries), config.WithEC2IMDSRegion(func(o *config.UseEC2IMDSRegion) {
-		o.Client = imdsClient
-	}))
-	if err != nil {
-		return err
+	var region string
+	if cfg.IsHybridNode() {
+		// TODO @vgg figure out the region inference for hybrid nodes
+		region = "us-west-2"
+	} else {
+		log.Info("Fetching instance details..")
+		imdsClient := imds.New(imds.Options{})
+		awsConfig, err := config.LoadDefaultConfig(context.TODO(), config.WithClientLogMode(aws.LogRetries), config.WithEC2IMDSRegion(func(o *config.UseEC2IMDSRegion) {
+			o.Client = imdsClient
+		}))
+		if err != nil {
+			return err
+		}
+		instanceDetails, err := api.GetInstanceDetails(context.TODO(), imdsClient, ec2.NewFromConfig(awsConfig))
+		if err != nil {
+			return err
+		}
+		cfg.Status.Instance = *instanceDetails
+		log.Info("Instance details populated", zap.Reflect("details", instanceDetails))
+		region = instanceDetails.Region
 	}
-	instanceDetails, err := api.GetInstanceDetails(context.TODO(), imdsClient, ec2.NewFromConfig(awsConfig))
-	if err != nil {
-		return err
-	}
-	cfg.Status.Instance = *instanceDetails
-	log.Info("Instance details populated", zap.Reflect("details", instanceDetails))
 	log.Info("Fetching default options...")
-	eksRegistry, err := ecr.GetEKSRegistry(instanceDetails.Region)
+	eksRegistry, err := ecr.GetEKSRegistry(region)
 	if err != nil {
 		return err
 	}

@@ -122,6 +122,12 @@ func (nc NodeConfig) IsHybridNode() bool {
 	return nc.Spec.Hybrid != nil
 }
 
+// IsOutpostNode returns true when Output configuration is non-nil.
+func (nc NodeConfig) IsOutpostNode() bool {
+	enabled := nc.Spec.Cluster.EnableOutpost
+	return enabled != nil && *enabled
+}
+
 // IAMRolesAnywhere defines IAM Roles Anywhere specific configuration.
 type IAMRolesAnywhere struct {
 	// TrustAnchorARN is the ARN of the trust anchor.
