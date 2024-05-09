@@ -3,9 +3,10 @@ package iamrolesanywhere
 import (
 	"context"
 	"fmt"
-	"io"
 	"net/http"
 	"runtime"
+
+	"github.com/awslabs/amazon-eks-ami/nodeadm/internal/artifact"
 )
 
 const signingHelperVersion = "1.1.1"
@@ -23,7 +24,7 @@ func SigningHelper(client http.Client) SigningHelperSource {
 }
 
 // GetSigningHelper retrieves the aws_sigining_helper for IAM Roles Anywhere.
-func (src signingHelperSource) GetSigningHelper(ctx context.Context) (io.ReadCloser, error) {
+func (src signingHelperSource) GetSigningHelper(ctx context.Context) (artifact.Source, error) {
 	if runtime.GOARCH != "amd64" {
 		return nil, fmt.Errorf("signing helper: unsupported architecture: %v", runtime.GOARCH)
 	}
@@ -40,8 +41,8 @@ func (src signingHelperSource) GetSigningHelper(ctx context.Context) (io.ReadClo
 	}
 
 	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("signing helper: %v", resp.StatusCode)
+		return nil, fmt.Errorf("non-200 status code: %v", resp.StatusCode)
 	}
 
-	return resp.Body, nil
+	return artifact.WithNopChecksum(resp.Body), nil
 }

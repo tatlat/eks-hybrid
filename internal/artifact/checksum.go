@@ -10,33 +10,16 @@ import (
 	"strings"
 )
 
-var _ Checksummer = checksum{}
-
-// Checksummer is a Source that has an associated checksum.
-type Checksummer interface {
-	io.Reader
-
-	// ActualChecksum returns the checksum calculated from the bytes that have been read from
-	// Source.
-	ActualChecksum() []byte
-
-	// Expected checksum returns the expected checksum that should be returned from Checksum once
-	// all bytes are read from the underlying Source.
-	ExpectChecksum() []byte
-
-	// VerifyChecksum verifies if ActualChecksum equals ExpectChecksum.
-	VerifyChecksum() bool
+type checksumVerifier struct {
+	expect []byte
+	digest hash.Hash
 }
+
+type nopChecksumVerifier struct{}
 
 type ChecksumError struct {
 	Expect []byte
 	Actual []byte
-}
-
-type checksum struct {
-	io.Reader
-	Expect []byte
-	Digest hash.Hash
 }
 
 // ParseGNUChecksum parses r as GNU checksum format and returns the checksum value. GNU checksums
@@ -63,60 +46,41 @@ func ParseGNUChecksum(r io.Reader) ([]byte, error) {
 	return checksum, nil
 }
 
-// WithChecksum creates a Source from src that can be type asserted to Checksumer. The checksum
-// is calculated by arranging for digest to receive the bytes read from src. The source can be
-// used with VerifyChecksum. expect is the expected hexidecimal value.
-func WithChecksum(src io.Reader, digest hash.Hash, expect []byte) Checksummer {
-	return checksum{
-		Reader: io.TeeReader(src, digest),
-		Expect: expect,
-		Digest: digest,
-	}
-}
-
-// VerifyChecksum will verify src satisfies the Checksumer interface. If it does, it will verify
-// the expected checksum equals the received checksum. Calling VerifyChecksum on a Source before
-// all bytes have been read is undefined. If src does not satisfy Checksumer it returns true.
-func VerifyChecksum(src io.Reader) error {
-	cs, ok := src.(Checksummer)
-	if !ok {
-		return nil
-	}
-
-	if !cs.VerifyChecksum() {
-		return newChecksumError(cs)
-	}
-
-	return nil
-}
-
-func newChecksumError(c Checksummer) error {
+// NewChecksumError creates an error of type ChecksumError.
+func NewChecksumError(src Source) error {
 	return ChecksumError{
-		Expect: c.ExpectChecksum(),
-		Actual: c.ActualChecksum(),
+		Expect: src.ExpectedChecksum(),
+		Actual: src.ActualChecksum(),
 	}
 }
 
-// Checksum satisfies Checksumer.
-func (c checksum) ActualChecksum() []byte {
-	return c.Digest.Sum(nil)
+// Actual satisfies Checksumer.
+func (c checksumVerifier) ActualChecksum() []byte {
+	return c.digest.Sum(nil)
 }
 
-// ExpectedChecksum satisfies Checksumer.
-func (c checksum) ExpectChecksum() []byte {
-	return c.Expect
+// Expected satisfies Checksumer.
+func (c checksumVerifier) ExpectedChecksum() []byte {
+	return c.expect
 }
 
-// VerifyChecksum satisfies Checksumer.
-func (c checksum) VerifyChecksum() bool {
-	return bytes.Equal(c.ActualChecksum(), c.ExpectChecksum())
+// VerifyChecksum satisfies Checksumer. Calling verify before the associated Source has been
+// completely read will cause an incomplete digest to be used and result in a false return.
+func (c checksumVerifier) VerifyChecksum() bool {
+	return bytes.Equal(c.ActualChecksum(), c.ExpectedChecksum())
 }
 
-func (e ChecksumError) Error() string {
-	return fmt.Sprintf("checksum mismatch: expect %x; actual %x", e.Expect, e.Actual)
+// Error implements the error interface.
+func (ce ChecksumError) Error() string {
+	return fmt.Sprintf("checksum mismatch (expect != actual): %v != %v", ce.Expect, ce.Actual)
 }
 
-func (e ChecksumError) Is(cmp error) bool {
-	_, ok := cmp.(ChecksumError)
+// Is implements the errors.Is interface.
+func (ce ChecksumError) Is(err error) bool {
+	_, ok := err.(ChecksumError)
 	return ok
 }
+
+func (nopChecksumVerifier) VerifyChecksum() bool     { return true }
+func (nopChecksumVerifier) ExpectedChecksum() []byte { return nil }
+func (nopChecksumVerifier) ActualChecksum() []byte   { return nil }

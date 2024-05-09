@@ -5,7 +5,6 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
-	"io"
 
 	"github.com/awslabs/amazon-eks-ami/nodeadm/internal/artifact"
 )
@@ -21,7 +20,7 @@ var kubeletUnitFile []byte
 
 // Source represents a source that serves a kubelet binary.
 type Source interface {
-	GetKubelet(context.Context) (io.ReadCloser, error)
+	GetKubelet(context.Context) (artifact.Source, error)
 }
 
 // Install installs kubelet at BinPath and installs a systemd unit file at UnitPath. The systemd
@@ -29,19 +28,23 @@ type Source interface {
 func Install(ctx context.Context, src Source) error {
 	kubelet, err := src.GetKubelet(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("kubelet: %w", err)
 	}
 	defer kubelet.Close()
 
 	if err := artifact.InstallFile(BinPath, kubelet, 0755); err != nil {
-		return err
+		return fmt.Errorf("kubelet: %w", err)
 	}
 
-	if err := artifact.VerifyChecksum(kubelet); err != nil {
-		return fmt.Errorf("kubelet: %w", err)
+	if !kubelet.VerifyChecksum() {
+		return fmt.Errorf("kubelet: %w", artifact.NewChecksumError(kubelet))
 	}
 
 	buf := bytes.NewBuffer(kubeletUnitFile)
 
-	return artifact.InstallFile(UnitPath, buf, 0644)
+	if err := artifact.InstallFile(UnitPath, buf, 0644); err != nil {
+		return fmt.Errorf("kubelet systemd unit: %w", err)
+	}
+
+	return nil
 }

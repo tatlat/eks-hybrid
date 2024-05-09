@@ -84,7 +84,7 @@ func FindLatestRelease(ctx context.Context, client S3ObjectReader, version strin
 }
 
 // GetKubelet satisfies kubelet.Source.
-func (r Release) GetKubelet(ctx context.Context) (io.ReadCloser, error) {
+func (r Release) GetKubelet(ctx context.Context) (artifact.Source, error) {
 	return r.getSource(ctx, "kubelet")
 }
 
@@ -103,7 +103,7 @@ func (r Release) GetImageCredentialProvider(ctx context.Context) (io.ReadCloser,
 	return r.getSource(ctx, "ecr-credental-provider")
 }
 
-func (r Release) getSource(ctx context.Context, filename string) (io.ReadCloser, error) {
+func (r Release) getSource(ctx context.Context, filename string) (artifact.Source, error) {
 	obj, err := r.getObject(ctx, filename)
 	if err != nil {
 		return nil, err
@@ -125,7 +125,7 @@ func (r Release) getSource(ctx context.Context, filename string) (io.ReadCloser,
 		return nil, err
 	}
 
-	return toReadCloser(artifact.WithChecksum(obj.Body, digest, expect), obj.Body), nil
+	return artifact.WithChecksum(obj.Body, digest, expect), nil
 }
 
 func (r Release) getObject(ctx context.Context, filename string) (*s3.GetObjectOutput, error) {
@@ -141,11 +141,4 @@ func (r Release) getObject(ctx context.Context, filename string) (*s3.GetObjectO
 
 func (r Release) getKey(artifact string) string {
 	return fmt.Sprintf("%v/%v/bin/linux/%v/%v", r.Version, r.ReleaseDate, runtime.GOARCH, artifact)
-}
-
-func toReadCloser(r io.Reader, c io.Closer) io.ReadCloser {
-	return struct {
-		io.Reader
-		io.Closer
-	}{r, c}
 }

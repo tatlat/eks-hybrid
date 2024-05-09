@@ -2,7 +2,7 @@ package iamrolesanywhere
 
 import (
 	"context"
-	"io"
+	"fmt"
 
 	"github.com/awslabs/amazon-eks-ami/nodeadm/internal/artifact"
 )
@@ -15,12 +15,12 @@ const IAMAuthenticatorBinPath = "/usr/local/bin/aws-iam-authenticator"
 
 // IAMAuthenticatorSource retrieves the aws-iam-authenticator binary.
 type IAMAuthenticatorSource interface {
-	GetIAMAuthenticator(context.Context) (io.ReadCloser, error)
+	GetIAMAuthenticator(context.Context) (artifact.Source, error)
 }
 
 // SigningHelperSource retrieves the aws_signing_helper binary.
 type SigningHelperSource interface {
-	GetSigningHelper(context.Context) (io.ReadCloser, error)
+	GetSigningHelper(context.Context) (artifact.Source, error)
 }
 
 // Install installs the aws_signing_helper and aws-iam-authenticator on the system at
@@ -28,27 +28,35 @@ type SigningHelperSource interface {
 func InstallIAMAuthenticator(ctx context.Context, iamAuthSrc IAMAuthenticatorSource) error {
 	authenticator, err := iamAuthSrc.GetIAMAuthenticator(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("aws-iam-authenticator: %w", err)
 	}
 	defer authenticator.Close()
 
 	if err := artifact.InstallFile(IAMAuthenticatorBinPath, authenticator, 0755); err != nil {
-		return err
+		return fmt.Errorf("aws-iam-authenticator: %w", err)
 	}
 
-	return artifact.VerifyChecksum(authenticator)
+	if !authenticator.VerifyChecksum() {
+		return fmt.Errorf("aws-iam-authenticator: %w", artifact.NewChecksumError(authenticator))
+	}
+
+	return nil
 }
 
 func InstallSigningHelper(ctx context.Context, signingHelperSrc SigningHelperSource) error {
 	signingHelper, err := signingHelperSrc.GetSigningHelper(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("aws_signing_helper: %w", err)
 	}
 	defer signingHelper.Close()
 
 	if err := artifact.InstallFile(SigningHelperBinPath, signingHelper, 0755); err != nil {
-		return err
+		return fmt.Errorf("aws_signing_helper: %w", err)
 	}
 
-	return artifact.VerifyChecksum(signingHelper)
+	if !signingHelper.VerifyChecksum() {
+		return fmt.Errorf("aws_signing_helper: %w", artifact.NewChecksumError(signingHelper))
+	}
+
+	return nil
 }
