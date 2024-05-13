@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
-	"io"
 	"runtime"
 	"strings"
 
@@ -89,17 +88,17 @@ func (r Release) GetKubelet(ctx context.Context) (artifact.Source, error) {
 }
 
 // GetKubectl satisfies kubectl.Source.
-func (r Release) GetKubectl(ctx context.Context) (io.ReadCloser, error) {
+func (r Release) GetKubectl(ctx context.Context) (artifact.Source, error) {
 	return r.getSource(ctx, "kubectl")
 }
 
 // GetIAMAuthenticator satisfies iamrolesanywhere.IAMAuthenticatorSource.
-func (r Release) GetIAMAuthenticator(ctx context.Context) (io.ReadCloser, error) {
+func (r Release) GetIAMAuthenticator(ctx context.Context) (artifact.Source, error) {
 	return r.getSource(ctx, "aws-iam-authenticator")
 }
 
 // GetImageCredentialProvider satisfies imagecredentialprovider.Source.
-func (r Release) GetImageCredentialProvider(ctx context.Context) (io.ReadCloser, error) {
+func (r Release) GetImageCredentialProvider(ctx context.Context) (artifact.Source, error) {
 	return r.getSource(ctx, "ecr-credental-provider")
 }
 
