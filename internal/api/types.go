@@ -122,6 +122,14 @@ func (nc NodeConfig) IsOutpostNode() bool {
 	return enabled != nil && *enabled
 }
 
+func (nc NodeConfig) IsIAMRolesAnywhere() bool {
+	return nc.Spec.Hybrid != nil && nc.Spec.Hybrid.IAMRolesAnywhere != nil
+}
+
+func (nc NodeConfig) IsSSM() bool {
+	return nc.Spec.Hybrid != nil && nc.Spec.Hybrid.SSM != nil
+}
+
 type IAMRolesAnywhere struct {
 	TrustAnchorARN string `json:"trustAnchorArn,omitempty"`
 	ProfileARN     string `json:"profileArn,omitempty"`

@@ -20,6 +20,7 @@ import (
 	"github.com/awslabs/amazon-eks-ami/nodeadm/internal/imagecredentialprovider"
 	"github.com/awslabs/amazon-eks-ami/nodeadm/internal/kubectl"
 	"github.com/awslabs/amazon-eks-ami/nodeadm/internal/kubelet"
+	"github.com/awslabs/amazon-eks-ami/nodeadm/internal/ssm"
 )
 
 func NewCommand() cli.Command {
@@ -96,14 +97,25 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return err
 	}
 
-	// Install the signing helper first because we need to auth when retrieving EKS artifacts
-	// via S3 APIs.
 	httpClient := http.Client{Timeout: 120 * time.Second}
-	signingHelper := iamrolesanywhere.SigningHelper(httpClient)
 
-	log.Info("Installing AWS signing helper...")
-	if err := iamrolesanywhere.InstallSigningHelper(ctx, signingHelper); err != nil && !errors.Is(err, fs.ErrExist) {
-		return err
+	switch {
+	case nodeCfg.IsIAMRolesAnywhere():
+		signingHelper := iamrolesanywhere.SigningHelper(httpClient)
+
+		log.Info("Installing AWS signing helper...")
+		if err := iamrolesanywhere.InstallSigningHelper(ctx, signingHelper); err != nil && !errors.Is(err, fs.ErrExist) {
+			return err
+		}
+	case nodeCfg.IsSSM():
+		ssmInstaller := ssm.SSMInstaller(httpClient, nodeCfg.Spec.Hybrid.Region)
+
+		log.Info("Installing SSM agent installer...")
+		if err := ssm.Install(ctx, ssmInstaller); err != nil {
+			return err
+		}
+	default:
+		return errors.New("unable to detect hybrid auth method")
 	}
 
 	// Create a Source for all EKS managed artifacts.
