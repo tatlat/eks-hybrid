@@ -1,7 +1,7 @@
 package config
 
 import (
-	"github.com/awslabs/amazon-eks-ami/nodeadm/internal/cli"
+	"github.com/aws/eks-hybrid/internal/cli"
 )
 
 func NewConfigCommand() cli.Command {

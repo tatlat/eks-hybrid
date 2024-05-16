@@ -4,7 +4,7 @@ RUN GOBIN=/bin go install github.com/aws/amazon-ec2-metadata-mock/cmd@v1.11.2
 RUN mv /bin/cmd /imds-mock
 
 FROM golang:1.21 AS nodeadm-build
-WORKDIR /go/src/github.com/awslabs/amazon-eks-ami/nodeadm
+WORKDIR /go/src/github.com/aws/eks-hybrid
 COPY . .
 RUN make build
 RUN mv _bin/nodeadm /nodeadm

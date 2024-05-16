@@ -1,8 +1,8 @@
 package config
 
 import (
-	"github.com/awslabs/amazon-eks-ami/nodeadm/internal/cli"
-	"github.com/awslabs/amazon-eks-ami/nodeadm/internal/configprovider"
+	"github.com/aws/eks-hybrid/internal/cli"
+	"github.com/aws/eks-hybrid/internal/configprovider"
 	"github.com/integrii/flaggy"
 	"go.uber.org/zap"
 )

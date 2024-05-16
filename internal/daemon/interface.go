@@ -1,6 +1,6 @@
 package daemon
 
-import "github.com/awslabs/amazon-eks-ami/nodeadm/internal/api"
+import "github.com/aws/eks-hybrid/internal/api"
 
 type Daemon interface {
 	// Configure configures the daemon.

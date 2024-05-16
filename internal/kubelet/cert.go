@@ -1,7 +1,7 @@
 package kubelet
 
 import (
-	"github.com/awslabs/amazon-eks-ami/nodeadm/internal/util"
+	"github.com/aws/eks-hybrid/internal/util"
 )
 
 const caCertificatePath = "/etc/kubernetes/pki/ca.crt"

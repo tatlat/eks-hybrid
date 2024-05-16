@@ -3,8 +3,8 @@ package bridge
 import (
 	"fmt"
 
-	api "github.com/awslabs/amazon-eks-ami/nodeadm/api"
-	internalapi "github.com/awslabs/amazon-eks-ami/nodeadm/internal/api"
+	api "github.com/aws/eks-hybrid/api"
+	internalapi "github.com/aws/eks-hybrid/internal/api"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 )

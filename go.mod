@@ -1,4 +1,4 @@
-module github.com/awslabs/amazon-eks-ami/nodeadm
+module github.com/aws/eks-hybrid
 
 go 1.21
 

@@ -5,7 +5,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/awslabs/amazon-eks-ami/nodeadm/internal/api"
+	"github.com/aws/eks-hybrid/internal/api"
 	"go.uber.org/zap"
 )
 

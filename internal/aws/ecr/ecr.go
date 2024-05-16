@@ -8,8 +8,8 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/ecr"
-	"github.com/awslabs/amazon-eks-ami/nodeadm/internal/aws/imds"
-	"github.com/awslabs/amazon-eks-ami/nodeadm/internal/system"
+	"github.com/aws/eks-hybrid/internal/aws/imds"
+	"github.com/aws/eks-hybrid/internal/system"
 )
 
 // Returns the base64 encoded authorization token string for ECR of the format "AWS:XXXXX"

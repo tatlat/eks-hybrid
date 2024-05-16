@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/awslabs/amazon-eks-ami/nodeadm/internal/artifact"
+	"github.com/aws/eks-hybrid/internal/artifact"
 )
 
 // InstallerPath is the path the SSM CLI installer is installed to.

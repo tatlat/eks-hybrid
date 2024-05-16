@@ -9,7 +9,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/ec2/imds"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go/aws"
-	ec2extra "github.com/awslabs/amazon-eks-ami/nodeadm/internal/aws/ec2"
+	ec2extra "github.com/aws/eks-hybrid/internal/aws/ec2"
 )
 
 // Fetch information about the ec2 instance using IMDS data.

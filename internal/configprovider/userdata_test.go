@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/awslabs/amazon-eks-ami/nodeadm/internal/api"
+	"github.com/aws/eks-hybrid/internal/api"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 

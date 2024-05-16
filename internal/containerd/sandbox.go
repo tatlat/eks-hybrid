@@ -6,9 +6,9 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/awslabs/amazon-eks-ami/nodeadm/internal/api"
-	"github.com/awslabs/amazon-eks-ami/nodeadm/internal/aws/ecr"
-	"github.com/awslabs/amazon-eks-ami/nodeadm/internal/util"
+	"github.com/aws/eks-hybrid/internal/api"
+	"github.com/aws/eks-hybrid/internal/aws/ecr"
+	"github.com/aws/eks-hybrid/internal/util"
 	"github.com/containerd/containerd/integration/remote"
 	"go.uber.org/zap"
 	v1 "k8s.io/cri-api/pkg/apis/runtime/v1"

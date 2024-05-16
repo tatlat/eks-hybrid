@@ -9,10 +9,10 @@ import (
 	"net/mail"
 	"strings"
 
-	"github.com/awslabs/amazon-eks-ami/nodeadm/api"
-	internalapi "github.com/awslabs/amazon-eks-ami/nodeadm/internal/api"
-	apibridge "github.com/awslabs/amazon-eks-ami/nodeadm/internal/api/bridge"
-	imds "github.com/awslabs/amazon-eks-ami/nodeadm/internal/aws/imds"
+	"github.com/aws/eks-hybrid/api"
+	internalapi "github.com/aws/eks-hybrid/internal/api"
+	apibridge "github.com/aws/eks-hybrid/internal/api/bridge"
+	imds "github.com/aws/eks-hybrid/internal/aws/imds"
 )
 
 const (
