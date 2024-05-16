@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"hash"
-	"io"
 	"strings"
 )
 
@@ -26,14 +25,8 @@ type ChecksumError struct {
 // are a space separated digest and filename:
 //
 //	<digest> <filename>
-func ParseGNUChecksum(r io.Reader) ([]byte, error) {
-	var buf strings.Builder
-	_, err := io.Copy(&buf, r)
-	if err != nil {
-		return nil, err
-	}
-
-	ch, _, found := strings.Cut(buf.String(), " ")
+func ParseGNUChecksum(gnuChecksum []byte) ([]byte, error) {
+	ch, _, found := strings.Cut(string(gnuChecksum), " ")
 	if !found {
 		return nil, errors.New("invalid gnu checksum")
 	}
@@ -72,7 +65,7 @@ func (c checksumVerifier) VerifyChecksum() bool {
 
 // Error implements the error interface.
 func (ce ChecksumError) Error() string {
-	return fmt.Sprintf("checksum mismatch (expect != actual): %v != %v", ce.Expect, ce.Actual)
+	return fmt.Sprintf("checksum mismatch (expect != actual): %s != %s", string(ce.Expect), string(ce.Actual))
 }
 
 // Is implements the errors.Is interface.

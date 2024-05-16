@@ -8,13 +8,14 @@ import (
 	"net/http"
 	"os/exec"
 	"runtime"
+	"time"
 )
 
 // SSMInstaller provides a Source that retrieves the SSM installer from the official
 // release endpoint.
-func SSMInstaller(client http.Client, region string) Source {
+func NewSSMInstaller(region string) Source {
 	return ssmInstallerSource{
-		client: client,
+		client: http.Client{Timeout: 120 * time.Second},
 		region: region,
 	}
 }

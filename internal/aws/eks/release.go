@@ -3,141 +3,155 @@ package eks
 import (
 	"context"
 	"crypto/sha256"
-	"errors"
 	"fmt"
 	"runtime"
 	"strings"
 
-	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/aws/aws-sdk-go/aws"
+	"github.com/pkg/errors"
 	"golang.org/x/mod/semver"
+	"sigs.k8s.io/yaml"
 
 	"github.com/aws/eks-hybrid/internal/artifact"
+	"github.com/aws/eks-hybrid/internal/util"
 )
 
-// bucket is the EKS bucket housing officially released EKS artifacts.
-const bucket = "amazon-eks"
+const (
+	// move this to build time @vgg
+	manifestUrl = "https://do-not-delete-temp-hybrid-manifest.s3.amazonaws.com/manifest.yaml"
+)
 
-// S3ObjectReader provides read only APIs for S3 interacftion. It is intended to be implemented
-// by the official AWS Go SDK.
-type S3ObjectReader interface {
-	ListObjectsV2(context.Context, *s3.ListObjectsV2Input, ...func(*s3.Options)) (*s3.ListObjectsV2Output, error)
-	GetObject(context.Context, *s3.GetObjectInput, ...func(*s3.Options)) (*s3.GetObjectOutput, error)
+type Manifest struct {
+	SupportedReleases []SupportedRelease `json:"supported_releases"`
 }
 
-// Release is an official EKS release. It provides methods for retrieving release artifacts.
-type Release struct {
-	Version     string
-	ReleaseDate string
-	Client      S3ObjectReader
+type SupportedRelease struct {
+	MajorMinorVersion  string         `json:"major_minor_version"`
+	LatestPatchVersion string         `json:"latest_patch_version"`
+	PatchReleases      []PatchRelease `json:"patch_releases"`
+}
+
+type PatchRelease struct {
+	Version      string     `json:"version"`
+	PatchVersion string     `json:"patch_version"`
+	ReleaseDate  string     `json:"release_date"`
+	Artifacts    []Artifact `json:"artifacts"`
+}
+
+type Artifact struct {
+	Name        string `json:"name"`
+	Arch        string `json:"arch"`
+	OS          string `json:"os"`
+	URI         string `json:"uri"`
+	ChecksumURI string `json:"checksum_uri"`
 }
 
 // FindLatestRelease finds the latest release based on version. Version should be a semantic version
-// (without a 'v' prepended). For example, 1.29. The client is re-used for future fetch operations.
-func FindLatestRelease(ctx context.Context, client S3ObjectReader, version string) (Release, error) {
+// (without a 'v' prepended). For example, 1.29.
+func FindLatestRelease(ctx context.Context, version string) (PatchRelease, error) {
 	if version == "" {
-		return Release{}, errors.New("version is empty")
+		return PatchRelease{}, fmt.Errorf("version is empty")
 	}
 
 	if !semver.IsValid("v" + version) {
-		return Release{}, fmt.Errorf("invalid semantic version: %v", version)
+		return PatchRelease{}, fmt.Errorf("invalid semantic version: %v", version)
 	}
 
-	ls, err := client.ListObjectsV2(ctx, &s3.ListObjectsV2Input{
-		Bucket: aws.String(bucket),
-		Prefix: aws.String(version),
-	}, func(o *s3.Options) {
-		// TODO(chrisdoherty) Investigate alternatives that optimize for geographical location.
-		// Buckets aren't replicated so we need to use the right region for querying S3.
-		o.Region = "us-west-2"
-	})
+	// Read in the release manifest
+	manifest, err := getReleaseManifest(ctx)
 	if err != nil {
-		return Release{}, err
+		return PatchRelease{}, err
 	}
 
-	latestVersion := "0.0.0"
-	var releaseDate string
-	for _, v := range ls.Contents {
-		// Expected v.Key format: 1.27.1/2023-04-19/.*
-		keyParts := strings.Split(*v.Key, "/")
+	// Check if input is major.minor or major.minor.patch
+	// semver.MajorMinor requires "v" to prepended
+	majorMinorVersion := semver.MajorMinor("v" + version)
 
-		if len(keyParts) < 2 {
-			return Release{}, fmt.Errorf("unexpected response when listing versions: %v", *v.Key)
-		}
+	// remove v from the majorMinor
+	majorMinorVersion = strings.ReplaceAll(majorMinorVersion, "v", "")
 
-		if !semver.IsValid("v" + keyParts[0]) {
-			return Release{}, fmt.Errorf("unexpected value for kubernetes version: %v", keyParts[0])
-		}
+	// find if input version has patch version
+	patch, hasPatchVersion := strings.CutPrefix(version, majorMinorVersion+".")
 
-		if semver.Compare("v"+latestVersion, "v"+keyParts[0]) < 0 {
-			latestVersion = keyParts[0]
-			releaseDate = keyParts[1]
+	// Find the patch release
+	for _, supportedRelease := range manifest.SupportedReleases {
+		if supportedRelease.MajorMinorVersion == majorMinorVersion {
+			for _, release := range supportedRelease.PatchReleases {
+				// Check if patch version was provided in the input
+				if hasPatchVersion {
+					if release.PatchVersion == patch {
+						return release, nil
+					}
+				} else {
+					if release.PatchVersion == supportedRelease.LatestPatchVersion {
+						return release, nil
+					}
+				}
+			}
 		}
 	}
 
-	return Release{
-		Version:     latestVersion,
-		ReleaseDate: releaseDate,
-		Client:      client,
-	}, nil
+	// If patch version was provided in the input and associated release was not found, throw an error
+	if hasPatchVersion {
+		return PatchRelease{}, fmt.Errorf("input semver did not match with available releases. Try again with major.minor version")
+	}
+
+	return PatchRelease{}, nil
+}
+
+// Read from the manifest file on s3 and parse into Manifest struct
+func getReleaseManifest(ctx context.Context) (*Manifest, error) {
+	yamlFileData, err := util.GetHttpFile(ctx, manifestUrl)
+	if err != nil {
+		return nil, err
+	}
+	var manifest Manifest
+	err = yaml.Unmarshal(yamlFileData, &manifest)
+	if err != nil {
+		return nil, errors.Wrap(err, "invalid yaml data in release manifest")
+	}
+	return &manifest, nil
 }
 
 // GetKubelet satisfies kubelet.Source.
-func (r Release) GetKubelet(ctx context.Context) (artifact.Source, error) {
+func (r PatchRelease) GetKubelet(ctx context.Context) (artifact.Source, error) {
 	return r.getSource(ctx, "kubelet")
 }
 
 // GetKubectl satisfies kubectl.Source.
-func (r Release) GetKubectl(ctx context.Context) (artifact.Source, error) {
+func (r PatchRelease) GetKubectl(ctx context.Context) (artifact.Source, error) {
 	return r.getSource(ctx, "kubectl")
 }
 
 // GetIAMAuthenticator satisfies iamrolesanywhere.IAMAuthenticatorSource.
-func (r Release) GetIAMAuthenticator(ctx context.Context) (artifact.Source, error) {
+func (r PatchRelease) GetIAMAuthenticator(ctx context.Context) (artifact.Source, error) {
 	return r.getSource(ctx, "aws-iam-authenticator")
 }
 
 // GetImageCredentialProvider satisfies imagecredentialprovider.Source.
-func (r Release) GetImageCredentialProvider(ctx context.Context) (artifact.Source, error) {
-	return r.getSource(ctx, "ecr-credental-provider")
+func (r PatchRelease) GetImageCredentialProvider(ctx context.Context) (artifact.Source, error) {
+	return r.getSource(ctx, "ecr-credential-provider")
 }
 
-func (r Release) getSource(ctx context.Context, filename string) (artifact.Source, error) {
-	obj, err := r.getObject(ctx, filename)
-	if err != nil {
-		return nil, err
+func (r PatchRelease) getSource(ctx context.Context, artifactName string) (artifact.Source, error) {
+	for _, releaseArtifact := range r.Artifacts {
+		if releaseArtifact.Name == artifactName && releaseArtifact.Arch == runtime.GOARCH && releaseArtifact.OS == runtime.GOOS {
+			obj, err := util.GetHttpFileReader(ctx, releaseArtifact.URI)
+			if err != nil {
+				obj.Close()
+				return nil, err
+			}
+
+			artifactChecksum, err := util.GetHttpFile(ctx, releaseArtifact.ChecksumURI)
+			if err != nil {
+				obj.Close()
+				return nil, err
+			}
+			source, err := artifact.WithChecksum(obj, sha256.New(), artifactChecksum)
+			if err != nil {
+				return nil, err
+			}
+			return source, nil
+		}
 	}
-
-	digest := sha256.New()
-	cs, err := r.getObject(ctx, fmt.Sprintf("%v.sha256", filename))
-	if err != nil {
-		// Ensure we don't leak file handles.
-		obj.Body.Close()
-		return nil, err
-	}
-	defer cs.Body.Close()
-
-	expect, err := artifact.ParseGNUChecksum(cs.Body)
-	if err != nil {
-		// Ensure we don't leak file handles.
-		obj.Body.Close()
-		return nil, err
-	}
-
-	return artifact.WithChecksum(obj.Body, digest, expect), nil
-}
-
-func (r Release) getObject(ctx context.Context, filename string) (*s3.GetObjectOutput, error) {
-	return r.Client.GetObject(ctx, &s3.GetObjectInput{
-		Bucket: aws.String(bucket),
-		Key:    aws.String(r.getKey(filename)),
-	}, func(o *s3.Options) {
-		// TODO(chrisdoherty) Investigate alternatives that optimize for geographical location.
-		// Buckets aren't replicated so we need to use the right region for querying S3.
-		o.Region = "us-west-2"
-	})
-}
-
-func (r Release) getKey(artifact string) string {
-	return fmt.Sprintf("%v/%v/bin/linux/%v/%v", r.Version, r.ReleaseDate, runtime.GOARCH, artifact)
+	return nil, fmt.Errorf("could not find artifact for %s arch and %s os", runtime.GOARCH, runtime.GOOS)
 }

@@ -16,19 +16,23 @@ type Source interface {
 // ChecksumVerifier verifies the checksum of a data source.
 type ChecksumVerifier interface {
 	// VerifyChecksum returns true if ExpectedChecksum() is equal to ActualChecksum(). Otherwise
-	// it returns false. If expected and acftual are nil, it returns true.
+	// it returns false. If expected and actual are nil, it returns true.
 	VerifyChecksum() bool
 
 	// ExpectedChecksum returns the expected checksum of the underlying data.
 	ExpectedChecksum() []byte
 
-	// ActualChecksum returns the acftual checksum of underlying data.
+	// ActualChecksum returns the actual checksum of underlying data.
 	ActualChecksum() []byte
 }
 
 // WithChecksum creates a checksumVerifier. The digest is used to calculate srcs checksum.
 // The returned Source should be used to read the artifact contents.
-func WithChecksum(rc io.ReadCloser, digest hash.Hash, expect []byte) Source {
+func WithChecksum(rc io.ReadCloser, digest hash.Hash, expect []byte) (Source, error) {
+	parsedExpectedChecksum, err := ParseGNUChecksum(expect)
+	if err != nil {
+		return nil, err
+	}
 	return struct {
 		io.Reader
 		io.Closer
@@ -36,8 +40,8 @@ func WithChecksum(rc io.ReadCloser, digest hash.Hash, expect []byte) Source {
 	}{
 		Reader:           io.TeeReader(rc, digest),
 		Closer:           rc,
-		ChecksumVerifier: checksumVerifier{expect: expect, digest: digest},
-	}
+		ChecksumVerifier: checksumVerifier{expect: parsedExpectedChecksum, digest: digest},
+	}, nil
 }
 
 // WithNopChecksum turns rc into a Source that nops when the ChecksumVerifier methods are called.

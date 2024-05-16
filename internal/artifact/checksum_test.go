@@ -8,7 +8,7 @@ import (
 )
 
 func TestParseGNUChecksum(t *testing.T) {
-	buf := bytes.NewBufferString("aaaa file")
+	buf := []byte("aaaa file")
 	checksum, err := artifact.ParseGNUChecksum(buf)
 	if err != nil {
 		t.Fatal(err)
