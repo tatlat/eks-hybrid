@@ -2,7 +2,7 @@ package system
 
 import (
 	_ "embed"
-	"github.com/awslabs/amazon-eks-ami/nodeadm/internal/api"
+	"github.com/aws/eks-hybrid/internal/api"
 	"reflect"
 	"testing"
 )

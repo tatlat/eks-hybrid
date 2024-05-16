@@ -1,9 +1,9 @@
 package bridge
 
 import (
-	"github.com/awslabs/amazon-eks-ami/nodeadm/api"
-	"github.com/awslabs/amazon-eks-ami/nodeadm/api/v1alpha1"
-	internalapi "github.com/awslabs/amazon-eks-ami/nodeadm/internal/api"
+	"github.com/aws/eks-hybrid/api"
+	"github.com/aws/eks-hybrid/api/v1alpha1"
+	internalapi "github.com/aws/eks-hybrid/internal/api"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )

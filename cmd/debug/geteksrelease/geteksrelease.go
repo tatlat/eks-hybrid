@@ -5,8 +5,8 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/awslabs/amazon-eks-ami/nodeadm/internal/aws/eks"
-	"github.com/awslabs/amazon-eks-ami/nodeadm/internal/cli"
+	"github.com/aws/eks-hybrid/internal/aws/eks"
+	"github.com/aws/eks-hybrid/internal/cli"
 	"github.com/integrii/flaggy"
 	"go.uber.org/zap"
 )

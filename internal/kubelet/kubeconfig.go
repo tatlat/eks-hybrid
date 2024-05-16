@@ -6,8 +6,8 @@ import (
 	"path"
 	"text/template"
 
-	"github.com/awslabs/amazon-eks-ami/nodeadm/internal/api"
-	"github.com/awslabs/amazon-eks-ami/nodeadm/internal/util"
+	"github.com/aws/eks-hybrid/internal/api"
+	"github.com/aws/eks-hybrid/internal/util"
 )
 
 const (

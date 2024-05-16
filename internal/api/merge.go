@@ -5,7 +5,7 @@ import (
 	"reflect"
 
 	"dario.cat/mergo"
-	"github.com/awslabs/amazon-eks-ami/nodeadm/internal/util"
+	"github.com/aws/eks-hybrid/internal/util"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 

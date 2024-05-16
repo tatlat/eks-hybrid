@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/awslabs/amazon-eks-ami/nodeadm/internal/iamrolesanywhere"
+	"github.com/aws/eks-hybrid/internal/iamrolesanywhere"
 )
 
 func TestEnsureAWSConfig_Write(t *testing.T) {

@@ -6,7 +6,7 @@ import (
 	_ "embed"
 	"fmt"
 
-	"github.com/awslabs/amazon-eks-ami/nodeadm/internal/artifact"
+	"github.com/aws/eks-hybrid/internal/artifact"
 )
 
 // BinPath is the path to the Kubelet binary.

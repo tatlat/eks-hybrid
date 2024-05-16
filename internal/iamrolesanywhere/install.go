@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/awslabs/amazon-eks-ami/nodeadm/internal/artifact"
+	"github.com/aws/eks-hybrid/internal/artifact"
 )
 
 // SigingHelperBinPath is the path that the signing helper is installed to.

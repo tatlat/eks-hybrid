@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"runtime"
 
-	"github.com/awslabs/amazon-eks-ami/nodeadm/internal/artifact"
+	"github.com/aws/eks-hybrid/internal/artifact"
 )
 
 const signingHelperVersion = "1.1.1"

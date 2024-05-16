@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/awslabs/amazon-eks-ami/nodeadm/internal/artifact"
+	"github.com/aws/eks-hybrid/internal/artifact"
 )
 
 func TestWithChecksum(t *testing.T) {

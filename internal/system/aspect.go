@@ -1,6 +1,6 @@
 package system
 
-import "github.com/awslabs/amazon-eks-ami/nodeadm/internal/api"
+import "github.com/aws/eks-hybrid/internal/api"
 
 type SystemAspect interface {
 	Name() string

@@ -8,8 +8,8 @@ package bridge
 import (
 	unsafe "unsafe"
 
-	v1alpha1 "github.com/awslabs/amazon-eks-ami/nodeadm/api/v1alpha1"
-	api "github.com/awslabs/amazon-eks-ami/nodeadm/internal/api"
+	v1alpha1 "github.com/aws/eks-hybrid/api/v1alpha1"
+	api "github.com/aws/eks-hybrid/internal/api"
 	conversion "k8s.io/apimachinery/pkg/conversion"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 )

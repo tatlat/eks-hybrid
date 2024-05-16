@@ -4,8 +4,8 @@ import (
 	"github.com/integrii/flaggy"
 	"go.uber.org/zap"
 
-	"github.com/awslabs/amazon-eks-ami/nodeadm/cmd/debug/geteksrelease"
-	"github.com/awslabs/amazon-eks-ami/nodeadm/internal/cli"
+	"github.com/aws/eks-hybrid/cmd/debug/geteksrelease"
+	"github.com/aws/eks-hybrid/internal/cli"
 )
 
 func main() {

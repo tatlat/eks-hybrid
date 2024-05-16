@@ -25,10 +25,10 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/ec2/imds"
 	"github.com/aws/smithy-go/ptr"
 
-	"github.com/awslabs/amazon-eks-ami/nodeadm/internal/api"
-	"github.com/awslabs/amazon-eks-ami/nodeadm/internal/containerd"
-	"github.com/awslabs/amazon-eks-ami/nodeadm/internal/system"
-	"github.com/awslabs/amazon-eks-ami/nodeadm/internal/util"
+	"github.com/aws/eks-hybrid/internal/api"
+	"github.com/aws/eks-hybrid/internal/containerd"
+	"github.com/aws/eks-hybrid/internal/system"
+	"github.com/aws/eks-hybrid/internal/util"
 )
 
 const (

@@ -12,15 +12,15 @@ import (
 	"github.com/integrii/flaggy"
 	"go.uber.org/zap"
 
-	"github.com/awslabs/amazon-eks-ami/nodeadm/internal/api"
-	"github.com/awslabs/amazon-eks-ami/nodeadm/internal/aws/eks"
-	"github.com/awslabs/amazon-eks-ami/nodeadm/internal/cli"
-	"github.com/awslabs/amazon-eks-ami/nodeadm/internal/configprovider"
-	"github.com/awslabs/amazon-eks-ami/nodeadm/internal/iamrolesanywhere"
-	"github.com/awslabs/amazon-eks-ami/nodeadm/internal/imagecredentialprovider"
-	"github.com/awslabs/amazon-eks-ami/nodeadm/internal/kubectl"
-	"github.com/awslabs/amazon-eks-ami/nodeadm/internal/kubelet"
-	"github.com/awslabs/amazon-eks-ami/nodeadm/internal/ssm"
+	"github.com/aws/eks-hybrid/internal/api"
+	"github.com/aws/eks-hybrid/internal/aws/eks"
+	"github.com/aws/eks-hybrid/internal/cli"
+	"github.com/aws/eks-hybrid/internal/configprovider"
+	"github.com/aws/eks-hybrid/internal/iamrolesanywhere"
+	"github.com/aws/eks-hybrid/internal/imagecredentialprovider"
+	"github.com/aws/eks-hybrid/internal/kubectl"
+	"github.com/aws/eks-hybrid/internal/kubelet"
+	"github.com/aws/eks-hybrid/internal/ssm"
 )
 
 func NewCommand() cli.Command {

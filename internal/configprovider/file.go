@@ -5,8 +5,8 @@ import (
 	"io"
 	"os"
 
-	internalapi "github.com/awslabs/amazon-eks-ami/nodeadm/internal/api"
-	apibridge "github.com/awslabs/amazon-eks-ami/nodeadm/internal/api/bridge"
+	internalapi "github.com/aws/eks-hybrid/internal/api"
+	apibridge "github.com/aws/eks-hybrid/internal/api/bridge"
 )
 
 type fileConfigProvider struct {

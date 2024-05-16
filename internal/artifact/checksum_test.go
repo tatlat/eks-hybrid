@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/awslabs/amazon-eks-ami/nodeadm/internal/artifact"
+	"github.com/aws/eks-hybrid/internal/artifact"
 )
 
 func TestParseGNUChecksum(t *testing.T) {
