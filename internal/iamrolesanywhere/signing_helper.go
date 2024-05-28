@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"runtime"
+	"time"
 
 	"github.com/aws/eks-hybrid/internal/artifact"
 )
@@ -15,11 +16,11 @@ type signingHelperSource struct {
 	client http.Client
 }
 
-// SigningHelper provides a SigningHelper that retrieves the binary from a official release
+// SigningHelper provides a SigningHelper that retrieves the binary from an official release
 // channels.
-func SigningHelper(client http.Client) SigningHelperSource {
+func NewSigningHelper() SigningHelperSource {
 	return signingHelperSource{
-		client: client,
+		client: http.Client{Timeout: 120 * time.Second},
 	}
 }
 

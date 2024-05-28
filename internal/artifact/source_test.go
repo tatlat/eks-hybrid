@@ -12,19 +12,17 @@ import (
 
 func TestWithChecksum(t *testing.T) {
 	data := "hello world"
-	digest := sha256.New()
 
-	// Calculate the expected digest for the data.
-	_, err := io.Copy(digest, bytes.NewBufferString(data))
-	if err != nil {
-		t.Fatal(err)
-	}
-	expect := digest.Sum(nil)
+	expect := []byte("b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9  -")
+	mismatchExpect := []byte("2fe4d4a5963f28b77737c091c436096beee0b74fabb9fcdcd2a4d8859d2099a3  -")
 
 	t.Run("GoodChecksum", func(t *testing.T) {
-		src := artifact.WithChecksum(io.NopCloser(bytes.NewBufferString(data)), sha256.New(), expect)
+		src, err := artifact.WithChecksum(io.NopCloser(bytes.NewBufferString(data)), sha256.New(), expect)
+		if err != nil {
+			t.Fatal(err)
+		}
 
-		_, err := io.Copy(io.Discard, src)
+		_, err = io.Copy(io.Discard, src)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -35,9 +33,12 @@ func TestWithChecksum(t *testing.T) {
 	})
 
 	t.Run("BadChecksum", func(t *testing.T) {
-		src := artifact.WithChecksum(io.NopCloser(bytes.NewBufferString(data)), sha256.New(), []byte("mismatch"))
+		src, err := artifact.WithChecksum(io.NopCloser(bytes.NewBufferString(data)), sha256.New(), mismatchExpect)
+		if err != nil {
+			t.Fatal(err)
+		}
 
-		_, err := io.Copy(io.Discard, src)
+		_, err = io.Copy(io.Discard, src)
 		if err != nil {
 			t.Fatal(err)
 		}
