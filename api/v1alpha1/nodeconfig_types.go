@@ -115,6 +115,10 @@ type HybridOptions struct {
 	// SSM includes Systems Manager specific configuration and is mutually exclusive with
 	// IAMRolesAnywhere.
 	SSM *SSM `json:"ssm,omitempty"`
+
+	// AwsConfigPath is the path where the Aws config is stored for hybrid nodes.
+	// This field is only used to init phase
+	AwsConfigPath string `json:"awsConfigPath,omitempty"`
 }
 
 // IsHybridNode returns true when the nc.Hybrid configuration is non-nil.
@@ -136,11 +140,15 @@ type IAMRolesAnywhere struct {
 	// ProfileARN is the ARN of the profile linked with the Hybrid IAM Role.
 	ProfileARN string `json:"profileArn,omitempty"`
 
-	// RoleARN is the role to assume when retrieving temporary credentials.
+	// RoleARN is the role to IAM roles anywhere gets authorized as to get temporary credentials.
 	RoleARN string `json:"roleArn,omitempty"`
+
+	// AssumeRoleARN is the role to assume after authorized as RoleARN.
+	// This role will have permissions to add a node to the cluster.
+	AssumeRoleARN string `json:"assumeRoleArn,omitempty"`
 }
 
-// SSM defines Systems MAnager specific configuration.
+// SSM defines Systems Manager specific configuration.
 type SSM struct {
 	// ActivationToken is the token generated when creating an SSM activation.
 	ActivationToken string `json:"activationToken,omitempty"`

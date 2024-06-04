@@ -8,9 +8,9 @@ import (
 )
 
 // BinPath is the path to the image-credential-provider binary.
-const BinPath = "/etc/eks/image-credential-provider/image-credential-provider"
+const BinPath = "/etc/eks/image-credential-provider/ecr-credential-provider"
 
-// Source represents a source that serves a image-credential-provider binary.
+// Source represents a source that serves an image-credential-provider binary.
 type Source interface {
 	GetImageCredentialProvider(context.Context) (artifact.Source, error)
 }

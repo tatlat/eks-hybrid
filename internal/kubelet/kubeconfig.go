@@ -50,6 +50,7 @@ type kubeconfigTemplateVars struct {
 	CaCertPath        string
 	SessionName       string
 	AssumeRole        string
+	AwsConfigPath     string
 }
 
 func newKubeconfigTemplateVars(cfg *api.NodeConfig) *kubeconfigTemplateVars {
@@ -68,7 +69,8 @@ func (kct *kubeconfigTemplateVars) withOutpostVars(cfg *api.NodeConfig) {
 func (kct *kubeconfigTemplateVars) withHybridVars(cfg *api.NodeConfig) {
 	kct.Region = cfg.Spec.Hybrid.Region
 	kct.SessionName = cfg.Spec.Hybrid.NodeName
-	kct.AssumeRole = cfg.Spec.Hybrid.IAMRolesAnywhere.RoleARN
+	kct.AssumeRole = cfg.Spec.Hybrid.IAMRolesAnywhere.AssumeRoleARN
+	kct.AwsConfigPath = cfg.Spec.Hybrid.AwsConfigPath
 }
 
 func generateKubeconfig(cfg *api.NodeConfig) ([]byte, error) {

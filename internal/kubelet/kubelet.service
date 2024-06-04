@@ -6,12 +6,13 @@ Requires=containerd.service
 
 [Service]
 Slice=runtime.slice
+EnvironmentFile=/etc/eks/kubelet/environment
 ExecStartPre=/sbin/iptables -P FORWARD ACCEPT -w 5
 ExecStart=/usr/bin/kubelet \
     --config /etc/kubernetes/kubelet/config.json \
     --kubeconfig /var/lib/kubelet/kubeconfig \
     --container-runtime-endpoint unix:///run/containerd/containerd.sock \
-    $KUBELET_ARGS \
+    $NODEADM_KUBELET_ARGS\
     $KUBELET_EXTRA_ARGS
 
 Restart=on-failure

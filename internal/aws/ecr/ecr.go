@@ -6,17 +6,32 @@ import (
 	"net"
 	"strings"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/ecr"
 	"github.com/aws/eks-hybrid/internal/aws/imds"
 	"github.com/aws/eks-hybrid/internal/system"
+
+	"github.com/aws/eks-hybrid/internal/api"
 )
 
 // Returns the base64 encoded authorization token string for ECR of the format "AWS:XXXXX"
-func GetAuthorizationToken(awsRegion string) (string, error) {
-	awsConfig, err := config.LoadDefaultConfig(context.Background(), config.WithRegion(awsRegion))
-	if err != nil {
-		return "", err
+func GetAuthorizationToken(nodeCfg *api.NodeConfig) (string, error) {
+	var awsConfig aws.Config
+	var err error
+	if nodeCfg.IsHybridNode() {
+		awsConfig, err = config.LoadDefaultConfig(context.Background(),
+			config.WithRegion(nodeCfg.Spec.Hybrid.Region),
+			config.WithSharedConfigFiles([]string{nodeCfg.Spec.Hybrid.AwsConfigPath}),
+			config.WithSharedConfigProfile("hybrid"))
+		if err != nil {
+			return "", err
+		}
+	} else {
+		awsConfig, err = config.LoadDefaultConfig(context.Background(), config.WithRegion(nodeCfg.Status.Instance.Region))
+		if err != nil {
+			return "", err
+		}
 	}
 	ecrClient := ecr.NewFromConfig(awsConfig)
 	token, err := ecrClient.GetAuthorizationToken(context.Background(), &ecr.GetAuthorizationTokenInput{})

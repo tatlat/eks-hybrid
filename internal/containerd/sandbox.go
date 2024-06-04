@@ -32,7 +32,7 @@ func cacheSandboxImage(cfg *api.NodeConfig) error {
 	zap.L().Info("Found sandbox image", zap.String("image", sandboxImage))
 
 	zap.L().Info("Fetching ECR authorization token..")
-	ecrUserToken, err := ecr.GetAuthorizationToken(cfg.Status.Instance.Region)
+	ecrUserToken, err := ecr.GetAuthorizationToken(cfg)
 	if err != nil {
 		return err
 	}
