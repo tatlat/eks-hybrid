@@ -66,11 +66,23 @@ func (kct *kubeconfigTemplateVars) withOutpostVars(cfg *api.NodeConfig) {
 	kct.Cluster = cfg.Spec.Cluster.ID
 }
 
-func (kct *kubeconfigTemplateVars) withHybridVars(cfg *api.NodeConfig) {
+func (kct *kubeconfigTemplateVars) withHybridTemplateVars(cfg *api.NodeConfig) {
+	if cfg.IsIAMRolesAnywhere() {
+		kct.withIamRolesAnywhereHybridVars(cfg)
+	} else if cfg.IsSSM() {
+		kct.withSsmHybridVars(cfg)
+	}
+}
+
+func (kct *kubeconfigTemplateVars) withIamRolesAnywhereHybridVars(cfg *api.NodeConfig) {
 	kct.Region = cfg.Spec.Hybrid.Region
 	kct.SessionName = cfg.Spec.Hybrid.NodeName
 	kct.AssumeRole = cfg.Spec.Hybrid.IAMRolesAnywhere.AssumeRoleARN
-	kct.AwsConfigPath = cfg.Spec.Hybrid.AwsConfigPath
+	kct.AwsConfigPath = cfg.Spec.Hybrid.IAMRolesAnywhere.AwsConfigPath
+}
+
+func (kct *kubeconfigTemplateVars) withSsmHybridVars(cfg *api.NodeConfig) {
+	kct.Region = cfg.Spec.Hybrid.Region
 }
 
 func generateKubeconfig(cfg *api.NodeConfig) ([]byte, error) {
@@ -78,12 +90,14 @@ func generateKubeconfig(cfg *api.NodeConfig) ([]byte, error) {
 	if cfg.IsOutpostNode() {
 		config.withOutpostVars(cfg)
 	}
+
 	if cfg.IsHybridNode() {
-		config.withHybridVars(cfg)
+		config.withHybridTemplateVars(cfg)
 	}
 
 	var buf bytes.Buffer
 	var kubeconfigTemplate *template.Template
+	// SSM based hybrid nodes can still use the normal eks get-token api for authentication
 	if cfg.IsHybridNode() {
 		kubeconfigTemplate = template.Must(template.New(kubeconfigFile).Parse(hybridKubeconfigTemplateData))
 	} else {

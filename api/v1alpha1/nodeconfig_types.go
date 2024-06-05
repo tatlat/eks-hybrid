@@ -105,7 +105,8 @@ type HybridOptions struct {
 	// NodeName is the name the node will adopt.
 	NodeName string `json:"nodeName,omitempty"`
 
-	// Region is an AWS region (e.g. us-east-1) used to retrieve regional artifacts.
+	// Region is an AWS region (e.g. us-east-1) used to retrieve regional artifacts
+	// as well as region where EKS cluster lives.
 	Region string `json:"region,omitempty"`
 
 	// IAMRolesAnywhere includes IAM Roles Anywhere specific configuration and is mutually exclusive
@@ -115,10 +116,6 @@ type HybridOptions struct {
 	// SSM includes Systems Manager specific configuration and is mutually exclusive with
 	// IAMRolesAnywhere.
 	SSM *SSM `json:"ssm,omitempty"`
-
-	// AwsConfigPath is the path where the Aws config is stored for hybrid nodes.
-	// This field is only used to init phase
-	AwsConfigPath string `json:"awsConfigPath,omitempty"`
 }
 
 // IsHybridNode returns true when the nc.Hybrid configuration is non-nil.
@@ -146,12 +143,19 @@ type IAMRolesAnywhere struct {
 	// AssumeRoleARN is the role to assume after authorized as RoleARN.
 	// This role will have permissions to add a node to the cluster.
 	AssumeRoleARN string `json:"assumeRoleArn,omitempty"`
+
+	// AwsConfigPath is the path where the Aws config is stored for hybrid nodes.
+	// This field is only used to init phase
+	// +optional
+	AwsConfigPath string `json:"awsConfigPath,omitempty"`
 }
 
 // SSM defines Systems Manager specific configuration.
+// ActivationCode and ActivationID are generated on the aws console or cli during hybrid activations.
+// During activation an IAM role is chosen for the SSM agent to assume. This is not overridable from the agent.
 type SSM struct {
-	// ActivationToken is the token generated when creating an SSM activation.
-	ActivationToken string `json:"activationToken,omitempty"`
+	// ActivationCode is the token generated when creating an SSM activation.
+	ActivationCode string `json:"activationCode,omitempty"`
 
 	// ActivationToken is the ID generated when creating an SSM activation.
 	ActivationID string `json:"activationId,omitempty"`

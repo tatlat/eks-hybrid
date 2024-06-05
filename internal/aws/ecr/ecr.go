@@ -20,12 +20,19 @@ func GetAuthorizationToken(nodeCfg *api.NodeConfig) (string, error) {
 	var awsConfig aws.Config
 	var err error
 	if nodeCfg.IsHybridNode() {
-		awsConfig, err = config.LoadDefaultConfig(context.Background(),
-			config.WithRegion(nodeCfg.Spec.Hybrid.Region),
-			config.WithSharedConfigFiles([]string{nodeCfg.Spec.Hybrid.AwsConfigPath}),
-			config.WithSharedConfigProfile("hybrid"))
-		if err != nil {
-			return "", err
+		if nodeCfg.IsIAMRolesAnywhere() {
+			awsConfig, err = config.LoadDefaultConfig(context.Background(),
+				config.WithRegion(nodeCfg.Spec.Hybrid.Region),
+				config.WithSharedConfigFiles([]string{nodeCfg.Spec.Hybrid.IAMRolesAnywhere.AwsConfigPath}),
+				config.WithSharedConfigProfile("hybrid"))
+			if err != nil {
+				return "", err
+			}
+		} else if nodeCfg.IsSSM() {
+			awsConfig, err = config.LoadDefaultConfig(context.Background(), config.WithRegion(nodeCfg.Spec.Hybrid.Region))
+			if err != nil {
+				return "", err
+			}
 		}
 	} else {
 		awsConfig, err = config.LoadDefaultConfig(context.Background(), config.WithRegion(nodeCfg.Status.Instance.Region))

@@ -30,7 +30,6 @@ func (s ssmInstallerSource) GetSSMInstaller(ctx context.Context) (io.ReadCloser,
 	if err != nil {
 		return nil, err
 	}
-
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return nil, err
@@ -51,7 +50,7 @@ func buildSSMURL(region string) (string, error) {
 	}
 
 	platform := fmt.Sprintf("%v_%v", variant, runtime.GOARCH)
-	return fmt.Sprintf("https://s3.%v.amazonaws.com/latest/%v/ssm-setup-cli", region, platform), nil
+	return fmt.Sprintf("https://amazon-ssm-%v.s3.%v.amazonaws.com/latest/%v/ssm-setup-cli", region, region, platform), nil
 }
 
 // detectPlatformVariant returns a portion of the SSM installers URL that is dependent on the
