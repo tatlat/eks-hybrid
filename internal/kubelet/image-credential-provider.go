@@ -28,8 +28,9 @@ const (
 var (
 	//go:embed image-credential-provider.template.json
 	imageCredentialProviderTemplateData string
-	imageCredentialProviderTemplate     = template.Must(template.New("image-credential-provider").Parse(imageCredentialProviderTemplateData))
-	imageCredentialProviderConfigPath   = path.Join(imageCredentialProviderRoot, imageCredentialProviderConfig)
+	//go:embed hybrid-image-credential-provider.template.json
+	hybridImageCredentialProviderTemplateData string
+	imageCredentialProviderConfigPath         = path.Join(imageCredentialProviderRoot, imageCredentialProviderConfig)
 )
 
 func (k *kubelet) writeImageCredentialProviderConfig(cfg *api.NodeConfig) error {
@@ -58,6 +59,7 @@ type imageCredentialProviderTemplateVars struct {
 	ConfigApiVersion   string
 	ProviderApiVersion string
 	EcrProviderName    string
+	AwsConfigPath      string
 }
 
 func generateImageCredentialProviderConfig(cfg *api.NodeConfig, ecrCredentialProviderBinPath string) ([]byte, error) {
@@ -75,7 +77,15 @@ func generateImageCredentialProviderConfig(cfg *api.NodeConfig, ecrCredentialPro
 		templateVars.ConfigApiVersion = "kubelet.config.k8s.io/v1"
 		templateVars.ProviderApiVersion = "credentialprovider.kubelet.k8s.io/v1"
 	}
+
 	var buf bytes.Buffer
+	var imageCredentialProviderTemplate *template.Template
+	if cfg.IsHybridNode() {
+		templateVars.AwsConfigPath = cfg.Spec.Hybrid.AwsConfigPath
+		imageCredentialProviderTemplate = template.Must(template.New("image-credential-provider").Parse(hybridImageCredentialProviderTemplateData))
+	} else {
+		imageCredentialProviderTemplate = template.Must(template.New("image-credential-provider").Parse(imageCredentialProviderTemplateData))
+	}
 	if err := imageCredentialProviderTemplate.Execute(&buf, templateVars); err != nil {
 		return nil, err
 	}

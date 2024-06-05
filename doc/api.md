@@ -48,6 +48,7 @@ _Appears in:_
 | `region` _string_ | Region is an AWS region (e.g. us-east-1) used to retrieve regional artifacts. |
 | `iamRolesAnywhere` _[IAMRolesAnywhere](#iamrolesanywhere)_ | IAMRolesAnywhere includes IAM Roles Anywhere specific configuration and is mutually exclusive with SSM. |
 | `ssm` _[SSM](#ssm)_ | SSM includes Systems Manager specific configuration and is mutually exclusive with IAMRolesAnywhere. |
+| `awsConfigPath` _string_ | AwsConfigPath is the path where the Aws config is stored for hybrid nodes. This field is only used to init phase |
 
 #### IAMRolesAnywhere
 
@@ -60,7 +61,8 @@ _Appears in:_
 | --- | --- |
 | `trustAnchorArn` _string_ | TrustAnchorARN is the ARN of the trust anchor. |
 | `profileArn` _string_ | ProfileARN is the ARN of the profile linked with the Hybrid IAM Role. |
-| `roleArn` _string_ | RoleARN is the role to assume when retrieving temporary credentials. |
+| `roleArn` _string_ | RoleARN is the role to IAM roles anywhere gets authorized as to get temporary credentials. |
+| `assumeRoleArn` _string_ | AssumeRoleARN is the role to assume after authorized as RoleARN. This role will have permissions to add a node to the cluster. |
 
 #### InstanceOptions
 
@@ -136,7 +138,7 @@ _Appears in:_
 
 #### SSM
 
-SSM defines Systems MAnager specific configuration.
+SSM defines Systems Manager specific configuration.
 
 _Appears in:_
 - [HybridOptions](#hybridoptions)

@@ -76,17 +76,26 @@ spec:
                 description: HybridOptions defines the options specific to hybrid
                   node enrollment.
                 properties:
+                  awsConfigPath:
+                    description: AwsConfigPath is the path where the Aws config is
+                      stored for hybrid nodes. This field is only used to init phase
+                    type: string
                   iamRolesAnywhere:
                     description: IAMRolesAnywhere includes IAM Roles Anywhere specific
                       configuration and is mutually exclusive with SSM.
                     properties:
+                      assumeRoleArn:
+                        description: AssumeRoleARN is the role to assume after authorized
+                          as RoleARN. This role will have permissions to add a node
+                          to the cluster.
+                        type: string
                       profileArn:
                         description: ProfileARN is the ARN of the profile linked with
                           the Hybrid IAM Role.
                         type: string
                       roleArn:
-                        description: RoleARN is the role to assume when retrieving
-                          temporary credentials.
+                        description: RoleARN is the role to IAM roles anywhere gets
+                          authorized as to get temporary credentials.
                         type: string
                       trustAnchorArn:
                         description: TrustAnchorARN is the ARN of the trust anchor.

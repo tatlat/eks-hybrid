@@ -189,6 +189,7 @@ func autoConvert_v1alpha1_HybridOptions_To_api_HybridOptions(in *v1alpha1.Hybrid
 	out.Region = in.Region
 	out.IAMRolesAnywhere = (*api.IAMRolesAnywhere)(unsafe.Pointer(in.IAMRolesAnywhere))
 	out.SSM = (*api.SSM)(unsafe.Pointer(in.SSM))
+	out.AwsConfigPath = in.AwsConfigPath
 	return nil
 }
 
@@ -202,6 +203,7 @@ func autoConvert_api_HybridOptions_To_v1alpha1_HybridOptions(in *api.HybridOptio
 	out.Region = in.Region
 	out.IAMRolesAnywhere = (*v1alpha1.IAMRolesAnywhere)(unsafe.Pointer(in.IAMRolesAnywhere))
 	out.SSM = (*v1alpha1.SSM)(unsafe.Pointer(in.SSM))
+	out.AwsConfigPath = in.AwsConfigPath
 	return nil
 }
 
@@ -214,6 +216,7 @@ func autoConvert_v1alpha1_IAMRolesAnywhere_To_api_IAMRolesAnywhere(in *v1alpha1.
 	out.TrustAnchorARN = in.TrustAnchorARN
 	out.ProfileARN = in.ProfileARN
 	out.RoleARN = in.RoleARN
+	out.AssumeRoleARN = in.AssumeRoleARN
 	return nil
 }
 
@@ -226,6 +229,7 @@ func autoConvert_api_IAMRolesAnywhere_To_v1alpha1_IAMRolesAnywhere(in *api.IAMRo
 	out.TrustAnchorARN = in.TrustAnchorARN
 	out.ProfileARN = in.ProfileARN
 	out.RoleARN = in.RoleARN
+	out.AssumeRoleARN = in.AssumeRoleARN
 	return nil
 }
 
