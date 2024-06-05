@@ -25,11 +25,25 @@ func ValidateNodeConfig(cfg *NodeConfig) error {
 		if cfg.Spec.Hybrid.Region == "" {
 			return fmt.Errorf("Region is missing in hybrid configuration")
 		}
-		if cfg.Spec.Hybrid.IAMRolesAnywhere == nil && cfg.Spec.Hybrid.SSM == nil {
+		if !cfg.IsIAMRolesAnywhere() && !cfg.IsSSM() {
 			return fmt.Errorf("Either IAMRolesAnywhere or SSM must be provided for hybrid node configuration")
 		}
-		if cfg.Spec.Hybrid.IAMRolesAnywhere != nil && cfg.Spec.Hybrid.SSM != nil {
+		if cfg.IsIAMRolesAnywhere() && cfg.IsSSM() {
 			return fmt.Errorf("Only one of IAMRolesAnywhere or SSM must be provided for hybrid node configuration")
+		}
+		if cfg.IsIAMRolesAnywhere() {
+			if cfg.Spec.Hybrid.IAMRolesAnywhere.AssumeRoleARN == "" {
+				return fmt.Errorf("AssumeRoleARN is missing in hybrid iam roles anywhere configuration")
+			}
+			if cfg.Spec.Hybrid.IAMRolesAnywhere.RoleARN == "" {
+				return fmt.Errorf("RoleARN is missing in hybrid iam roles anywhere configuration")
+			}
+			if cfg.Spec.Hybrid.IAMRolesAnywhere.ProfileARN == "" {
+				return fmt.Errorf("ProfileARN is missing in hybrid iam roles anywhere configuration")
+			}
+			if cfg.Spec.Hybrid.IAMRolesAnywhere.TrustAnchorARN == "" {
+				return fmt.Errorf("TrustAnchroARN is missing in hybrid iam roles anywhere configuration")
+			}
 		}
 	}
 	return nil

@@ -32,7 +32,6 @@ func NewInitCommand() cli.Command {
 	init.cmd = flaggy.NewSubcommand("init")
 	init.cmd.StringSlice(&init.daemons, "d", "daemon", "specify one or more of `containerd` and `kubelet`. This is intended for testing and should not be used in a production environment.")
 	init.cmd.StringSlice(&init.skipPhases, "s", "skip", "phases of the bootstrap you want to skip")
-	init.cmd.String(&init.awsConfig, "", "aws-config", "An aws config path to use for hybrid configuration (/etc/aws/hybrid/config)")
 	init.cmd.Description = "Initialize this instance as a node in an EKS cluster"
 	return &init
 }
@@ -41,7 +40,6 @@ type initCmd struct {
 	cmd        *flaggy.Subcommand
 	skipPhases []string
 	daemons    []string
-	awsConfig  string
 }
 
 func (c *initCmd) Flaggy() *flaggy.Subcommand {
@@ -73,24 +71,24 @@ func (c *initCmd) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return err
 	}
 
-	// Default and validate aws config
-	if c.awsConfig == "" {
-		c.awsConfig = iamrolesanywhere.DefaultAWSConfigPath
-	}
-
 	zap.L().Info("Validating configuration..")
 	if err := api.ValidateNodeConfig(nodeConfig); err != nil {
 		return err
 	}
 
-	if err := iamrolesanywhere.EnsureAWSConfig(iamrolesanywhere.AWSConfig{
-		TrustAnchorARN: nodeConfig.Spec.Hybrid.IAMRolesAnywhere.TrustAnchorARN,
-		ProfileARN:     nodeConfig.Spec.Hybrid.IAMRolesAnywhere.ProfileARN,
-		RoleARN:        nodeConfig.Spec.Hybrid.IAMRolesAnywhere.RoleARN,
-		Region:         nodeConfig.Spec.Hybrid.Region,
-		ConfigPath:     c.awsConfig,
-	}); err != nil {
-		return err
+	if nodeConfig.IsHybridNode() {
+		if nodeConfig.Spec.Hybrid.AwsConfigPath == "" {
+			nodeConfig.Spec.Hybrid.AwsConfigPath = iamrolesanywhere.DefaultAWSConfigPath
+		}
+		if err := iamrolesanywhere.EnsureAWSConfig(iamrolesanywhere.AWSConfig{
+			TrustAnchorARN: nodeConfig.Spec.Hybrid.IAMRolesAnywhere.TrustAnchorARN,
+			ProfileARN:     nodeConfig.Spec.Hybrid.IAMRolesAnywhere.ProfileARN,
+			RoleARN:        nodeConfig.Spec.Hybrid.IAMRolesAnywhere.RoleARN,
+			Region:         nodeConfig.Spec.Hybrid.Region,
+			ConfigPath:     nodeConfig.Spec.Hybrid.AwsConfigPath,
+		}); err != nil {
+			return err
+		}
 	}
 
 	log.Info("Creating daemon manager..")
