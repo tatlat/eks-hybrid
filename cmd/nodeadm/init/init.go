@@ -19,6 +19,7 @@ import (
 	"github.com/aws/eks-hybrid/internal/containerd"
 	"github.com/aws/eks-hybrid/internal/daemon"
 	"github.com/aws/eks-hybrid/internal/kubelet"
+	"github.com/aws/eks-hybrid/internal/ssm"
 	"github.com/aws/eks-hybrid/internal/system"
 )
 
@@ -77,17 +78,21 @@ func (c *initCmd) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	}
 
 	if nodeConfig.IsHybridNode() {
-		if nodeConfig.Spec.Hybrid.AwsConfigPath == "" {
-			nodeConfig.Spec.Hybrid.AwsConfigPath = iamrolesanywhere.DefaultAWSConfigPath
-		}
-		if err := iamrolesanywhere.EnsureAWSConfig(iamrolesanywhere.AWSConfig{
-			TrustAnchorARN: nodeConfig.Spec.Hybrid.IAMRolesAnywhere.TrustAnchorARN,
-			ProfileARN:     nodeConfig.Spec.Hybrid.IAMRolesAnywhere.ProfileARN,
-			RoleARN:        nodeConfig.Spec.Hybrid.IAMRolesAnywhere.RoleARN,
-			Region:         nodeConfig.Spec.Hybrid.Region,
-			ConfigPath:     nodeConfig.Spec.Hybrid.AwsConfigPath,
-		}); err != nil {
-			return err
+		// validate and/or create aws config with the inputs from IAM roles anywhere inputs
+		// skip this for SSM, as SSM agents generates and owns the aws config.
+		if nodeConfig.IsIAMRolesAnywhere() {
+			if nodeConfig.Spec.Hybrid.IAMRolesAnywhere.AwsConfigPath == "" {
+				nodeConfig.Spec.Hybrid.IAMRolesAnywhere.AwsConfigPath = iamrolesanywhere.DefaultAWSConfigPath
+			}
+			if err := iamrolesanywhere.EnsureAWSConfig(iamrolesanywhere.AWSConfig{
+				TrustAnchorARN: nodeConfig.Spec.Hybrid.IAMRolesAnywhere.TrustAnchorARN,
+				ProfileARN:     nodeConfig.Spec.Hybrid.IAMRolesAnywhere.ProfileARN,
+				RoleARN:        nodeConfig.Spec.Hybrid.IAMRolesAnywhere.RoleARN,
+				Region:         nodeConfig.Spec.Hybrid.Region,
+				ConfigPath:     nodeConfig.Spec.Hybrid.IAMRolesAnywhere.AwsConfigPath,
+			}); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -103,10 +108,18 @@ func (c *initCmd) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		system.NewNetworkingAspect(),
 	}
 
-	daemons := []daemon.Daemon{
+	var daemons []daemon.Daemon
+	// If Hybrid w/ SSM is enabled, we need to make sure SSM daemon is configured first
+	// in order to register the instance first. This will provide us both aws credentials
+	// and managed instance ID which will override hostname in both kubelet configs & provider-id
+	if nodeConfig.IsSSM() {
+		daemons = append(daemons, ssm.NewSsmDaemon(daemonManager))
+	}
+
+	daemons = append(daemons,
 		containerd.NewContainerdDaemon(daemonManager),
 		kubelet.NewKubeletDaemon(daemonManager),
-	}
+	)
 
 	if !slices.Contains(c.skipPhases, configPhase) {
 		log.Info("Configuring daemons...")
@@ -121,6 +134,17 @@ func (c *initCmd) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 				return err
 			}
 			log.Info("Configured daemon", nameField)
+
+			// Check if SSM daemon and set node name
+			if daemon.Name() == ssm.SsmDaemonName {
+				registeredNodeName, err := ssm.GetManagedHybridInstanceId()
+				if err != nil {
+					return err
+				}
+				nodeNameField := zap.String("registered instance-id", registeredNodeName)
+				log.Info("Re-setting node name with registered managed instance id", nodeNameField)
+				nodeConfig.Spec.Hybrid.NodeName = registeredNodeName
+			}
 		}
 	}
 
@@ -167,8 +191,7 @@ func (c *initCmd) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 func enrichConfig(log *zap.Logger, cfg *api.NodeConfig) error {
 	var region string
 	if cfg.IsHybridNode() {
-		// TODO @vgg figure out the region inference for hybrid nodes
-		region = "us-west-2"
+		region = cfg.Spec.Hybrid.Region
 	} else {
 		log.Info("Fetching instance details..")
 		imdsClient := imds.New(imds.Options{})

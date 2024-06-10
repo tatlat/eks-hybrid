@@ -45,10 +45,9 @@ _Appears in:_
 | Field | Description |
 | --- | --- |
 | `nodeName` _string_ | NodeName is the name the node will adopt. |
-| `region` _string_ | Region is an AWS region (e.g. us-east-1) used to retrieve regional artifacts. |
+| `region` _string_ | Region is an AWS region (e.g. us-east-1) used to retrieve regional artifacts as well as region where EKS cluster lives. |
 | `iamRolesAnywhere` _[IAMRolesAnywhere](#iamrolesanywhere)_ | IAMRolesAnywhere includes IAM Roles Anywhere specific configuration and is mutually exclusive with SSM. |
 | `ssm` _[SSM](#ssm)_ | SSM includes Systems Manager specific configuration and is mutually exclusive with IAMRolesAnywhere. |
-| `awsConfigPath` _string_ | AwsConfigPath is the path where the Aws config is stored for hybrid nodes. This field is only used to init phase |
 
 #### IAMRolesAnywhere
 
@@ -63,6 +62,7 @@ _Appears in:_
 | `profileArn` _string_ | ProfileARN is the ARN of the profile linked with the Hybrid IAM Role. |
 | `roleArn` _string_ | RoleARN is the role to IAM roles anywhere gets authorized as to get temporary credentials. |
 | `assumeRoleArn` _string_ | AssumeRoleARN is the role to assume after authorized as RoleARN. This role will have permissions to add a node to the cluster. |
+| `awsConfigPath` _string_ | AwsConfigPath is the path where the Aws config is stored for hybrid nodes. This field is only used to init phase |
 
 #### InstanceOptions
 
@@ -138,12 +138,12 @@ _Appears in:_
 
 #### SSM
 
-SSM defines Systems Manager specific configuration.
+SSM defines Systems Manager specific configuration. ActivationCode and ActivationID are generated on the aws console or cli during hybrid activations. During activation an IAM role is chosen for the SSM agent to assume. This is not overridable from the agent.
 
 _Appears in:_
 - [HybridOptions](#hybridoptions)
 
 | Field | Description |
 | --- | --- |
-| `activationToken` _string_ | ActivationToken is the token generated when creating an SSM activation. |
+| `activationCode` _string_ | ActivationCode is the token generated when creating an SSM activation. |
 | `activationId` _string_ | ActivationToken is the ID generated when creating an SSM activation. |

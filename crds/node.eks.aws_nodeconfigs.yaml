@@ -76,10 +76,6 @@ spec:
                 description: HybridOptions defines the options specific to hybrid
                   node enrollment.
                 properties:
-                  awsConfigPath:
-                    description: AwsConfigPath is the path where the Aws config is
-                      stored for hybrid nodes. This field is only used to init phase
-                    type: string
                   iamRolesAnywhere:
                     description: IAMRolesAnywhere includes IAM Roles Anywhere specific
                       configuration and is mutually exclusive with SSM.
@@ -88,6 +84,11 @@ spec:
                         description: AssumeRoleARN is the role to assume after authorized
                           as RoleARN. This role will have permissions to add a node
                           to the cluster.
+                        type: string
+                      awsConfigPath:
+                        description: AwsConfigPath is the path where the Aws config
+                          is stored for hybrid nodes. This field is only used to init
+                          phase
                         type: string
                       profileArn:
                         description: ProfileARN is the ARN of the profile linked with
@@ -106,18 +107,19 @@ spec:
                     type: string
                   region:
                     description: Region is an AWS region (e.g. us-east-1) used to
-                      retrieve regional artifacts.
+                      retrieve regional artifacts as well as region where EKS cluster
+                      lives.
                     type: string
                   ssm:
                     description: SSM includes Systems Manager specific configuration
                       and is mutually exclusive with IAMRolesAnywhere.
                     properties:
-                      activationId:
-                        description: ActivationToken is the ID generated when creating
+                      activationCode:
+                        description: ActivationCode is the token generated when creating
                           an SSM activation.
                         type: string
-                      activationToken:
-                        description: ActivationToken is the token generated when creating
+                      activationId:
+                        description: ActivationToken is the ID generated when creating
                           an SSM activation.
                         type: string
                     type: object

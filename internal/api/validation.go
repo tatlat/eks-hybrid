@@ -42,7 +42,15 @@ func ValidateNodeConfig(cfg *NodeConfig) error {
 				return fmt.Errorf("ProfileARN is missing in hybrid iam roles anywhere configuration")
 			}
 			if cfg.Spec.Hybrid.IAMRolesAnywhere.TrustAnchorARN == "" {
-				return fmt.Errorf("TrustAnchroARN is missing in hybrid iam roles anywhere configuration")
+				return fmt.Errorf("TrustAnchorARN is missing in hybrid iam roles anywhere configuration")
+			}
+		}
+		if cfg.IsSSM() {
+			if cfg.Spec.Hybrid.SSM.ActivationCode == "" {
+				return fmt.Errorf("ActivationCode is missing in hybrid ssm configuration")
+			}
+			if cfg.Spec.Hybrid.SSM.ActivationID == "" {
+				return fmt.Errorf("ActivationID is missing in hybrid ssm configuration")
 			}
 		}
 	}

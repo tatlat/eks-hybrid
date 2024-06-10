@@ -111,7 +111,6 @@ type HybridOptions struct {
 	Region           string            `json:"region,omitempty"`
 	IAMRolesAnywhere *IAMRolesAnywhere `json:"iamRolesAnywhere,omitempty"`
 	SSM              *SSM              `json:"ssm,omitempty"`
-	AwsConfigPath    string            `json:"awsConfigPath,omitempty"`
 }
 
 func (nc NodeConfig) IsHybridNode() bool {
@@ -136,9 +135,10 @@ type IAMRolesAnywhere struct {
 	ProfileARN     string `json:"profileArn,omitempty"`
 	RoleARN        string `json:"roleArn,omitempty"`
 	AssumeRoleARN  string `json:"assumeRoleARN,omitempty"`
+	AwsConfigPath  string `json:"awsConfigPath,omitempty"`
 }
 
 type SSM struct {
-	ActivationToken string `json:"activationToken,omitempty"`
-	ActivationID    string `json:"activationId,omitempty"`
+	ActivationCode string `json:"activationCode,omitempty"`
+	ActivationID   string `json:"activationId,omitempty"`
 }

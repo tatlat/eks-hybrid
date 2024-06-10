@@ -28,9 +28,9 @@ const (
 var (
 	//go:embed image-credential-provider.template.json
 	imageCredentialProviderTemplateData string
-	//go:embed hybrid-image-credential-provider.template.json
-	hybridImageCredentialProviderTemplateData string
-	imageCredentialProviderConfigPath         = path.Join(imageCredentialProviderRoot, imageCredentialProviderConfig)
+	//go:embed hybrid-roles-anywhere-image-credential-provider.template.json
+	hybridRolesAnywhereImageCredentialProviderTemplateData string
+	imageCredentialProviderConfigPath                      = path.Join(imageCredentialProviderRoot, imageCredentialProviderConfig)
 )
 
 func (k *kubelet) writeImageCredentialProviderConfig(cfg *api.NodeConfig) error {
@@ -80,10 +80,11 @@ func generateImageCredentialProviderConfig(cfg *api.NodeConfig, ecrCredentialPro
 
 	var buf bytes.Buffer
 	var imageCredentialProviderTemplate *template.Template
-	if cfg.IsHybridNode() {
-		templateVars.AwsConfigPath = cfg.Spec.Hybrid.AwsConfigPath
-		imageCredentialProviderTemplate = template.Must(template.New("image-credential-provider").Parse(hybridImageCredentialProviderTemplateData))
+	if cfg.IsIAMRolesAnywhere() {
+		templateVars.AwsConfigPath = cfg.Spec.Hybrid.IAMRolesAnywhere.AwsConfigPath
+		imageCredentialProviderTemplate = template.Must(template.New("image-credential-provider").Parse(hybridRolesAnywhereImageCredentialProviderTemplateData))
 	} else {
+		// The regular non-iam roles anywhere credential provider would still work for SSM based installs
 		imageCredentialProviderTemplate = template.Must(template.New("image-credential-provider").Parse(imageCredentialProviderTemplateData))
 	}
 	if err := imageCredentialProviderTemplate.Execute(&buf, templateVars); err != nil {
