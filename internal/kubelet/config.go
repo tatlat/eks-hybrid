@@ -36,6 +36,8 @@ const (
 	kubeletConfigFile = "config.json"
 	kubeletConfigDir  = "config.json.d"
 	kubeletConfigPerm = 0644
+
+	hybridNodeLabel = "eks.amazonaws.com/hybrid-node=true"
 )
 
 func (k *kubelet) writeKubeletConfig(cfg *api.NodeConfig) error {
@@ -266,6 +268,10 @@ func (ksc *kubeletConfig) withHybridCloudProvider(cfg *api.NodeConfig, flags map
 	flags["hostname-override"] = cfg.Spec.Hybrid.NodeName
 }
 
+func (ksc *kubeletConfig) withHybridNodeLabels(cfg *api.NodeConfig, flags map[string]string) {
+	flags["node-labels"] = hybridNodeLabel
+}
+
 // When the DefaultReservedResources flag is enabled, override the kubelet
 // config with reserved cgroup values on behalf of the user
 func (ksc *kubeletConfig) withDefaultReservedResources(cfg *api.NodeConfig) {
@@ -324,6 +330,7 @@ func (k *kubelet) GenerateKubeletConfig(cfg *api.NodeConfig) (*kubeletConfig, er
 
 	if cfg.IsHybridNode() {
 		kubeletConfig.withHybridCloudProvider(cfg, k.flags)
+		kubeletConfig.withHybridNodeLabels(cfg, k.flags)
 	} else {
 		if err := kubeletConfig.withNodeIp(cfg, k.flags); err != nil {
 			return nil, err
