@@ -3,13 +3,15 @@ package install
 import (
 	"context"
 	"errors"
+	"io/fs"
+
 	"github.com/integrii/flaggy"
 	"go.uber.org/zap"
-	"io/fs"
 
 	"github.com/aws/eks-hybrid/internal/api"
 	"github.com/aws/eks-hybrid/internal/aws/eks"
 	"github.com/aws/eks-hybrid/internal/cli"
+	"github.com/aws/eks-hybrid/internal/cni"
 	"github.com/aws/eks-hybrid/internal/configprovider"
 	"github.com/aws/eks-hybrid/internal/iamrolesanywhere"
 	"github.com/aws/eks-hybrid/internal/imagecredentialprovider"
@@ -86,7 +88,7 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		ssmInstaller := ssm.NewSSMInstaller(nodeCfg.Spec.Hybrid.Region)
 
 		log.Info("Installing SSM agent installer...")
-		if err := ssm.Install(ctx, ssmInstaller); err != nil {
+		if err := ssm.Install(ctx, ssmInstaller); err != nil && !errors.Is(err, fs.ErrExist) {
 			return err
 		}
 	default:
@@ -100,6 +102,11 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 
 	log.Info("Installing kubectl...")
 	if err := kubectl.Install(ctx, release); err != nil && !errors.Is(err, fs.ErrExist) {
+		return err
+	}
+
+	log.Info("Installing cni-plugins...")
+	if err := cni.Install(ctx, release); err != nil && !errors.Is(err, fs.ErrExist) {
 		return err
 	}
 

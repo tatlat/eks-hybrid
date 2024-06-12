@@ -132,6 +132,10 @@ func (r PatchRelease) GetImageCredentialProvider(ctx context.Context) (artifact.
 	return r.getSource(ctx, "ecr-credential-provider")
 }
 
+func (r PatchRelease) GetCniPlugins(ctx context.Context) (artifact.Source, error) {
+	return r.getSource(ctx, "cni-plugins")
+}
+
 func (r PatchRelease) getSource(ctx context.Context, artifactName string) (artifact.Source, error) {
 	for _, releaseArtifact := range r.Artifacts {
 		if releaseArtifact.Name == artifactName && releaseArtifact.Arch == runtime.GOARCH && releaseArtifact.OS == runtime.GOOS {

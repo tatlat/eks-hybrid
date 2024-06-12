@@ -4,6 +4,7 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path"
 )
 
@@ -26,4 +27,22 @@ func InstallFile(dst string, src io.Reader, perms fs.FileMode) error {
 
 	_, err = io.Copy(fh, src)
 	return err
+}
+
+// InstallTarGz untars the src file into the dst directory and deletes the src tgz file
+func InstallTarGz(dst string, src string) error {
+	if err := os.MkdirAll(path.Dir(dst), DefaultDirPerms); err != nil {
+		return err
+	}
+
+	tgzExtractCmd := exec.Command("tar", "xvf", src, "-C", dst)
+	if err := tgzExtractCmd.Run(); err != nil {
+		return err
+	}
+
+	// Remove the tgz file
+	if err := os.Remove(src); err != nil {
+		return err
+	}
+	return nil
 }
