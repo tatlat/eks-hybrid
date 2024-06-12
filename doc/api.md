@@ -18,6 +18,7 @@ _Appears in:_
 | Field | Description |
 | --- | --- |
 | `name` _string_ | Name is the name of your EKS cluster |
+| `region` _string_ | Region is an AWS region (e.g. us-east-1) used to retrieve regional artifacts as well as region where EKS cluster lives. |
 | `apiServerEndpoint` _string_ | APIServerEndpoint is the URL of your EKS cluster's kube-apiserver. |
 | `certificateAuthority` _[byte](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.29/#byte-v1-meta) array_ | CertificateAuthority is a base64-encoded string of your cluster's certificate authority chain. |
 | `cidr` _string_ | CIDR is your cluster's Pod IP CIDR. This value is used to infer your cluster's DNS address. |
@@ -45,7 +46,6 @@ _Appears in:_
 | Field | Description |
 | --- | --- |
 | `nodeName` _string_ | NodeName is the name the node will adopt. |
-| `region` _string_ | Region is an AWS region (e.g. us-east-1) used to retrieve regional artifacts as well as region where EKS cluster lives. |
 | `iamRolesAnywhere` _[IAMRolesAnywhere](#iamrolesanywhere)_ | IAMRolesAnywhere includes IAM Roles Anywhere specific configuration and is mutually exclusive with SSM. |
 | `ssm` _[SSM](#ssm)_ | SSM includes Systems Manager specific configuration and is mutually exclusive with IAMRolesAnywhere. |
 

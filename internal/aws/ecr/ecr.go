@@ -24,14 +24,14 @@ func GetAuthorizationToken(nodeCfg *api.NodeConfig) (string, error) {
 	if nodeCfg.IsHybridNode() {
 		if nodeCfg.IsIAMRolesAnywhere() {
 			awsConfig, err = config.LoadDefaultConfig(context.Background(),
-				config.WithRegion(nodeCfg.Spec.Hybrid.Region),
+				config.WithRegion(nodeCfg.Spec.Cluster.Region),
 				config.WithSharedConfigFiles([]string{nodeCfg.Spec.Hybrid.IAMRolesAnywhere.AwsConfigPath}),
 				config.WithSharedConfigProfile("hybrid"))
 			if err != nil {
 				return "", err
 			}
 		} else if nodeCfg.IsSSM() {
-			awsConfig, err = config.LoadDefaultConfig(context.Background(), config.WithRegion(nodeCfg.Spec.Hybrid.Region))
+			awsConfig, err = config.LoadDefaultConfig(context.Background(), config.WithRegion(nodeCfg.Spec.Cluster.Region))
 			if err != nil {
 				return "", err
 			}

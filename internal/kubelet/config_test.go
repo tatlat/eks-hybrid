@@ -122,7 +122,6 @@ func TestHybridCloudProvider(t *testing.T) {
 		Spec: api.NodeConfigSpec{
 			Hybrid: &api.HybridOptions{
 				NodeName: "dummy-hybrid",
-				Region:   "us-west-2",
 				IAMRolesAnywhere: &api.IAMRolesAnywhere{
 					TrustAnchorARN: "arn:aws:iam::222211113333:role/AmazonEKSConnectorAgentRole",
 					ProfileARN:     "dummy-profile-arn",

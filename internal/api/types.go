@@ -55,6 +55,7 @@ type DefaultOptions struct {
 
 type ClusterDetails struct {
 	Name                 string `json:"name,omitempty"`
+	Region               string `json:"region,omitempty"`
 	APIServerEndpoint    string `json:"apiServerEndpoint,omitempty"`
 	CertificateAuthority []byte `json:"certificateAuthority,omitempty"`
 	CIDR                 string `json:"cidr,omitempty"`
@@ -108,7 +109,6 @@ const (
 
 type HybridOptions struct {
 	NodeName         string            `json:"nodeName,omitempty"`
-	Region           string            `json:"region,omitempty"`
 	IAMRolesAnywhere *IAMRolesAnywhere `json:"iamRolesAnywhere,omitempty"`
 	SSM              *SSM              `json:"ssm,omitempty"`
 }

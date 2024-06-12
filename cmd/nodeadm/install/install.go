@@ -85,7 +85,7 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 			return err
 		}
 	case nodeCfg.IsSSM():
-		ssmInstaller := ssm.NewSSMInstaller(nodeCfg.Spec.Hybrid.Region)
+		ssmInstaller := ssm.NewSSMInstaller(nodeCfg.Spec.Cluster.Region)
 
 		log.Info("Installing SSM agent installer...")
 		if err := ssm.Install(ctx, ssmInstaller); err != nil && !errors.Is(err, fs.ErrExist) {

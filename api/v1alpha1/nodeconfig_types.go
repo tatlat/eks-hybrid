@@ -42,6 +42,10 @@ type ClusterDetails struct {
 	// Name is the name of your EKS cluster
 	Name string `json:"name,omitempty"`
 
+	// Region is an AWS region (e.g. us-east-1) used to retrieve regional artifacts
+	// as well as region where EKS cluster lives.
+	Region string `json:"region,omitempty"`
+
 	// APIServerEndpoint is the URL of your EKS cluster's kube-apiserver.
 	APIServerEndpoint string `json:"apiServerEndpoint,omitempty"`
 
@@ -104,10 +108,6 @@ const (
 type HybridOptions struct {
 	// NodeName is the name the node will adopt.
 	NodeName string `json:"nodeName,omitempty"`
-
-	// Region is an AWS region (e.g. us-east-1) used to retrieve regional artifacts
-	// as well as region where EKS cluster lives.
-	Region string `json:"region,omitempty"`
 
 	// IAMRolesAnywhere includes IAM Roles Anywhere specific configuration and is mutually exclusive
 	// with SSM.
