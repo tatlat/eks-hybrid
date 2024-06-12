@@ -75,14 +75,14 @@ func (kct *kubeconfigTemplateVars) withHybridTemplateVars(cfg *api.NodeConfig) {
 }
 
 func (kct *kubeconfigTemplateVars) withIamRolesAnywhereHybridVars(cfg *api.NodeConfig) {
-	kct.Region = cfg.Spec.Hybrid.Region
+	kct.Region = cfg.Spec.Cluster.Region
 	kct.SessionName = cfg.Spec.Hybrid.NodeName
 	kct.AssumeRole = cfg.Spec.Hybrid.IAMRolesAnywhere.AssumeRoleARN
 	kct.AwsConfigPath = cfg.Spec.Hybrid.IAMRolesAnywhere.AwsConfigPath
 }
 
 func (kct *kubeconfigTemplateVars) withSsmHybridVars(cfg *api.NodeConfig) {
-	kct.Region = cfg.Spec.Hybrid.Region
+	kct.Region = cfg.Spec.Cluster.Region
 }
 
 func generateKubeconfig(cfg *api.NodeConfig) ([]byte, error) {

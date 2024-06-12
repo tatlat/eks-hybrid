@@ -22,8 +22,8 @@ func ValidateNodeConfig(cfg *NodeConfig) error {
 	}
 	// Validate all hybrid node configuration
 	if cfg.IsHybridNode() {
-		if cfg.Spec.Hybrid.Region == "" {
-			return fmt.Errorf("Region is missing in hybrid configuration")
+		if cfg.Spec.Cluster.Region == "" {
+			return fmt.Errorf("Region is missing in cluster configuration")
 		}
 		if !cfg.IsIAMRolesAnywhere() && !cfg.IsSSM() {
 			return fmt.Errorf("Either IAMRolesAnywhere or SSM must be provided for hybrid node configuration")

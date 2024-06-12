@@ -17,7 +17,7 @@ type HybridInstanceRegistration struct {
 
 func (s *ssm) registerMachine(cfg *api.NodeConfig) error {
 	registerCmd := exec.Command(InstallerPath, "-register", "-activation-code", cfg.Spec.Hybrid.SSM.ActivationCode,
-		"-activation-id", cfg.Spec.Hybrid.SSM.ActivationID, "-region", cfg.Spec.Hybrid.Region)
+		"-activation-id", cfg.Spec.Hybrid.SSM.ActivationID, "-region", cfg.Spec.Cluster.Region)
 	return registerCmd.Run()
 }
 

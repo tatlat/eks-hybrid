@@ -88,7 +88,7 @@ func (c *initCmd) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 				TrustAnchorARN: nodeConfig.Spec.Hybrid.IAMRolesAnywhere.TrustAnchorARN,
 				ProfileARN:     nodeConfig.Spec.Hybrid.IAMRolesAnywhere.ProfileARN,
 				RoleARN:        nodeConfig.Spec.Hybrid.IAMRolesAnywhere.RoleARN,
-				Region:         nodeConfig.Spec.Hybrid.Region,
+				Region:         nodeConfig.Spec.Cluster.Region,
 				ConfigPath:     nodeConfig.Spec.Hybrid.IAMRolesAnywhere.AwsConfigPath,
 			}); err != nil {
 				return err
@@ -192,7 +192,7 @@ func enrichConfig(log *zap.Logger, cfg *api.NodeConfig) error {
 	var err error
 	var eksRegistry ecr.ECRRegistry
 	if cfg.IsHybridNode() {
-		eksRegistry, err = ecr.GetEKSHybridRegistry(cfg.Spec.Hybrid.Region)
+		eksRegistry, err = ecr.GetEKSHybridRegistry(cfg.Spec.Cluster.Region)
 		if err != nil {
 			return err
 		}

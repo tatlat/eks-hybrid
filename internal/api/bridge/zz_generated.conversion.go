@@ -136,6 +136,7 @@ func RegisterConversions(s *runtime.Scheme) error {
 
 func autoConvert_v1alpha1_ClusterDetails_To_api_ClusterDetails(in *v1alpha1.ClusterDetails, out *api.ClusterDetails, s conversion.Scope) error {
 	out.Name = in.Name
+	out.Region = in.Region
 	out.APIServerEndpoint = in.APIServerEndpoint
 	out.CertificateAuthority = *(*[]byte)(unsafe.Pointer(&in.CertificateAuthority))
 	out.CIDR = in.CIDR
@@ -151,6 +152,7 @@ func Convert_v1alpha1_ClusterDetails_To_api_ClusterDetails(in *v1alpha1.ClusterD
 
 func autoConvert_api_ClusterDetails_To_v1alpha1_ClusterDetails(in *api.ClusterDetails, out *v1alpha1.ClusterDetails, s conversion.Scope) error {
 	out.Name = in.Name
+	out.Region = in.Region
 	out.APIServerEndpoint = in.APIServerEndpoint
 	out.CertificateAuthority = *(*[]byte)(unsafe.Pointer(&in.CertificateAuthority))
 	out.CIDR = in.CIDR
@@ -186,7 +188,6 @@ func Convert_api_ContainerdOptions_To_v1alpha1_ContainerdOptions(in *api.Contain
 
 func autoConvert_v1alpha1_HybridOptions_To_api_HybridOptions(in *v1alpha1.HybridOptions, out *api.HybridOptions, s conversion.Scope) error {
 	out.NodeName = in.NodeName
-	out.Region = in.Region
 	out.IAMRolesAnywhere = (*api.IAMRolesAnywhere)(unsafe.Pointer(in.IAMRolesAnywhere))
 	out.SSM = (*api.SSM)(unsafe.Pointer(in.SSM))
 	return nil
@@ -199,7 +200,6 @@ func Convert_v1alpha1_HybridOptions_To_api_HybridOptions(in *v1alpha1.HybridOpti
 
 func autoConvert_api_HybridOptions_To_v1alpha1_HybridOptions(in *api.HybridOptions, out *v1alpha1.HybridOptions, s conversion.Scope) error {
 	out.NodeName = in.NodeName
-	out.Region = in.Region
 	out.IAMRolesAnywhere = (*v1alpha1.IAMRolesAnywhere)(unsafe.Pointer(in.IAMRolesAnywhere))
 	out.SSM = (*v1alpha1.SSM)(unsafe.Pointer(in.SSM))
 	return nil
