@@ -189,9 +189,13 @@ func (c *initCmd) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 // Various initializations and verifications of the NodeConfig and
 // perform in-place updates when allowed by the user
 func enrichConfig(log *zap.Logger, cfg *api.NodeConfig) error {
-	var region string
+	var err error
+	var eksRegistry ecr.ECRRegistry
 	if cfg.IsHybridNode() {
-		region = cfg.Spec.Hybrid.Region
+		eksRegistry, err = ecr.GetEKSHybridRegistry(cfg.Spec.Hybrid.Region)
+		if err != nil {
+			return err
+		}
 	} else {
 		log.Info("Fetching instance details..")
 		imdsClient := imds.New(imds.Options{})
@@ -207,12 +211,12 @@ func enrichConfig(log *zap.Logger, cfg *api.NodeConfig) error {
 		}
 		cfg.Status.Instance = *instanceDetails
 		log.Info("Instance details populated", zap.Reflect("details", instanceDetails))
-		region = instanceDetails.Region
-	}
-	log.Info("Fetching default options...")
-	eksRegistry, err := ecr.GetEKSRegistry(region)
-	if err != nil {
-		return err
+		region := instanceDetails.Region
+		log.Info("Fetching default options...")
+		eksRegistry, err = ecr.GetEKSRegistry(region)
+		if err != nil {
+			return err
+		}
 	}
 	cfg.Status.Defaults = api.DefaultOptions{
 		SandboxImage: eksRegistry.GetSandboxImage(),

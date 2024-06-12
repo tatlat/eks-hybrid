@@ -15,6 +15,8 @@ import (
 	"github.com/aws/eks-hybrid/internal/api"
 )
 
+const hybridServicesDomain = "amazonaws.com"
+
 // Returns the base64 encoded authorization token string for ECR of the format "AWS:XXXXX"
 func GetAuthorizationToken(nodeCfg *api.NodeConfig) (string, error) {
 	var awsConfig aws.Config
@@ -54,11 +56,20 @@ func (r *ECRRegistry) GetSandboxImage() string {
 }
 
 func GetEKSRegistry(region string) (ECRRegistry, error) {
-	account, region := getEKSRegistryCoordinates(region)
 	servicesDomain, err := imds.GetProperty(imds.ServicesDomain)
 	if err != nil {
 		return "", err
 	}
+
+	return getEksRegistryWithServiceDomain(region, servicesDomain)
+}
+
+func GetEKSHybridRegistry(region string) (ECRRegistry, error) {
+	return getEksRegistryWithServiceDomain(region, hybridServicesDomain)
+}
+
+func getEksRegistryWithServiceDomain(region, servicesDomain string) (ECRRegistry, error) {
+	account, region := getEKSRegistryCoordinates(region)
 	fipsInstalled, fipsEnabled, err := system.GetFipsInfo()
 	if err != nil {
 		return "", err
