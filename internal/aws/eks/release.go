@@ -15,10 +15,8 @@ import (
 	"github.com/aws/eks-hybrid/internal/util"
 )
 
-const (
-	// move this to build time @vgg
-	manifestUrl = "https://do-not-delete-temp-hybrid-manifest.s3.amazonaws.com/manifest.yaml"
-)
+// set build time
+var manifestUrl string
 
 type Manifest struct {
 	SupportedReleases []SupportedRelease `json:"supported_releases"`

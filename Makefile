@@ -13,6 +13,9 @@ endif
 SHELL = /usr/bin/env bash -o pipefail
 .SHELLFLAGS = -ec
 
+GIT_VERSION?=0.0.0
+HYBRID_MANIFEST_URL?=https://do-not-delete-temp-hybrid-manifest.s3.amazonaws.com/manifest.yaml
+
 .PHONY: all
 all: crds generate fmt vet build
 
@@ -76,9 +79,11 @@ test-e2e: build ## Run e2e tests.
 
 ##@ Build
 
+## Build binary.
 .PHONY: build
-build: ## Build binary.
-	go build -o $(LOCALBIN)/nodeadm cmd/nodeadm/main.go
+build: LINKER_FLAGS :=-X github.com/aws/eks-hybrid/cmd/nodeadm/version.GitVersion=$(GIT_VERSION) -X github.com/aws/eks-hybrid/internal/aws/eks.manifestUrl=$(HYBRID_MANIFEST_URL) -s -w -buildid='' -extldflags -static
+build:
+	go build -ldflags "$(LINKER_FLAGS)" -o $(LOCALBIN)/nodeadm cmd/nodeadm/main.go
 
 .PHONY: run
 run: build ## Run binary

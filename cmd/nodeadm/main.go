@@ -7,12 +7,14 @@ import (
 	"github.com/aws/eks-hybrid/cmd/nodeadm/config"
 	initcmd "github.com/aws/eks-hybrid/cmd/nodeadm/init"
 	"github.com/aws/eks-hybrid/cmd/nodeadm/install"
+	"github.com/aws/eks-hybrid/cmd/nodeadm/version"
 	"github.com/aws/eks-hybrid/internal/cli"
 )
 
 func main() {
 	flaggy.SetName("nodeadm")
 	flaggy.SetDescription("From zero to Node faster than you can say Elastic Kubernetes Service")
+	flaggy.SetVersion(version.GitVersion)
 	flaggy.DefaultParser.AdditionalHelpPrepend = "\nhttp://github.com/aws/eks-hybrid"
 	flaggy.DefaultParser.ShowHelpOnUnexpected = true
 
