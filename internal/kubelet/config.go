@@ -84,6 +84,7 @@ type kubeletConfig struct {
 	ServerTLSBootstrap       bool                             `json:"serverTLSBootstrap"`
 	SystemReservedCgroup     *string                          `json:"systemReservedCgroup,omitempty"`
 	TLSCipherSuites          []string                         `json:"tlsCipherSuites"`
+	ResolvConf               string                           `json:"resolvConf,omitempty"`
 	metav1.TypeMeta          `json:",inline"`
 }
 
@@ -221,6 +222,10 @@ func (ksc *kubeletConfig) withNodeIp(cfg *api.NodeConfig, flags map[string]strin
 	return nil
 }
 
+func (ksc *kubeletConfig) withResolvConf(resolvConfPath string) {
+	ksc.ResolvConf = resolvConfPath
+}
+
 func (ksc *kubeletConfig) withVersionToggles(kubeletVersion string, flags map[string]string) {
 	// TODO: remove when 1.26 is EOL
 	if semver.Compare(kubeletVersion, "v1.27.0") < 0 {
@@ -331,6 +336,14 @@ func (k *kubelet) GenerateKubeletConfig(cfg *api.NodeConfig) (*kubeletConfig, er
 	if cfg.IsHybridNode() {
 		kubeletConfig.withHybridCloudProvider(cfg, k.flags)
 		kubeletConfig.withHybridNodeLabels(cfg, k.flags)
+
+		// On Ubuntu, systemd-resolved adds loopback address as nameserver to /etc/resolv.conf
+		// This causes pods not being able to do successful dns lookups
+		// Setting Kubelet config to point to the right resolv.conf file
+		// https://coredns.io/plugins/loop/#troubleshooting-loops-in-kubernetes-clusters
+		if util.GetOsName() == system.Ubuntu {
+			kubeletConfig.withResolvConf(system.UbuntuResolvConfPath)
+		}
 	} else {
 		if err := kubeletConfig.withNodeIp(cfg, k.flags); err != nil {
 			return nil, err
