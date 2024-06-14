@@ -1,6 +1,7 @@
 package artifact
 
 import (
+	"fmt"
 	"io"
 	"io/fs"
 	"os"
@@ -31,13 +32,13 @@ func InstallFile(dst string, src io.Reader, perms fs.FileMode) error {
 
 // InstallTarGz untars the src file into the dst directory and deletes the src tgz file
 func InstallTarGz(dst string, src string) error {
-	if err := os.MkdirAll(path.Dir(dst), DefaultDirPerms); err != nil {
+	if err := os.MkdirAll(dst, DefaultDirPerms); err != nil {
 		return err
 	}
 
 	tgzExtractCmd := exec.Command("tar", "xvf", src, "-C", dst)
 	if err := tgzExtractCmd.Run(); err != nil {
-		return err
+		return fmt.Errorf("unable to untar: %v", err)
 	}
 
 	// Remove the tgz file
