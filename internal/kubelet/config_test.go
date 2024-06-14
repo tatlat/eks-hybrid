@@ -138,3 +138,10 @@ func TestHybridCloudProvider(t *testing.T) {
 	assert.Equal(t, kubeletArgs["hostname-override"], nodeConfig.Spec.Hybrid.NodeName)
 	assert.Equal(t, *kubeletConfig.ProviderID, expectedProviderId)
 }
+
+func TestResolvConf(t *testing.T) {
+	resolvConfPath := "/dummy/path/to/resolv.conf"
+	kubeletConfig := defaultKubeletSubConfig()
+	kubeletConfig.withResolvConf(resolvConfPath)
+	assert.Equal(t, kubeletConfig.ResolvConf, resolvConfPath)
+}
