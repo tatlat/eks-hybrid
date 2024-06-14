@@ -9,7 +9,7 @@ import (
 
 const (
 	// BinPath is the path to the cni plugins binary.
-	BinPath = "/opt/cni/plugins"
+	BinPath = "/opt/cni/bin"
 
 	// TgzPath is the path to install the cni-plugins tgz file
 	TgzPath = "/opt/cni/plugins/cni-plugins.tgz"
