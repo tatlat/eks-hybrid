@@ -24,6 +24,10 @@ func (cd *containerd) Configure(c *api.NodeConfig) error {
 }
 
 func (cd *containerd) EnsureRunning() error {
+	err := cd.daemonManager.EnableDaemon(ContainerdDaemonName)
+	if err != nil {
+		return err
+	}
 	return cd.daemonManager.StartDaemon(ContainerdDaemonName)
 }
 

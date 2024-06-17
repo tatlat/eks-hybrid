@@ -65,16 +65,15 @@ func (m *systemdDaemonManager) GetDaemonStatus(name string) (DaemonStatus, error
 	}
 }
 
+// EnableDaemon enables the daemon with the given name.
+// If the daemon is already enabled, this is a no-op.
 func (m *systemdDaemonManager) EnableDaemon(name string) error {
 	unitName := getServiceUnitName(name)
 	_, changes, err := m.conn.EnableUnitFilesContext(context.TODO(), []string{unitName}, false, false)
 	if err != nil {
 		return err
 	}
-	if len(changes) != 1 {
-		return fmt.Errorf("unexpected number of unit file changes: %d", len(changes))
-	}
-	if changes[0].Type != TypeSymlink {
+	if len(changes) != 0 && changes[0].Type != TypeSymlink {
 		return fmt.Errorf("unexpected unit file change type: %s", changes[0].Type)
 	}
 	return nil
