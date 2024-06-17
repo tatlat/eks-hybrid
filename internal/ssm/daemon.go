@@ -25,6 +25,10 @@ func (s *ssm) Configure(cfg *api.NodeConfig) error {
 }
 
 func (s *ssm) EnsureRunning() error {
+	err := s.daemonManager.EnableDaemon(SsmDaemonName)
+	if err != nil {
+		return err
+	}
 	return s.daemonManager.StartDaemon(SsmDaemonName)
 }
 
