@@ -23,12 +23,15 @@ func (cd *containerd) Configure(c *api.NodeConfig) error {
 	return writeContainerdConfig(c)
 }
 
+// EnsureRunning ensures containerd is running with the written configuration
+// With some installations, containerd daemon is already in an running state
+// This enables the daemon and restarts or starts depending on the state of daemon
 func (cd *containerd) EnsureRunning() error {
 	err := cd.daemonManager.EnableDaemon(ContainerdDaemonName)
 	if err != nil {
 		return err
 	}
-	return cd.daemonManager.StartDaemon(ContainerdDaemonName)
+	return cd.daemonManager.RestartDaemon(ContainerdDaemonName)
 }
 
 func (cd *containerd) PostLaunch(c *api.NodeConfig) error {
