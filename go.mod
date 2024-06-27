@@ -17,6 +17,7 @@ require (
 	github.com/coreos/go-systemd/v22 v22.5.0
 	github.com/go-ini/ini v1.67.0
 	github.com/go-logr/zapr v1.3.0
+	github.com/golang/mock v1.6.0
 	github.com/integrii/flaggy v1.5.2
 	github.com/onsi/gomega v1.33.1
 	github.com/pbnjay/memory v0.0.0-20210728143218-7b4eea64cf58

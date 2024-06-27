@@ -14,7 +14,7 @@ func (e *FailError) Error() string {
 }
 
 type WarningError struct {
-	err string
+	err string 
 }
 
 func (e *WarningError) Error() string {

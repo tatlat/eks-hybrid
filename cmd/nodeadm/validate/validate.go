@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/aws/eks-hybrid/internal/cli"
+	"github.com/aws/eks-hybrid/internal/configprovider"
 	"github.com/aws/eks-hybrid/internal/validation/logger"
 	"github.com/aws/eks-hybrid/internal/validation/validator"
 	"github.com/integrii/flaggy"
@@ -26,6 +27,21 @@ func (c *validateCmd) Flaggy() *flaggy.Subcommand {
 }
 
 func (c *validateCmd) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
+	logger.Init()
+
+	logger.Info("Loading configuration.." + opts.ConfigSource)
+	provider, err := configprovider.BuildConfigProvider(opts.ConfigSource)
+	if err != nil {
+		return err
+	}
+	nodeConfig, err := provider.Provide()
+	if err != nil {
+		return err
+	}
+	logger.Info("Loaded configuration")
+
+	regionCode := nodeConfig.Spec.Cluster.Region
+
 	runner := validator.NewRunner()
 
 	runner.Register(
@@ -35,9 +51,8 @@ func (c *validateCmd) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		validator.DefaultNodeOS(),
 		validator.DefaultArch(),
 		validator.DefaultSysD(),
+		validator.DefaultEndpoints(regionCode),
 	)
-
-	logger.Init()
 
 	errs := runner.Run()
 	if errs != nil {

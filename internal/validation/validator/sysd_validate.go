@@ -21,7 +21,6 @@ type GetSysD func() bool
 
 func DefaultSysD() *SysD {
 	return NewSysD(findSystemd)
-
 }
 
 func NewSysD(s GetSysD) *SysD {
