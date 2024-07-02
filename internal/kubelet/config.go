@@ -37,7 +37,7 @@ const (
 	kubeletConfigDir  = "config.json.d"
 	kubeletConfigPerm = 0644
 
-	hybridNodeLabel = "eks.amazonaws.com/hybrid-node=true"
+	hybridNodeLabel = "eks.amazonaws.com/compute-type=hybrid"
 )
 
 func (k *kubelet) writeKubeletConfig(cfg *api.NodeConfig) error {
