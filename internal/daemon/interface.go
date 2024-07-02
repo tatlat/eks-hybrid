@@ -15,6 +15,10 @@ type Daemon interface {
 	// daemon as been started
 	PostLaunch(*api.NodeConfig) error
 
+	// Stop stops the daemon
+	// If the daemon is already stopped, this will be a no-op
+	Stop() error
+
 	// Name returns the name of the daemon.
 	Name() string
 }

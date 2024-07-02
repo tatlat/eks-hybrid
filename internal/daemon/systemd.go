@@ -31,6 +31,11 @@ func NewDaemonManager() (DaemonManager, error) {
 	}, nil
 }
 
+// DaemonReload instructs systemd to scan and reload all unit files
+func (m *systemdDaemonManager) DaemonReload() error {
+	return m.conn.ReloadContext(context.TODO())
+}
+
 func (m *systemdDaemonManager) StartDaemon(name string) error {
 	unitName := getServiceUnitName(name)
 	_, err := m.conn.StartUnitContext(context.TODO(), unitName, ModeReplace, nil)

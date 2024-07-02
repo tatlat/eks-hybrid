@@ -3,8 +3,10 @@ package kubectl
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"github.com/aws/eks-hybrid/internal/artifact"
+	"github.com/aws/eks-hybrid/internal/tracker"
 )
 
 // BinPath is the path to the kubectl binary.
@@ -16,7 +18,7 @@ type Source interface {
 }
 
 // Install installs kubectl at BinPath.
-func Install(ctx context.Context, src Source) error {
+func Install(ctx context.Context, tracker *tracker.Tracker, src Source) error {
 	kubectl, err := src.GetKubectl(ctx)
 	if err != nil {
 		return fmt.Errorf("kubectl: %w", err)
@@ -26,10 +28,17 @@ func Install(ctx context.Context, src Source) error {
 	if err := artifact.InstallFile(BinPath, kubectl, 0755); err != nil {
 		return fmt.Errorf("kubectl: %w", err)
 	}
+	if err = tracker.Add(artifact.Kubectl); err != nil {
+		return err
+	}
 
 	if !kubectl.VerifyChecksum() {
 		return fmt.Errorf("kubectl: %w", artifact.NewChecksumError(kubectl))
 	}
 
 	return nil
+}
+
+func Uninstall() error {
+	return os.RemoveAll(BinPath)
 }

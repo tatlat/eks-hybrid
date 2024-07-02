@@ -56,6 +56,10 @@ func (k *kubelet) PostLaunch(_ *api.NodeConfig) error {
 	return nil
 }
 
+func (k *kubelet) Stop() error {
+	return k.daemonManager.StopDaemon(KubeletDaemonName)
+}
+
 func (k *kubelet) Name() string {
 	return KubeletDaemonName
 }
