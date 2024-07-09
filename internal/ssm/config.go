@@ -2,6 +2,7 @@ package ssm
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 
@@ -17,8 +18,12 @@ type HybridInstanceRegistration struct {
 
 func (s *ssm) registerMachine(cfg *api.NodeConfig) error {
 	registerCmd := exec.Command(InstallerPath, "-register", "-activation-code", cfg.Spec.Hybrid.SSM.ActivationCode,
-		"-activation-id", cfg.Spec.Hybrid.SSM.ActivationID, "-region", cfg.Spec.Cluster.Region)
-	return registerCmd.Run()
+		"-activation-id", cfg.Spec.Hybrid.SSM.ActivationID, "-override", "-region", cfg.Spec.Cluster.Region)
+	out, err := registerCmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("running register machine command: %s, error: %v", out, err)
+	}
+	return nil
 }
 
 func GetManagedHybridInstanceId() (string, error) {

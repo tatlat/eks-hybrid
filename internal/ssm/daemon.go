@@ -36,15 +36,27 @@ func (s *ssm) PostLaunch(_ *api.NodeConfig) error {
 	return nil
 }
 
+// Stop stops the ssm unit only if it is loaded and running
+func (s *ssm) Stop() error {
+	status, err := s.daemonManager.GetDaemonStatus(SsmDaemonName)
+	if err != nil {
+		return err
+	}
+	if status == daemon.DaemonStatusRunning {
+		return s.daemonManager.StopDaemon(SsmDaemonName)
+	}
+	return nil
+}
+
 func (s *ssm) Name() string {
 	return SsmDaemonName
 }
 
 func setDaemonName() {
 	osToDaemonName := map[string]string{
-		"ubuntu": "snap.amazon-ssm-agent.amazon-ssm-agent",
-		"rhel":   "amazon-ssm-agent",
-		"amzn":   "amazon-ssm-agent",
+		util.UbuntuOsName: "snap.amazon-ssm-agent.amazon-ssm-agent",
+		util.RhelOsName:   "amazon-ssm-agent",
+		util.AmazonOsName: "amazon-ssm-agent",
 	}
 	osName := util.GetOsName()
 	if daemonName, ok := osToDaemonName[osName]; ok {

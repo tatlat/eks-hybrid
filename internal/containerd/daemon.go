@@ -38,6 +38,10 @@ func (cd *containerd) PostLaunch(c *api.NodeConfig) error {
 	return cacheSandboxImage(c)
 }
 
+func (cd *containerd) Stop() error {
+	return cd.daemonManager.StopDaemon(ContainerdDaemonName)
+}
+
 func (cd *containerd) Name() string {
 	return ContainerdDaemonName
 }

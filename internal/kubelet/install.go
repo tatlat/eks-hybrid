@@ -5,15 +5,19 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
+	"os"
 
 	"github.com/aws/eks-hybrid/internal/artifact"
+	"github.com/aws/eks-hybrid/internal/tracker"
 )
 
-// BinPath is the path to the Kubelet binary.
-const BinPath = "/usr/bin/kubelet"
+const (
+	// BinPath is the path to the Kubelet binary.
+	BinPath = "/usr/bin/kubelet"
 
-// UnitPath is the path to the Kubelet systemd unit file.
-const UnitPath = "/etc/systemd/system/kubelet.service"
+	// UnitPath is the path to the Kubelet systemd unit file.
+	UnitPath = "/etc/systemd/system/kubelet.service"
+)
 
 //go:embed kubelet.service
 var kubeletUnitFile []byte
@@ -25,7 +29,7 @@ type Source interface {
 
 // Install installs kubelet at BinPath and installs a systemd unit file at UnitPath. The systemd
 // unit is configured to launch the kubelet binary.
-func Install(ctx context.Context, src Source) error {
+func Install(ctx context.Context, tracker *tracker.Tracker, src Source) error {
 	kubelet, err := src.GetKubelet(ctx)
 	if err != nil {
 		return fmt.Errorf("kubelet: %w", err)
@@ -34,6 +38,9 @@ func Install(ctx context.Context, src Source) error {
 
 	if err := artifact.InstallFile(BinPath, kubelet, 0755); err != nil {
 		return fmt.Errorf("kubelet: %w", err)
+	}
+	if err = tracker.Add(artifact.Kubelet); err != nil {
+		return err
 	}
 
 	if !kubelet.VerifyChecksum() {
@@ -47,4 +54,11 @@ func Install(ctx context.Context, src Source) error {
 	}
 
 	return nil
+}
+
+func Uninstall() error {
+	if err := os.RemoveAll(BinPath); err != nil {
+		return err
+	}
+	return os.RemoveAll(UnitPath)
 }
