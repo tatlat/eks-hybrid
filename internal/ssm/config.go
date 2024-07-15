@@ -16,9 +16,13 @@ type HybridInstanceRegistration struct {
 	Region            string `json:"Region"`
 }
 
-func (s *ssm) registerMachine(cfg *api.NodeConfig) error {
+func (s *ssm) registerMachine(cfg *api.NodeConfig, force bool) error {
 	registerCmd := exec.Command(InstallerPath, "-register", "-activation-code", cfg.Spec.Hybrid.SSM.ActivationCode,
-		"-activation-id", cfg.Spec.Hybrid.SSM.ActivationID, "-override", "-region", cfg.Spec.Cluster.Region)
+		"-activation-id", cfg.Spec.Hybrid.SSM.ActivationID, "-region", cfg.Spec.Cluster.Region)
+	if force {
+		registerCmd.Args = append(registerCmd.Args, "-override")
+	}
+
 	out, err := registerCmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("running register machine command: %s, error: %v", out, err)

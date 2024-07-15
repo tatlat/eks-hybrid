@@ -65,7 +65,8 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 
 	// Ensure hybrid configuration
 	log.Info("Validating configuration")
-	if err := api.ValidateNodeConfig(nodeCfg); err != nil {
+	v := api.NewValidator(nodeCfg)
+	if err := v.Validate(nodeCfg); err != nil {
 		return err
 	}
 

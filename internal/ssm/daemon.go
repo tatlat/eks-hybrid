@@ -1,6 +1,8 @@
 package ssm
 
 import (
+	"os"
+
 	"github.com/aws/eks-hybrid/internal/api"
 	"github.com/aws/eks-hybrid/internal/daemon"
 	"github.com/aws/eks-hybrid/internal/util"
@@ -17,11 +19,23 @@ type ssm struct {
 
 func NewSsmDaemon(daemonManager daemon.DaemonManager) daemon.Daemon {
 	setDaemonName()
-	return &ssm{daemonManager: daemonManager}
+	return &ssm{
+		daemonManager: daemonManager,
+	}
 }
 
 func (s *ssm) Configure(cfg *api.NodeConfig) error {
-	return s.registerMachine(cfg)
+	_, err := GetManagedHybridInstanceId()
+	if err != nil && os.IsNotExist(err) {
+		// The node is not registered with SSM
+		// In some cases, while the node is not registered, there might be some leftover
+		// registration data from previous registrations. Setting force to true, will override
+		// leftover registration data from the service cache.
+		return s.registerMachine(cfg, true)
+	} else if err != nil {
+		return err
+	}
+	return s.registerMachine(cfg, false)
 }
 
 func (s *ssm) EnsureRunning() error {
