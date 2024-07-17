@@ -69,6 +69,7 @@ var completeMergedWithPartial = api.NodeConfig{
 	},
 }
 
+// nolint:unused
 func indent(in string) string {
 	var mid interface{}
 	err := json.Unmarshal([]byte(in), &mid)
