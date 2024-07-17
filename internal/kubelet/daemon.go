@@ -1,6 +1,7 @@
 package kubelet
 
 import (
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/eks-hybrid/internal/api"
 	"github.com/aws/eks-hybrid/internal/daemon"
 )
@@ -15,17 +16,25 @@ type kubelet struct {
 	environment map[string]string
 	// kubelet config flags without leading dashes
 	flags map[string]string
+	// awsConfig used to make aws calls
+	awsConfig aws.Config
 }
 
-func NewKubeletDaemon(daemonManager daemon.DaemonManager) daemon.Daemon {
+func NewKubeletDaemon(daemonManager daemon.DaemonManager, awsConfig aws.Config) daemon.Daemon {
 	return &kubelet{
 		daemonManager: daemonManager,
 		environment:   make(map[string]string),
 		flags:         make(map[string]string),
+		awsConfig:     awsConfig,
 	}
 }
 
 func (k *kubelet) Configure(cfg *api.NodeConfig) error {
+	if cfg.IsHybridNode() {
+		if err := k.ensureClusterDetails(cfg); err != nil {
+			return err
+		}
+	}
 	if err := k.writeKubeletConfig(cfg); err != nil {
 		return err
 	}

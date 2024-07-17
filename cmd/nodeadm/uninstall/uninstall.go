@@ -1,6 +1,7 @@
 package uninstall
 
 import (
+	"github.com/aws/eks-hybrid/internal/aws"
 	"github.com/integrii/flaggy"
 	"go.uber.org/zap"
 	"os"
@@ -65,6 +66,15 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return err
 	}
 
+	awsConfigProvider, err := aws.NewConfig(nodeCfg)
+	if err != nil {
+		return err
+	}
+	awsConfig, err := awsConfigProvider.GetConfig()
+	if err != nil {
+		return err
+	}
+
 	log.Info("Creating daemon manager..")
 	daemonManager, err := daemon.NewDaemonManager()
 	if err != nil {
@@ -105,7 +115,7 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	}
 	if artifacts.Kubelet {
 		log.Info("Uninstalling kubelet...")
-		kubeletDaemon := kubelet.NewKubeletDaemon(daemonManager)
+		kubeletDaemon := kubelet.NewKubeletDaemon(daemonManager, awsConfig)
 		if err := kubeletDaemon.Stop(); err != nil {
 			return err
 		}
@@ -119,7 +129,7 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		if err := ssmDaemon.Stop(); err != nil {
 			return err
 		}
-		if err := ssm.Uninstall(nodeCfg); err != nil {
+		if err := ssm.Uninstall(awsConfig); err != nil {
 			return err
 		}
 	}

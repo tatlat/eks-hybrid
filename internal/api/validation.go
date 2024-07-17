@@ -2,26 +2,68 @@ package api
 
 import "fmt"
 
-func ValidateNodeConfig(cfg *NodeConfig) error {
-	if cfg.Spec.Cluster.Name == "" {
-		return fmt.Errorf("Name is missing in cluster configuration")
+type validator struct {
+	validatorFuncs []func(*NodeConfig) error
+}
+
+func NewValidator(cfg *NodeConfig) *validator {
+	v := newWithCommonValidations()
+	if cfg.IsOutpostNode() {
+		v.withOutpostValidations()
+	} else if cfg.IsHybridNode() {
+		v.withHybridValidations()
+	} else {
+		v.withEc2UserdataValidations()
 	}
-	if cfg.Spec.Cluster.APIServerEndpoint == "" {
-		return fmt.Errorf("Apiserver endpoint is missing in cluster configuration")
+	return v
+}
+
+func (v *validator) Validate(cfg *NodeConfig) error {
+	for _, f := range v.validatorFuncs {
+		if err := f(cfg); err != nil {
+			return err
+		}
 	}
-	if cfg.Spec.Cluster.CertificateAuthority == nil {
-		return fmt.Errorf("Certificate authority is missing in cluster configuration")
-	}
-	if cfg.Spec.Cluster.CIDR == "" {
-		return fmt.Errorf("CIDR is missing in cluster configuration")
-	}
-	if enabled := cfg.Spec.Cluster.EnableOutpost; enabled != nil && *enabled {
+	return nil
+}
+
+func newWithCommonValidations() *validator {
+	v := new(validator)
+	v.validatorFuncs = append(v.validatorFuncs, func(cfg *NodeConfig) error {
+		if cfg.Spec.Cluster.Name == "" {
+			return fmt.Errorf("Name is missing in cluster configuration")
+		}
+		if cfg.Spec.Cluster.CIDR == "" {
+			return fmt.Errorf("CIDR is missing in cluster configuration")
+		}
+		return nil
+	})
+	return v
+}
+
+func (v *validator) withEc2UserdataValidations() {
+	v.validatorFuncs = append(v.validatorFuncs, func(cfg *NodeConfig) error {
+		if cfg.Spec.Cluster.APIServerEndpoint == "" {
+			return fmt.Errorf("Apiserver endpoint is missing in cluster configuration")
+		}
+		if cfg.Spec.Cluster.CertificateAuthority == nil {
+			return fmt.Errorf("Certificate authority is missing in cluster configuration")
+		}
+		return nil
+	})
+}
+
+func (v *validator) withOutpostValidations() {
+	v.validatorFuncs = append(v.validatorFuncs, func(cfg *NodeConfig) error {
 		if cfg.Spec.Cluster.ID == "" {
 			return fmt.Errorf("CIDR is missing in cluster configuration")
 		}
-	}
-	// Validate all hybrid node configuration
-	if cfg.IsHybridNode() {
+		return nil
+	})
+}
+
+func (v *validator) withHybridValidations() {
+	v.validatorFuncs = append(v.validatorFuncs, func(cfg *NodeConfig) error {
 		if cfg.Spec.Cluster.Region == "" {
 			return fmt.Errorf("Region is missing in cluster configuration")
 		}
@@ -53,6 +95,6 @@ func ValidateNodeConfig(cfg *NodeConfig) error {
 				return fmt.Errorf("ActivationID is missing in hybrid ssm configuration")
 			}
 		}
-	}
-	return nil
+		return nil
+	})
 }
