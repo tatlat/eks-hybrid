@@ -102,6 +102,8 @@ CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
 CONVERSION_GEN ?= $(LOCALBIN)/conversion-gen
 CRD_REF_DOCS ?= $(LOCALBIN)/crd-ref-docs
 ENVTEST ?= $(LOCALBIN)/setup-envtest
+GOLANGCI_LINT_CONFIG ?= .github/workflows/golangci-lint.yml
+GOLANGCI_LINT := $(LOCALBIN)/golangci-lint
 
 ## Tool Versions
 KUSTOMIZE_VERSION ?= v5.0.1
@@ -142,3 +144,11 @@ $(CRD_REF_DOCS): $(LOCALBIN)
 .PHONY: update-deps
 update-deps:
 	go get $(shell go list -f '{{if not (or .Main .Indirect)}}{{.Path}}{{end}}' -mod=mod -m all) && go mod tidy
+
+.PHONY: lint
+lint: $(GOLANGCI_LINT) ## Run golangci-lint
+	$(GOLANGCI_LINT) run --new-from-rev main
+
+$(GOLANGCI_LINT): $(LOCALBIN) $(GOLANGCI_LINT_CONFIG)
+	$(eval GOLANGCI_LINT_VERSION?=$(shell cat .github/workflows/golangci-lint.yml | yq e '.jobs.golangci.steps[] | select(.name == "golangci-lint") .with.version' -))
+	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(LOCALBIN) $(GOLANGCI_LINT_VERSION)
