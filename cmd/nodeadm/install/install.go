@@ -79,6 +79,10 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	}
 	log.Info("Using Kubernetes version", zap.Reflect("kubernetes version", release.Version))
 
+	return Install(ctx, nodeCfg, release, log)
+}
+
+func Install(ctx context.Context, nodeConfig *api.NodeConfig, eksRelease eks.PatchRelease, log *zap.Logger) error {
 	// Create tracker with existing changes or new tracker
 	trackerConf, err := tracker.GetCurrentState()
 	if err != nil {
@@ -86,15 +90,15 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	}
 
 	switch {
-	case nodeCfg.IsIAMRolesAnywhere():
+	case nodeConfig.IsIAMRolesAnywhere():
 		signingHelper := iamrolesanywhere.NewSigningHelper()
 
 		log.Info("Installing AWS signing helper...")
 		if err := iamrolesanywhere.Install(ctx, trackerConf, signingHelper); err != nil && !errors.Is(err, fs.ErrExist) {
 			return err
 		}
-	case nodeCfg.IsSSM():
-		ssmInstaller := ssm.NewSSMInstaller(nodeCfg.Spec.Cluster.Region)
+	case nodeConfig.IsSSM():
+		ssmInstaller := ssm.NewSSMInstaller(nodeConfig.Spec.Cluster.Region)
 
 		log.Info("Installing SSM agent installer...")
 		if err := ssm.Install(ctx, trackerConf, ssmInstaller); err != nil && !errors.Is(err, fs.ErrExist) {
@@ -105,33 +109,30 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	}
 
 	log.Info("Installing kubelet...")
-	if err := kubelet.Install(ctx, trackerConf, release); err != nil && !errors.Is(err, fs.ErrExist) {
+	if err := kubelet.Install(ctx, trackerConf, eksRelease); err != nil && !errors.Is(err, fs.ErrExist) {
 		return err
 	}
 
 	log.Info("Installing kubectl...")
-	if err := kubectl.Install(ctx, trackerConf, release); err != nil && !errors.Is(err, fs.ErrExist) {
+	if err := kubectl.Install(ctx, trackerConf, eksRelease); err != nil && !errors.Is(err, fs.ErrExist) {
 		return err
 	}
 
 	log.Info("Installing cni-plugins...")
-	if err := cni.Install(ctx, trackerConf, release); err != nil && !errors.Is(err, fs.ErrExist) {
+	if err := cni.Install(ctx, trackerConf, eksRelease); err != nil && !errors.Is(err, fs.ErrExist) {
 		return err
 	}
 
 	log.Info("Installing image credential provider...")
-	if err := imagecredentialprovider.Install(ctx, trackerConf, release); err != nil && !errors.Is(err, fs.ErrExist) {
+	if err := imagecredentialprovider.Install(ctx, trackerConf, eksRelease); err != nil && !errors.Is(err, fs.ErrExist) {
 		return err
 	}
 
 	log.Info("Installing IAM authenticator...")
-	if err := iamauthenticator.Install(ctx, trackerConf, release); err != nil && !errors.Is(err, fs.ErrExist) {
+	if err := iamauthenticator.Install(ctx, trackerConf, eksRelease); err != nil && !errors.Is(err, fs.ErrExist) {
 		return err
 	}
 
 	log.Info("Finishing up install...")
-	if err := trackerConf.Save(); err != nil {
-		return err
-	}
-	return nil
+	return trackerConf.Save()
 }
