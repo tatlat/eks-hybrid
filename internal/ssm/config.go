@@ -43,3 +43,17 @@ func GetManagedHybridInstanceId() (string, error) {
 	}
 	return registration.ManagedInstanceID, nil
 }
+
+func GetManagedHybridInstanceIdAndRegion() (string, string, error) {
+	data, err := os.ReadFile(registrationFilePath)
+	if err != nil {
+		return "", "", err
+	}
+
+	var registration HybridInstanceRegistration
+	err = json.Unmarshal(data, &registration)
+	if err != nil {
+		return "", "", err
+	}
+	return registration.ManagedInstanceID, registration.Region, nil
+}

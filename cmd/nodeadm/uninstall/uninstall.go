@@ -1,14 +1,12 @@
 package uninstall
 
 import (
-	"github.com/aws/eks-hybrid/internal/aws"
 	"github.com/integrii/flaggy"
 	"go.uber.org/zap"
 	"os"
 
 	"github.com/aws/eks-hybrid/internal/cli"
 	"github.com/aws/eks-hybrid/internal/cni"
-	"github.com/aws/eks-hybrid/internal/configprovider"
 	"github.com/aws/eks-hybrid/internal/daemon"
 	"github.com/aws/eks-hybrid/internal/iamauthenticator"
 	"github.com/aws/eks-hybrid/internal/iamrolesanywhere"
@@ -46,32 +44,12 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return cli.ErrMustRunAsRoot
 	}
 
-	log.Info("Loading configuration", zap.String("configSource", opts.ConfigSource))
-	provider, err := configprovider.BuildConfigProvider(opts.ConfigSource)
-	if err != nil {
-		return err
-	}
-	nodeCfg, err := provider.Provide()
-	if err != nil {
-		return err
-	}
-	log.Info("Loaded configuration", zap.Reflect("config", nodeCfg))
-
 	log.Info("Loading installed components")
 	installed, err := tracker.GetInstalledArtifacts()
 	if err != nil && os.IsNotExist(err) {
 		log.Info("Nodeadm components are already uninstalled")
 		return nil
 	} else if err != nil {
-		return err
-	}
-
-	awsConfigProvider, err := aws.NewConfig(nodeCfg)
-	if err != nil {
-		return err
-	}
-	awsConfig, err := awsConfigProvider.GetConfig()
-	if err != nil {
 		return err
 	}
 
@@ -115,7 +93,7 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	}
 	if artifacts.Kubelet {
 		log.Info("Uninstalling kubelet...")
-		kubeletDaemon := kubelet.NewKubeletDaemon(daemonManager, awsConfig)
+		kubeletDaemon := kubelet.NewKubeletDaemon(daemonManager)
 		if err := kubeletDaemon.Stop(); err != nil {
 			return err
 		}
@@ -129,7 +107,7 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		if err := ssmDaemon.Stop(); err != nil {
 			return err
 		}
-		if err := ssm.Uninstall(awsConfig); err != nil {
+		if err := ssm.Uninstall(); err != nil {
 			return err
 		}
 	}
