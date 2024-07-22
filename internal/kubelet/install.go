@@ -57,8 +57,17 @@ func Install(ctx context.Context, tracker *tracker.Tracker, src Source) error {
 }
 
 func Uninstall() error {
-	if err := os.RemoveAll(BinPath); err != nil {
-		return err
+	pathsToRemove := []string{
+		BinPath,
+		UnitPath,
+		kubeconfigPath,
+		kubeletConfigRoot,
 	}
-	return os.RemoveAll(UnitPath)
+
+	for _, path := range pathsToRemove {
+		if err := os.RemoveAll(path); err != nil {
+			return err
+		}
+	}
+	return nil
 }
