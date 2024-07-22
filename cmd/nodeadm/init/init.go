@@ -6,7 +6,6 @@ import (
 	"k8s.io/utils/strings/slices"
 
 	"github.com/aws/eks-hybrid/internal/api"
-	"github.com/aws/eks-hybrid/internal/aws"
 	"github.com/aws/eks-hybrid/internal/cli"
 	"github.com/aws/eks-hybrid/internal/configenricher"
 	"github.com/aws/eks-hybrid/internal/configprovider"
@@ -73,15 +72,6 @@ func (c *initCmd) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return err
 	}
 
-	awsConfigProvider, err := aws.NewConfig(nodeConfig)
-	if err != nil {
-		return err
-	}
-	awsConfig, err := awsConfigProvider.GetConfig()
-	if err != nil {
-		return err
-	}
-
 	log.Info("Creating daemon manager..")
 	daemonManager, err := daemon.NewDaemonManager()
 	if err != nil {
@@ -104,7 +94,7 @@ func (c *initCmd) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 
 	daemons = append(daemons,
 		containerd.NewContainerdDaemon(daemonManager),
-		kubelet.NewKubeletDaemon(daemonManager, awsConfig),
+		kubelet.NewKubeletDaemon(daemonManager),
 	)
 
 	if !slices.Contains(c.skipPhases, configPhase) {

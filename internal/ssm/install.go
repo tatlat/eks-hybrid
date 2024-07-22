@@ -11,7 +11,7 @@ import (
 	"github.com/aws/eks-hybrid/internal/tracker"
 	"github.com/aws/eks-hybrid/internal/util"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
 	awsSsm "github.com/aws/aws-sdk-go-v2/service/ssm"
 )
 
@@ -42,8 +42,8 @@ func Install(ctx context.Context, tracker *tracker.Tracker, source Source) error
 
 // Uninstall deregisters the managed instance and removes all files and components that
 // make up the ssm agent component.
-func Uninstall(awsConfig aws.Config) error {
-	instanceId, err := GetManagedHybridInstanceId()
+func Uninstall() error {
+	instanceId, region, err := GetManagedHybridInstanceIdAndRegion()
 
 	// If uninstall is being run just after running install and before running init
 	// SSM would not be fully installed and inited, hence it's not required to run
@@ -55,6 +55,10 @@ func Uninstall(awsConfig aws.Config) error {
 	}
 
 	// Create SSM client
+	awsConfig, err := config.LoadDefaultConfig(context.Background(), config.WithRegion(region))
+	if err != nil {
+		return err
+	}
 	ssmClient := awsSsm.NewFromConfig(awsConfig)
 	managed, err := isInstanceManaged(ssmClient, instanceId)
 	if err != nil {
