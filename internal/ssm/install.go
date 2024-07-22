@@ -46,7 +46,7 @@ func Uninstall() error {
 	instanceId, region, err := GetManagedHybridInstanceIdAndRegion()
 
 	// If uninstall is being run just after running install and before running init
-	// SSM would not be fully installed and inited, hence it's not required to run
+	// SSM would not be fully installed and registered, hence it's not required to run
 	// deregister instance.
 	if err != nil && os.IsNotExist(err) {
 		return os.RemoveAll(InstallerPath)

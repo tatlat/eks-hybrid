@@ -79,6 +79,10 @@ func (c *initCmd) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	}
 	defer daemonManager.Close()
 
+	return Init(nodeConfig, c.skipPhases, daemonManager, log)
+}
+
+func Init(nodeConfig *api.NodeConfig, skipPhases []string, manager daemon.DaemonManager, log *zap.Logger) error {
 	aspects := []system.SystemAspect{
 		system.NewLocalDiskAspect(),
 		system.NewNetworkingAspect(),
@@ -89,20 +93,17 @@ func (c *initCmd) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	// in order to register the instance first. This will provide us both aws credentials
 	// and managed instance ID which will override hostname in both kubelet configs & provider-id
 	if nodeConfig.IsSSM() {
-		daemons = append(daemons, ssm.NewSsmDaemon(daemonManager))
+		daemons = append(daemons, ssm.NewSsmDaemon(manager))
 	}
 
 	daemons = append(daemons,
-		containerd.NewContainerdDaemon(daemonManager),
-		kubelet.NewKubeletDaemon(daemonManager),
+		containerd.NewContainerdDaemon(manager),
+		kubelet.NewKubeletDaemon(manager),
 	)
 
-	if !slices.Contains(c.skipPhases, configPhase) {
+	if !slices.Contains(skipPhases, configPhase) {
 		log.Info("Configuring daemons...")
 		for _, daemon := range daemons {
-			if len(c.daemons) > 0 && !slices.Contains(c.daemons, daemon.Name()) {
-				continue
-			}
 			nameField := zap.String("name", daemon.Name())
 
 			log.Info("Configuring daemon...", nameField)
@@ -124,7 +125,7 @@ func (c *initCmd) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		}
 	}
 
-	if !slices.Contains(c.skipPhases, runPhase) {
+	if !slices.Contains(skipPhases, runPhase) {
 		// Aspects are not required for hybrid nodes
 		// Setting up aspects fall under user responsibility for hybrid nodes
 		if !nodeConfig.IsHybridNode() {
@@ -139,10 +140,6 @@ func (c *initCmd) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 			}
 		}
 		for _, daemon := range daemons {
-			if len(c.daemons) > 0 && !slices.Contains(c.daemons, daemon.Name()) {
-				continue
-			}
-
 			nameField := zap.String("name", daemon.Name())
 
 			log.Info("Ensuring daemon is running..", nameField)
@@ -158,6 +155,5 @@ func (c *initCmd) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 			log.Info("Finished post-launch tasks", nameField)
 		}
 	}
-
 	return nil
 }

@@ -61,6 +61,35 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	defer daemonManager.Close()
 
 	artifacts := installed.Artifacts
+	if err := UninstallBinaries(artifacts, log); err != nil {
+		return err
+	}
+
+	if artifacts.Kubelet {
+		log.Info("Uninstalling kubelet...")
+		kubeletDaemon := kubelet.NewKubeletDaemon(daemonManager)
+		if err := kubeletDaemon.Stop(); err != nil {
+			return err
+		}
+		if err := kubelet.Uninstall(); err != nil {
+			return err
+		}
+	}
+	if artifacts.Ssm {
+		log.Info("Uninstalling and de-registering SSM agent...")
+		ssmDaemon := ssm.NewSsmDaemon(daemonManager)
+		if err := ssmDaemon.Stop(); err != nil {
+			return err
+		}
+		if err := ssm.Uninstall(); err != nil {
+			return err
+		}
+	}
+
+	return tracker.Clear()
+}
+
+func UninstallBinaries(artifacts *tracker.InstalledArtifacts, log *zap.Logger) error {
 	if artifacts.Kubectl {
 		log.Info("Uninstalling kubectl...")
 		if err := kubectl.Uninstall(); err != nil {
@@ -91,26 +120,5 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 			return err
 		}
 	}
-	if artifacts.Kubelet {
-		log.Info("Uninstalling kubelet...")
-		kubeletDaemon := kubelet.NewKubeletDaemon(daemonManager)
-		if err := kubeletDaemon.Stop(); err != nil {
-			return err
-		}
-		if err := kubelet.Uninstall(); err != nil {
-			return err
-		}
-	}
-	if artifacts.Ssm {
-		log.Info("Uninstalling and de-registering SSM agent...")
-		ssmDaemon := ssm.NewSsmDaemon(daemonManager)
-		if err := ssmDaemon.Stop(); err != nil {
-			return err
-		}
-		if err := ssm.Uninstall(); err != nil {
-			return err
-		}
-	}
-
-	return tracker.Clear()
+	return nil
 }
