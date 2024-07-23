@@ -123,6 +123,7 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		if err := ssm.Upgrade(ssmDaemon, nodeConfig); err != nil {
 			return err
 		}
+
 	}
 	if err := tracker.Clear(); err != nil {
 		return err

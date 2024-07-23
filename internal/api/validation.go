@@ -33,9 +33,6 @@ func newWithCommonValidations() *validator {
 		if cfg.Spec.Cluster.Name == "" {
 			return fmt.Errorf("Name is missing in cluster configuration")
 		}
-		if cfg.Spec.Cluster.CIDR == "" {
-			return fmt.Errorf("CIDR is missing in cluster configuration")
-		}
 		return nil
 	})
 	return v
@@ -48,6 +45,9 @@ func (v *validator) withEc2UserdataValidations() {
 		}
 		if cfg.Spec.Cluster.CertificateAuthority == nil {
 			return fmt.Errorf("Certificate authority is missing in cluster configuration")
+		}
+		if cfg.Spec.Cluster.CIDR == "" {
+			return fmt.Errorf("CIDR is missing in cluster configuration")
 		}
 		return nil
 	})

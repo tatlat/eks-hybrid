@@ -12,7 +12,7 @@ import (
 )
 
 func (k *kubelet) ensureClusterDetails(cfg *api.NodeConfig) error {
-	if cfg.Spec.Cluster.APIServerEndpoint == "" || cfg.Spec.Cluster.CertificateAuthority == nil {
+	if cfg.Spec.Cluster.APIServerEndpoint == "" || cfg.Spec.Cluster.CertificateAuthority == nil || cfg.Spec.Cluster.CIDR == "" {
 		awsConfigProvider, err := internalaws.NewConfig(cfg)
 		if err != nil {
 			return err
@@ -40,6 +40,10 @@ func (k *kubelet) ensureClusterDetails(cfg *api.NodeConfig) error {
 				return err
 			}
 			cfg.Spec.Cluster.CertificateAuthority = decoded
+		}
+
+		if cfg.Spec.Cluster.CIDR == "" {
+			cfg.Spec.Cluster.CIDR = *cluster.Cluster.KubernetesNetworkConfig.ServiceIpv4Cidr
 		}
 	}
 	return nil
