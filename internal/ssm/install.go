@@ -91,3 +91,30 @@ func Uninstall() error {
 
 	return os.RemoveAll(InstallerPath)
 }
+
+// UninstallWithoutDeregister uninstalls ssm agent and ssm installer without running de-register
+// instance against aws ssm
+func UninstallWithoutDeregister() error {
+	if err := os.RemoveAll(InstallerPath); err != nil {
+		return err
+	}
+	instanceId, _ := GetManagedHybridInstanceId()
+
+	// SSM register had a successful run, which mean the agent is running
+	// Removing the agent from node
+	if instanceId != "" {
+		osToRemoveCommand := map[string]*exec.Cmd{
+			util.UbuntuOsName: exec.Command("snap", "remove", "amazon-ssm-agent"),
+			util.RhelOsName:   exec.Command("yum", "remove", "amazon-ssm-agent", "-y"),
+			util.AmazonOsName: exec.Command("yum", "remove", "amazon-ssm-agent", "-y"),
+		}
+		osName := util.GetOsName()
+		if cmd, ok := osToRemoveCommand[osName]; ok {
+			if _, err := cmd.CombinedOutput(); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}

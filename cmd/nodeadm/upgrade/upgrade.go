@@ -120,7 +120,7 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		if err := ssmDaemon.Stop(); err != nil {
 			return err
 		}
-		if err := ssm.Upgrade(ssmDaemon, nodeConfig); err != nil {
+		if err := ssm.UninstallWithoutDeregister(); err != nil {
 			return err
 		}
 
