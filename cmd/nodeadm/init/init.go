@@ -83,10 +83,7 @@ func (c *initCmd) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 }
 
 func Init(nodeConfig *api.NodeConfig, skipPhases []string, manager daemon.DaemonManager, log *zap.Logger) error {
-	aspects := []system.SystemAspect{
-		system.NewLocalDiskAspect(),
-		system.NewNetworkingAspect(),
-	}
+	aspects := system.NewNodeAspects(nodeConfig)
 
 	var daemons []daemon.Daemon
 	// If Hybrid w/ SSM is enabled, we need to make sure SSM daemon is configured first
@@ -102,6 +99,16 @@ func Init(nodeConfig *api.NodeConfig, skipPhases []string, manager daemon.Daemon
 	)
 
 	if !slices.Contains(skipPhases, configPhase) {
+		log.Info("Setting up system aspects...")
+		for _, aspect := range aspects {
+			nameField := zap.String("name", aspect.Name())
+			log.Info("Setting up system aspect..", nameField)
+			if err := aspect.Setup(nodeConfig); err != nil {
+				return err
+			}
+			log.Info("Set up system aspect", nameField)
+		}
+
 		log.Info("Configuring daemons...")
 		for _, daemon := range daemons {
 			nameField := zap.String("name", daemon.Name())
@@ -126,19 +133,6 @@ func Init(nodeConfig *api.NodeConfig, skipPhases []string, manager daemon.Daemon
 	}
 
 	if !slices.Contains(skipPhases, runPhase) {
-		// Aspects are not required for hybrid nodes
-		// Setting up aspects fall under user responsibility for hybrid nodes
-		if !nodeConfig.IsHybridNode() {
-			log.Info("Setting up system aspects...")
-			for _, aspect := range aspects {
-				nameField := zap.String("name", aspect.Name())
-				log.Info("Setting up system aspect..", nameField)
-				if err := aspect.Setup(nodeConfig); err != nil {
-					return err
-				}
-				log.Info("Set up system aspect", nameField)
-			}
-		}
 		for _, daemon := range daemons {
 			nameField := zap.String("name", daemon.Name())
 

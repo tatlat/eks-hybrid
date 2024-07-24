@@ -31,7 +31,7 @@ func Install(tracker *tracker.Tracker) error {
 		}
 
 		for _, manager := range pkgManagers {
-			if err := artifact.InstallPackage(containerdPackageName, manager); err == nil {
+			if err := artifact.InstallPackage(containerdPackageName, manager, true); err == nil {
 				return tracker.Add(artifact.Containerd)
 			}
 		}
