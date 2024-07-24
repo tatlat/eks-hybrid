@@ -7,6 +7,7 @@ import (
 
 	"github.com/aws/eks-hybrid/internal/cli"
 	"github.com/aws/eks-hybrid/internal/cni"
+	"github.com/aws/eks-hybrid/internal/containerd"
 	"github.com/aws/eks-hybrid/internal/daemon"
 	"github.com/aws/eks-hybrid/internal/iamauthenticator"
 	"github.com/aws/eks-hybrid/internal/iamrolesanywhere"
@@ -82,6 +83,16 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 			return err
 		}
 		if err := ssm.Uninstall(); err != nil {
+			return err
+		}
+	}
+	if artifacts.Containerd {
+		log.Info("Uninstalling containerd...")
+		containerdDaemon := containerd.NewContainerdDaemon(daemonManager)
+		if err := containerdDaemon.Stop(); err != nil {
+			return err
+		}
+		if err := containerd.Uninstall(); err != nil {
 			return err
 		}
 	}

@@ -44,8 +44,15 @@ func (m *systemdDaemonManager) StartDaemon(name string) error {
 
 func (m *systemdDaemonManager) StopDaemon(name string) error {
 	unitName := getServiceUnitName(name)
-	_, err := m.conn.StopUnitContext(context.TODO(), unitName, ModeReplace, nil)
-	return err
+	status, err := m.GetDaemonStatus(name)
+	if err != nil {
+		return err
+	}
+	if status == DaemonStatusRunning {
+		_, err := m.conn.StopUnitContext(context.TODO(), unitName, ModeReplace, nil)
+		return err
+	}
+	return nil
 }
 
 func (m *systemdDaemonManager) RestartDaemon(name string) error {
@@ -61,9 +68,9 @@ func (m *systemdDaemonManager) GetDaemonStatus(name string) (DaemonStatus, error
 		return DaemonStatusUnknown, err
 	}
 	switch status.Value.String() {
-	case "active":
+	case "\"active\"":
 		return DaemonStatusRunning, nil
-	case "inactive":
+	case "\"inactive\"":
 		return DaemonStatusStopped, nil
 	default:
 		return DaemonStatusUnknown, nil

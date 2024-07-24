@@ -34,4 +34,8 @@ func (m *noopDaemonManager) DisableDaemon(name string) error {
 	return nil
 }
 
+func (m *noopDaemonManager) DaemonReload() error {
+	return nil
+}
+
 func (m *noopDaemonManager) Close() {}

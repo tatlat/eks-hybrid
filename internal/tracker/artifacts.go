@@ -19,6 +19,7 @@ type Tracker struct {
 }
 
 type InstalledArtifacts struct {
+	Containerd              bool
 	CniPlugins              bool
 	IamAuthenticator        bool
 	IamRolesAnywhere        bool
@@ -45,6 +46,8 @@ func (tracker *Tracker) Add(componentName string) error {
 		tracker.Artifacts.Kubelet = true
 	case artifact.Ssm:
 		tracker.Artifacts.Ssm = true
+	case artifact.Containerd:
+		tracker.Artifacts.Containerd = true
 	default:
 		return fmt.Errorf("invalid artifact to track")
 	}

@@ -47,3 +47,21 @@ func InstallTarGz(dst string, src string) error {
 	}
 	return nil
 }
+
+func InstallPackage(packageName, packageManager string) error {
+	installCmd := exec.Command(packageManager, "install", packageName, "-y")
+	out, err := installCmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("running install command using package manager: %s, error: %v", out, err)
+	}
+	return nil
+}
+
+func UninstallPackage(packageName, packageManager string) error {
+	removeCmd := exec.Command(packageManager, "remove", packageName, "-y")
+	out, err := removeCmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("running uninstall command using package manager: %s, error: %v", out, err)
+	}
+	return nil
+}

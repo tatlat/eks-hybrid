@@ -3,6 +3,7 @@ package install
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io/fs"
 
 	"github.com/integrii/flaggy"
@@ -13,6 +14,7 @@ import (
 	"github.com/aws/eks-hybrid/internal/cli"
 	"github.com/aws/eks-hybrid/internal/cni"
 	"github.com/aws/eks-hybrid/internal/configprovider"
+	"github.com/aws/eks-hybrid/internal/containerd"
 	"github.com/aws/eks-hybrid/internal/iamauthenticator"
 	"github.com/aws/eks-hybrid/internal/iamrolesanywhere"
 	"github.com/aws/eks-hybrid/internal/imagecredentialprovider"
@@ -87,6 +89,15 @@ func Install(ctx context.Context, nodeConfig *api.NodeConfig, eksRelease eks.Pat
 	trackerConf, err := tracker.GetCurrentState()
 	if err != nil {
 		return err
+	}
+
+	log.Info("Installing containerd...")
+	if err := containerd.Install(trackerConf); err != nil && !errors.Is(err, fs.ErrExist) {
+		return err
+	}
+
+	if err := containerd.ValidateSystemdUnitFile(); err != nil {
+		return fmt.Errorf("please install systemd unit file for containerd: %v", err)
 	}
 
 	switch {

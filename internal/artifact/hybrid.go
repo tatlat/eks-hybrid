@@ -8,4 +8,5 @@ const (
 	Kubectl                 = "kubectl"
 	Kubelet                 = "kubelet"
 	Ssm                     = "ssm"
+	Containerd              = "containerd"
 )

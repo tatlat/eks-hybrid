@@ -15,6 +15,7 @@ import (
 	"github.com/aws/eks-hybrid/internal/cli"
 	"github.com/aws/eks-hybrid/internal/configenricher"
 	"github.com/aws/eks-hybrid/internal/configprovider"
+	"github.com/aws/eks-hybrid/internal/containerd"
 	"github.com/aws/eks-hybrid/internal/daemon"
 	"github.com/aws/eks-hybrid/internal/kubelet"
 	"github.com/aws/eks-hybrid/internal/ssm"
@@ -125,6 +126,18 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		}
 
 	}
+
+	if artifacts.Containerd {
+		log.Info("Uninstalling containerd...")
+		containerdDaemon := containerd.NewContainerdDaemon(daemonManager)
+		if err := containerdDaemon.Stop(); err != nil {
+			return err
+		}
+		if err := containerd.Uninstall(); err != nil {
+			return err
+		}
+	}
+
 	if err := tracker.Clear(); err != nil {
 		return err
 	}
