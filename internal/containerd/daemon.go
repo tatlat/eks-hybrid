@@ -20,7 +20,10 @@ func NewContainerdDaemon(daemonManager daemon.DaemonManager) daemon.Daemon {
 }
 
 func (cd *containerd) Configure(c *api.NodeConfig) error {
-	return writeContainerdConfig(c)
+	if err := writeContainerdConfig(c); err != nil {
+		return err
+	}
+	return writeContainerdKernelModulesConfig(cd.daemonManager)
 }
 
 // EnsureRunning ensures containerd is running with the written configuration

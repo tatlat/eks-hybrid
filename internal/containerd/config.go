@@ -6,23 +6,31 @@ import (
 	"path/filepath"
 	"text/template"
 
-	"github.com/aws/eks-hybrid/internal/api"
-	"github.com/aws/eks-hybrid/internal/util"
 	"go.uber.org/zap"
+
+	"github.com/aws/eks-hybrid/internal/api"
+	"github.com/aws/eks-hybrid/internal/daemon"
+	"github.com/aws/eks-hybrid/internal/util"
 )
 
 const ContainerRuntimeEndpoint = "unix:///run/containerd/containerd.sock"
 
 const (
-	containerdConfigFile      = "/etc/containerd/config.toml"
-	containerdConfigImportDir = "/etc/containerd/config.d"
-	containerdConfigPerm      = 0644
+	containerdConfigFile              = "/etc/containerd/config.toml"
+	containerdConfigImportDir         = "/etc/containerd/config.d"
+	containerdKernelModulesConfigFile = "/etc/modules-load.d/containerd.conf"
+	containerdConfigPerm              = 0644
+
+	kernelModulesSystemdUnit = "systemd-modules-load"
 )
 
 var (
 	//go:embed config.template.toml
 	containerdConfigTemplateData string
 	containerdConfigTemplate     = template.Must(template.New(containerdConfigFile).Parse(containerdConfigTemplateData))
+
+	//go:embed kernel-modules.conf
+	containerdKernelModulesFileData string
 )
 
 type containerdTemplateVars struct {
@@ -56,4 +64,11 @@ func generateContainerdConfig(cfg *api.NodeConfig) ([]byte, error) {
 		return nil, err
 	}
 	return buf.Bytes(), nil
+}
+
+func writeContainerdKernelModulesConfig(daemonManager daemon.DaemonManager) error {
+	if err := util.WriteFileWithDir(containerdKernelModulesConfigFile, []byte(containerdKernelModulesFileData), containerdConfigPerm); err != nil {
+		return err
+	}
+	return daemonManager.RestartDaemon(kernelModulesSystemdUnit)
 }
