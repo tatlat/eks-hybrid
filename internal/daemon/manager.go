@@ -26,6 +26,8 @@ type DaemonManager interface {
 	// DisableDaemon disables the daemon with the given name.
 	// If the daemon is not enabled, this is a no-op.
 	DisableDaemon(name string) error
+	// DaemonReload will reload all the daemons
+	DaemonReload() error
 	// Close cleans up any underlying resources used by the daemon manager.
 	Close()
 }
