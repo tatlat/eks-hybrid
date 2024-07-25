@@ -9,12 +9,11 @@ import (
 	"github.com/integrii/flaggy"
 	"go.uber.org/zap"
 
-	"github.com/aws/eks-hybrid/internal/api"
 	"github.com/aws/eks-hybrid/internal/aws/eks"
 	"github.com/aws/eks-hybrid/internal/cli"
 	"github.com/aws/eks-hybrid/internal/cni"
-	"github.com/aws/eks-hybrid/internal/configprovider"
 	"github.com/aws/eks-hybrid/internal/containerd"
+	"github.com/aws/eks-hybrid/internal/creds"
 	"github.com/aws/eks-hybrid/internal/iamauthenticator"
 	"github.com/aws/eks-hybrid/internal/iamrolesanywhere"
 	"github.com/aws/eks-hybrid/internal/imagecredentialprovider"
@@ -30,6 +29,7 @@ func NewCommand() cli.Command {
 	fc := flaggy.NewSubcommand("install")
 	fc.Description = "Install components required to join an EKS cluster"
 	fc.AddPositionalValue(&cmd.kubernetesVersion, "KUBERNETES_VERSION", 1, true, "The major[.minor[.patch]] version of Kubernetes to install")
+	fc.String(&cmd.credentialProvider, "p", "credential-provider", "Credential process to install. Allowed values are ssm & iam-ra")
 
 	cmd.flaggy = fc
 
@@ -37,8 +37,9 @@ func NewCommand() cli.Command {
 }
 
 type command struct {
-	flaggy            *flaggy.Subcommand
-	kubernetesVersion string
+	flaggy             *flaggy.Subcommand
+	kubernetesVersion  string
+	credentialProvider string
 }
 
 func (c *command) Flaggy() *flaggy.Subcommand {
@@ -53,22 +54,8 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	if !root {
 		return cli.ErrMustRunAsRoot
 	}
-
-	log.Info("Loading configuration", zap.String("configSource", opts.ConfigSource))
-	provider, err := configprovider.BuildConfigProvider(opts.ConfigSource)
+	credentialProvider, err := creds.GetCredentialProvider(c.credentialProvider)
 	if err != nil {
-		return err
-	}
-	nodeCfg, err := provider.Provide()
-	if err != nil {
-		return err
-	}
-	log.Info("Loaded configuration", zap.Reflect("config", nodeCfg))
-
-	// Ensure hybrid configuration
-	log.Info("Validating configuration")
-	v := api.NewValidator(nodeCfg)
-	if err := v.Validate(nodeCfg); err != nil {
 		return err
 	}
 
@@ -81,10 +68,10 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	}
 	log.Info("Using Kubernetes version", zap.Reflect("kubernetes version", release.Version))
 
-	return Install(ctx, nodeCfg, release, log)
+	return Install(ctx, release, credentialProvider, log)
 }
 
-func Install(ctx context.Context, nodeConfig *api.NodeConfig, eksRelease eks.PatchRelease, log *zap.Logger) error {
+func Install(ctx context.Context, eksRelease eks.PatchRelease, credentialProvider creds.CredentialProvider, log *zap.Logger) error {
 	// Create tracker with existing changes or new tracker
 	trackerConf, err := tracker.GetCurrentState()
 	if err != nil {
@@ -100,16 +87,16 @@ func Install(ctx context.Context, nodeConfig *api.NodeConfig, eksRelease eks.Pat
 		return fmt.Errorf("please install systemd unit file for containerd: %v", err)
 	}
 
-	switch {
-	case nodeConfig.IsIAMRolesAnywhere():
+	switch credentialProvider {
+	case creds.IamRolesAnywhereCredentialProvider:
 		signingHelper := iamrolesanywhere.NewSigningHelper()
 
 		log.Info("Installing AWS signing helper...")
 		if err := iamrolesanywhere.Install(ctx, trackerConf, signingHelper); err != nil && !errors.Is(err, fs.ErrExist) {
 			return err
 		}
-	case nodeConfig.IsSSM():
-		ssmInstaller := ssm.NewSSMInstaller(nodeConfig.Spec.Cluster.Region)
+	case creds.SsmCredentialProvider:
+		ssmInstaller := ssm.NewSSMInstaller()
 
 		log.Info("Installing SSM agent installer...")
 		if err := ssm.Install(ctx, trackerConf, ssmInstaller); err != nil && !errors.Is(err, fs.ErrExist) {

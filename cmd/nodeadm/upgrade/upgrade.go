@@ -16,6 +16,7 @@ import (
 	"github.com/aws/eks-hybrid/internal/configenricher"
 	"github.com/aws/eks-hybrid/internal/configprovider"
 	"github.com/aws/eks-hybrid/internal/containerd"
+	"github.com/aws/eks-hybrid/internal/creds"
 	"github.com/aws/eks-hybrid/internal/daemon"
 	"github.com/aws/eks-hybrid/internal/kubelet"
 	"github.com/aws/eks-hybrid/internal/ssm"
@@ -142,8 +143,13 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return err
 	}
 
+	credsProvider, err := creds.GetCredentialProviderFromNodeConfig(nodeConfig)
+	if err != nil {
+		return err
+	}
+
 	// Installing new version of artifacts
-	if err := install.Install(ctx, nodeConfig, release, log); err != nil {
+	if err := install.Install(ctx, release, credsProvider, log); err != nil {
 		return err
 	}
 
