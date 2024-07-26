@@ -20,7 +20,7 @@ func GetCredentialProvider(credProcess string) (CredentialProvider, error) {
 	case string(IamRolesAnywhereCredentialProvider):
 		return IamRolesAnywhereCredentialProvider, nil
 	default:
-		return "", fmt.Errorf("invalid credential process provided. Valid options are ssm and iam")
+		return "", fmt.Errorf("invalid credential process provided. Valid options are ssm and iam-ra")
 	}
 }
 
