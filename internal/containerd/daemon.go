@@ -1,6 +1,7 @@
 package containerd
 
 import (
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/eks-hybrid/internal/api"
 	"github.com/aws/eks-hybrid/internal/daemon"
 )
@@ -11,16 +12,20 @@ var _ daemon.Daemon = &containerd{}
 
 type containerd struct {
 	daemonManager daemon.DaemonManager
+	nodeConfig    *api.NodeConfig
+	awsConfig     *aws.Config
 }
 
-func NewContainerdDaemon(daemonManager daemon.DaemonManager) daemon.Daemon {
+func NewContainerdDaemon(daemonManager daemon.DaemonManager, cfg *api.NodeConfig, awsConfig *aws.Config) daemon.Daemon {
 	return &containerd{
 		daemonManager: daemonManager,
+		nodeConfig:    cfg,
+		awsConfig:     awsConfig,
 	}
 }
 
-func (cd *containerd) Configure(c *api.NodeConfig) error {
-	if err := writeContainerdConfig(c); err != nil {
+func (cd *containerd) Configure() error {
+	if err := writeContainerdConfig(cd.nodeConfig); err != nil {
 		return err
 	}
 	return writeContainerdKernelModulesConfig(cd.daemonManager)
@@ -37,8 +42,8 @@ func (cd *containerd) EnsureRunning() error {
 	return cd.daemonManager.RestartDaemon(ContainerdDaemonName)
 }
 
-func (cd *containerd) PostLaunch(c *api.NodeConfig) error {
-	return cacheSandboxImage(c)
+func (cd *containerd) PostLaunch() error {
+	return cacheSandboxImage(cd.awsConfig)
 }
 
 func (cd *containerd) Stop() error {

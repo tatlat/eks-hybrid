@@ -40,7 +40,7 @@ const (
 	hybridNodeLabel = "eks.amazonaws.com/compute-type=hybrid"
 )
 
-func (k *kubelet) writeKubeletConfig(cfg *api.NodeConfig) error {
+func (k *kubelet) writeKubeletConfig() error {
 	kubeletVersion, err := GetKubeletVersion()
 	if err != nil {
 		return err
@@ -48,9 +48,9 @@ func (k *kubelet) writeKubeletConfig(cfg *api.NodeConfig) error {
 	// tracking: https://github.com/kubernetes/enhancements/issues/3983
 	// for enabling drop-in configuration
 	if semver.Compare(kubeletVersion, "v1.29.0") < 0 {
-		return k.writeKubeletConfigToFile(cfg)
+		return k.writeKubeletConfigToFile()
 	} else {
-		return k.writeKubeletConfigToDir(cfg)
+		return k.writeKubeletConfigToDir()
 	}
 }
 
@@ -311,7 +311,7 @@ func (ksc *kubeletConfig) withPodInfraContainerImage(cfg *api.NodeConfig, kubele
 	return nil
 }
 
-func (k *kubelet) GenerateKubeletConfig(cfg *api.NodeConfig) (*kubeletConfig, error) {
+func (k *kubelet) GenerateKubeletConfig() (*kubeletConfig, error) {
 	// Get the kubelet/kubernetes version to help conditionally enable features
 	kubeletVersion, err := GetKubeletVersion()
 	if err != nil {
@@ -321,21 +321,21 @@ func (k *kubelet) GenerateKubeletConfig(cfg *api.NodeConfig) (*kubeletConfig, er
 
 	kubeletConfig := defaultKubeletSubConfig()
 
-	if err := kubeletConfig.withFallbackClusterDns(&cfg.Spec.Cluster); err != nil {
+	if err := kubeletConfig.withFallbackClusterDns(&k.nodeConfig.Spec.Cluster); err != nil {
 		return nil, err
 	}
-	if err := kubeletConfig.withOutpostSetup(cfg); err != nil {
+	if err := kubeletConfig.withOutpostSetup(k.nodeConfig); err != nil {
 		return nil, err
 	}
-	if err := kubeletConfig.withPodInfraContainerImage(cfg, kubeletVersion, k.flags); err != nil {
+	if err := kubeletConfig.withPodInfraContainerImage(k.nodeConfig, kubeletVersion, k.flags); err != nil {
 		return nil, err
 	}
 
 	kubeletConfig.withVersionToggles(kubeletVersion, k.flags)
 
-	if cfg.IsHybridNode() {
-		kubeletConfig.withHybridCloudProvider(cfg, k.flags)
-		kubeletConfig.withHybridNodeLabels(cfg, k.flags)
+	if k.nodeConfig.IsHybridNode() {
+		kubeletConfig.withHybridCloudProvider(k.nodeConfig, k.flags)
+		kubeletConfig.withHybridNodeLabels(k.nodeConfig, k.flags)
 
 		// On Ubuntu, systemd-resolved adds loopback address as nameserver to /etc/resolv.conf
 		// This causes pods not being able to do successful dns lookups
@@ -345,11 +345,11 @@ func (k *kubelet) GenerateKubeletConfig(cfg *api.NodeConfig) (*kubeletConfig, er
 			kubeletConfig.withResolvConf(system.UbuntuResolvConfPath)
 		}
 	} else {
-		if err := kubeletConfig.withNodeIp(cfg, k.flags); err != nil {
+		if err := kubeletConfig.withNodeIp(k.nodeConfig, k.flags); err != nil {
 			return nil, err
 		}
-		kubeletConfig.withCloudProvider(kubeletVersion, cfg, k.flags)
-		kubeletConfig.withDefaultReservedResources(cfg)
+		kubeletConfig.withCloudProvider(kubeletVersion, k.nodeConfig, k.flags)
+		kubeletConfig.withDefaultReservedResources(k.nodeConfig)
 	}
 
 	return &kubeletConfig, nil
@@ -357,15 +357,15 @@ func (k *kubelet) GenerateKubeletConfig(cfg *api.NodeConfig) (*kubeletConfig, er
 
 // WriteConfig writes the kubelet config to a file.
 // This should only be used for kubelet versions < 1.28.
-func (k *kubelet) writeKubeletConfigToFile(cfg *api.NodeConfig) error {
-	kubeletConfig, err := k.GenerateKubeletConfig(cfg)
+func (k *kubelet) writeKubeletConfigToFile() error {
+	kubeletConfig, err := k.GenerateKubeletConfig()
 	if err != nil {
 		return err
 	}
 
 	var kubeletConfigBytes []byte
-	if cfg.Spec.Kubelet.Config != nil && len(cfg.Spec.Kubelet.Config) > 0 {
-		mergedMap, err := util.DocumentMerge(kubeletConfig, cfg.Spec.Kubelet.Config, mergo.WithOverride)
+	if k.nodeConfig.Spec.Kubelet.Config != nil && len(k.nodeConfig.Spec.Kubelet.Config) > 0 {
+		mergedMap, err := util.DocumentMerge(kubeletConfig, k.nodeConfig.Spec.Kubelet.Config, mergo.WithOverride)
 		if err != nil {
 			return err
 		}
@@ -390,8 +390,8 @@ func (k *kubelet) writeKubeletConfigToFile(cfg *api.NodeConfig) error {
 // standard config file and writes the user's provided config to a directory for
 // drop-in support. This is only supported on kubelet versions >= 1.28. see:
 // https://kubernetes.io/docs/tasks/administer-cluster/kubelet-config-file/#kubelet-conf-d
-func (k *kubelet) writeKubeletConfigToDir(cfg *api.NodeConfig) error {
-	kubeletConfig, err := k.GenerateKubeletConfig(cfg)
+func (k *kubelet) writeKubeletConfigToDir() error {
+	kubeletConfig, err := k.GenerateKubeletConfig()
 	if err != nil {
 		return err
 	}
@@ -408,7 +408,7 @@ func (k *kubelet) writeKubeletConfigToDir(cfg *api.NodeConfig) error {
 		return err
 	}
 
-	if cfg.Spec.Kubelet.Config != nil && len(cfg.Spec.Kubelet.Config) > 0 {
+	if k.nodeConfig.Spec.Kubelet.Config != nil && len(k.nodeConfig.Spec.Kubelet.Config) > 0 {
 		dirPath := path.Join(kubeletConfigRoot, kubeletConfigDir)
 		k.flags["config-dir"] = dirPath
 
@@ -419,7 +419,7 @@ func (k *kubelet) writeKubeletConfigToDir(cfg *api.NodeConfig) error {
 		// merge in default type metadata like kind and apiVersion in case the
 		// user has not specified this, as it is required to qualify a drop-in
 		// config as a valid KubeletConfiguration
-		userKubeletConfigMap, err := util.DocumentMerge(defaultKubeletSubConfig().TypeMeta, cfg.Spec.Kubelet.Config)
+		userKubeletConfigMap, err := util.DocumentMerge(defaultKubeletSubConfig().TypeMeta, k.nodeConfig.Spec.Kubelet.Config)
 		if err != nil {
 			return err
 		}

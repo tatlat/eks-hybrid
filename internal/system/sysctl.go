@@ -23,18 +23,20 @@ var (
 	nodeadmSysctlConfPath = path.Join(sysctlConfDir, nodeadmSysctlConfFile)
 )
 
-type sysctlAspect struct{}
+type sysctlAspect struct {
+	nodeConfig *api.NodeConfig
+}
 
 var _ SystemAspect = &sysctlAspect{}
 
-func NewSysctlAspect() *sysctlAspect {
-	return &sysctlAspect{}
+func NewSysctlAspect(cfg *api.NodeConfig) SystemAspect {
+	return &sysctlAspect{nodeConfig: cfg}
 }
 func (s *sysctlAspect) Name() string {
 	return sysctlAspectName
 }
 
-func (s *sysctlAspect) Setup(cfg *api.NodeConfig) error {
+func (s *sysctlAspect) Setup() error {
 	if err := writeSysctlConfig(); err != nil {
 		return err
 	}

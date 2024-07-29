@@ -9,11 +9,11 @@ import (
 )
 
 const (
-	minDisk       float64 = float64(20)
+	minDisk float64 = float64(20)
 
-	prefixDisk            = "Available disk size ="
-	prefixMinDisk         = "Minimum Disk Size ="
-	unitDisk              = "GB"
+	prefixDisk    = "Available disk size ="
+	prefixMinDisk = "Minimum Disk Size ="
+	unitDisk      = "GB"
 )
 
 type DiskSize struct {

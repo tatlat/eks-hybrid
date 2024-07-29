@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/aws/eks-hybrid/internal/api"
 	"github.com/aws/eks-hybrid/internal/util"
 )
 
@@ -16,7 +15,7 @@ const (
 // Write environment variables needed for kubelet runtime. This should be the
 // last method called on the kubelet object so that environment side effects of
 // other methods are properly recorded
-func (k *kubelet) writeKubeletEnvironment(cfg *api.NodeConfig) error {
+func (k *kubelet) writeKubeletEnvironment() error {
 	// transform kubelet flags into a single string and write them to the
 	// kubelet environment variable
 	var kubeletFlags []string
@@ -24,7 +23,7 @@ func (k *kubelet) writeKubeletEnvironment(cfg *api.NodeConfig) error {
 		kubeletFlags = append(kubeletFlags, fmt.Sprintf("--%s=%s", flag, value))
 	}
 	// append user-provided flags at the end to give them precedence
-	kubeletFlags = append(kubeletFlags, cfg.Spec.Kubelet.Flags...)
+	kubeletFlags = append(kubeletFlags, k.nodeConfig.Spec.Kubelet.Flags...)
 	// expose these flags via an environment variable scoped to nodeadm
 	k.environment[kubeletArgsEnvironmentName] = strings.Join(kubeletFlags, " ")
 	// write additional environment variables

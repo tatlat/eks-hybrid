@@ -107,6 +107,15 @@ const (
 	LocalStorageMount LocalStorageStrategy = "Mount"
 )
 
+type NodeType string
+
+const (
+	Ssm              NodeType = "ssm"
+	IamRolesAnywhere NodeType = "iam-ra"
+	Ec2              NodeType = "ec2"
+	Outpost          NodeType = "outpost"
+)
+
 type HybridOptions struct {
 	NodeName         string            `json:"nodeName,omitempty"`
 	IAMRolesAnywhere *IAMRolesAnywhere `json:"iamRolesAnywhere,omitempty"`
@@ -128,6 +137,17 @@ func (nc NodeConfig) IsIAMRolesAnywhere() bool {
 
 func (nc NodeConfig) IsSSM() bool {
 	return nc.Spec.Hybrid != nil && nc.Spec.Hybrid.SSM != nil
+}
+
+func (nc NodeConfig) GetNodeType() NodeType {
+	if nc.IsSSM() {
+		return Ssm
+	} else if nc.IsIAMRolesAnywhere() {
+		return IamRolesAnywhere
+	} else if nc.IsOutpostNode() {
+		return Outpost
+	}
+	return Ec2
 }
 
 type IAMRolesAnywhere struct {

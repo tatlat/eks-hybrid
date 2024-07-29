@@ -6,7 +6,7 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/aws/eks-hybrid/internal/api"
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/eks-hybrid/internal/aws/ecr"
 	"github.com/aws/eks-hybrid/internal/util"
 	"github.com/containerd/containerd/integration/remote"
@@ -16,7 +16,7 @@ import (
 
 var containerdSandboxImageRegex = regexp.MustCompile(`sandbox_image = "(.*)"`)
 
-func cacheSandboxImage(cfg *api.NodeConfig) error {
+func cacheSandboxImage(awsConfig *aws.Config) error {
 	zap.L().Info("Looking up current sandbox image in containerd config..")
 	// capture the output of a `containerd config dump`, which is the final
 	// containerd configuration used after all of the applied transformations
@@ -32,7 +32,7 @@ func cacheSandboxImage(cfg *api.NodeConfig) error {
 	zap.L().Info("Found sandbox image", zap.String("image", sandboxImage))
 
 	zap.L().Info("Fetching ECR authorization token..")
-	ecrUserToken, err := ecr.GetAuthorizationToken(cfg)
+	ecrUserToken, err := ecr.GetAuthorizationToken(awsConfig)
 	if err != nil {
 		return err
 	}

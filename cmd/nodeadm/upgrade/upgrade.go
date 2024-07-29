@@ -10,15 +10,13 @@ import (
 	initialize "github.com/aws/eks-hybrid/cmd/nodeadm/init"
 	"github.com/aws/eks-hybrid/cmd/nodeadm/install"
 	"github.com/aws/eks-hybrid/cmd/nodeadm/uninstall"
-	"github.com/aws/eks-hybrid/internal/api"
 	"github.com/aws/eks-hybrid/internal/aws/eks"
 	"github.com/aws/eks-hybrid/internal/cli"
-	"github.com/aws/eks-hybrid/internal/configenricher"
-	"github.com/aws/eks-hybrid/internal/configprovider"
 	"github.com/aws/eks-hybrid/internal/containerd"
 	"github.com/aws/eks-hybrid/internal/creds"
 	"github.com/aws/eks-hybrid/internal/daemon"
 	"github.com/aws/eks-hybrid/internal/kubelet"
+	"github.com/aws/eks-hybrid/internal/node"
 	"github.com/aws/eks-hybrid/internal/ssm"
 	"github.com/aws/eks-hybrid/internal/tracker"
 )
@@ -52,26 +50,16 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	}
 
 	log.Info("Loading configuration..", zap.String("configSource", opts.ConfigSource))
-	provider, err := configprovider.BuildConfigProvider(opts.ConfigSource)
+	nodeProvider, err := node.NewNodeProvider(opts.ConfigSource, log)
 	if err != nil {
 		return err
 	}
-	nodeConfig, err := provider.Provide()
-	if err != nil {
+
+	// Ensure hybrid configuration and enrich
+	if err := nodeProvider.ValidateConfig(); err != nil {
 		return err
 	}
-	log.Info("Loaded configuration", zap.Reflect("config", nodeConfig))
-
-	// Ensure hybrid configuration
-	log.Info("Validating configuration")
-	v := api.NewValidator(nodeConfig)
-	if err := v.Validate(nodeConfig); err != nil {
-		return err
-	}
-
-	log.Info("Enriching configuration..")
-	enricher := configenricher.New(log, nodeConfig)
-	if err := enricher.Enrich(nodeConfig); err != nil {
+	if err := nodeProvider.Enrich(); err != nil {
 		return err
 	}
 
@@ -107,31 +95,25 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 
 	if artifacts.Kubelet {
 		log.Info("Uninstalling kubelet...")
-		kubeletDaemon := kubelet.NewKubeletDaemon(daemonManager)
-		if err := kubeletDaemon.Stop(); err != nil {
+		if err := daemonManager.StopDaemon(kubelet.KubeletDaemonName); err != nil {
 			return err
 		}
 		if err := kubelet.Uninstall(); err != nil {
 			return err
 		}
 	}
-
 	if artifacts.Ssm {
-		log.Info("Uninstalling  SSM agent...")
-		ssmDaemon := ssm.NewSsmDaemon(daemonManager)
-		if err := ssmDaemon.Stop(); err != nil {
+		log.Info("Uninstalling and de-registering SSM agent...")
+		if err := daemonManager.StopDaemon(ssm.SsmDaemonName); err != nil {
 			return err
 		}
-		if err := ssm.UninstallWithoutDeregister(); err != nil {
+		if err := ssm.Uninstall(); err != nil {
 			return err
 		}
-
 	}
-
 	if artifacts.Containerd {
 		log.Info("Uninstalling containerd...")
-		containerdDaemon := containerd.NewContainerdDaemon(daemonManager)
-		if err := containerdDaemon.Stop(); err != nil {
+		if err := daemonManager.StopDaemon(containerd.ContainerdDaemonName); err != nil {
 			return err
 		}
 		if err := containerd.Uninstall(); err != nil {
@@ -143,7 +125,7 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return err
 	}
 
-	credsProvider, err := creds.GetCredentialProviderFromNodeConfig(nodeConfig)
+	credsProvider, err := creds.GetCredentialProviderFromNodeConfig(nodeProvider.GetNodeConfig())
 	if err != nil {
 		return err
 	}
@@ -153,5 +135,5 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return err
 	}
 
-	return initialize.Init(nodeConfig, nil, daemonManager, log)
+	return initialize.Init(nodeProvider)
 }

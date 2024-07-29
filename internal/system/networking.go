@@ -31,14 +31,16 @@ var (
 )
 
 // NewNetworkingAspect constructs new networkingAspect.
-func NewNetworkingAspect() *networkingAspect {
-	return &networkingAspect{}
+func NewNetworkingAspect(cfg *api.NodeConfig) *networkingAspect {
+	return &networkingAspect{nodeConfig: cfg}
 }
 
 var _ SystemAspect = &networkingAspect{}
 
 // networkingAspect setups eks-specific networking configurations.
-type networkingAspect struct{}
+type networkingAspect struct {
+	nodeConfig *api.NodeConfig
+}
 
 // Name returns the name of this aspect.
 func (a *networkingAspect) Name() string {
@@ -46,8 +48,8 @@ func (a *networkingAspect) Name() string {
 }
 
 // Setup executes the logic of this aspect.
-func (a *networkingAspect) Setup(cfg *api.NodeConfig) error {
-	if err := a.ensureEKSNetworkConfiguration(cfg); err != nil {
+func (a *networkingAspect) Setup() error {
+	if err := a.ensureEKSNetworkConfiguration(); err != nil {
 		return fmt.Errorf("failed to ensure eks network configuration: %w", err)
 	}
 	return nil
@@ -62,7 +64,7 @@ func (a *networkingAspect) Setup(cfg *api.NodeConfig) error {
 // To address this issue temporarily, we use drop-ins to alter configuration of `80-ec2.network` after boot to make it match against primary ENI only.
 // TODO: there are limitations on current solutions as well, and we should figure long term solution for this:
 //  1. the altNames for ENIs(a new feature in AL2023) were setup by amazon-ec2-net-utils via udev rules, but it's disabled by eks.
-func (a *networkingAspect) ensureEKSNetworkConfiguration(cfg *api.NodeConfig) error {
+func (a *networkingAspect) ensureEKSNetworkConfiguration() error {
 	networkCfgDropInDir := fmt.Sprintf("%s/%s.d", administrationNetworkDir, ec2NetworkConfigurationName)
 	eksPrimaryENIOnlyConfPathName := fmt.Sprintf("%s/%s", networkCfgDropInDir, eksPrimaryENIOnlyConfName)
 	if exists, err := util.IsFilePathExists(eksPrimaryENIOnlyConfPathName); err != nil {
@@ -72,7 +74,7 @@ func (a *networkingAspect) ensureEKSNetworkConfiguration(cfg *api.NodeConfig) er
 		return nil
 	}
 
-	eksPrimaryENIOnlyConfContent, err := a.generateEKSPrimaryENIOnlyConfiguration(cfg)
+	eksPrimaryENIOnlyConfContent, err := a.generateEKSPrimaryENIOnlyConfiguration()
 	if err != nil {
 		return fmt.Errorf("failed to generate eks_primary_eni_only network configuration: %w", err)
 	}
@@ -95,8 +97,8 @@ type eksPrimaryENIOnlyTemplateVars struct {
 }
 
 // generateEKSPrimaryENIOnlyConfiguration generates the eks primary eni only network configuration.
-func (a *networkingAspect) generateEKSPrimaryENIOnlyConfiguration(cfg *api.NodeConfig) ([]byte, error) {
-	primaryENIMac := cfg.Status.Instance.MAC
+func (a *networkingAspect) generateEKSPrimaryENIOnlyConfiguration() ([]byte, error) {
+	primaryENIMac := a.nodeConfig.Status.Instance.MAC
 	templateVars := eksPrimaryENIOnlyTemplateVars{
 		PermanentMACAddress: primaryENIMac,
 	}

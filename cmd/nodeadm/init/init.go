@@ -1,19 +1,12 @@
 package init
 
 import (
+	"github.com/aws/eks-hybrid/internal/cli"
+	"github.com/aws/eks-hybrid/internal/node"
+	"github.com/aws/eks-hybrid/internal/nodeprovider"
+
 	"github.com/integrii/flaggy"
 	"go.uber.org/zap"
-	"k8s.io/utils/strings/slices"
-
-	"github.com/aws/eks-hybrid/internal/api"
-	"github.com/aws/eks-hybrid/internal/cli"
-	"github.com/aws/eks-hybrid/internal/configenricher"
-	"github.com/aws/eks-hybrid/internal/configprovider"
-	"github.com/aws/eks-hybrid/internal/containerd"
-	"github.com/aws/eks-hybrid/internal/daemon"
-	"github.com/aws/eks-hybrid/internal/kubelet"
-	"github.com/aws/eks-hybrid/internal/ssm"
-	"github.com/aws/eks-hybrid/internal/system"
 )
 
 const (
@@ -25,15 +18,13 @@ func NewInitCommand() cli.Command {
 	init := initCmd{}
 	init.cmd = flaggy.NewSubcommand("init")
 	init.cmd.StringSlice(&init.daemons, "d", "daemon", "specify one or more of `containerd` and `kubelet`. This is intended for testing and should not be used in a production environment.")
-	init.cmd.StringSlice(&init.skipPhases, "s", "skip", "phases of the bootstrap you want to skip")
 	init.cmd.Description = "Initialize this instance as a node in an EKS cluster"
 	return &init
 }
 
 type initCmd struct {
-	cmd        *flaggy.Subcommand
-	skipPhases []string
-	daemons    []string
+	cmd     *flaggy.Subcommand
+	daemons []string
 }
 
 func (c *initCmd) Flaggy() *flaggy.Subcommand {
@@ -49,105 +40,72 @@ func (c *initCmd) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return cli.ErrMustRunAsRoot
 	}
 
-	log.Info("Loading configuration..", zap.String("configSource", opts.ConfigSource))
-	provider, err := configprovider.BuildConfigProvider(opts.ConfigSource)
+	nodeProvider, err := node.NewNodeProvider(opts.ConfigSource, log)
 	if err != nil {
 		return err
 	}
-	nodeConfig, err := provider.Provide()
-	if err != nil {
+	if err := nodeProvider.ValidateConfig(); err != nil {
 		return err
 	}
-	log.Info("Loaded configuration", zap.Reflect("config", nodeConfig))
-
-	zap.L().Info("Validating configuration..")
-	v := api.NewValidator(nodeConfig)
-	if err := v.Validate(nodeConfig); err != nil {
+	if err := nodeProvider.Enrich(); err != nil {
 		return err
 	}
 
-	log.Info("Enriching configuration..")
-	enricher := configenricher.New(log, nodeConfig)
-	if err := enricher.Enrich(nodeConfig); err != nil {
-		return err
-	}
-
-	log.Info("Creating daemon manager..")
-	daemonManager, err := daemon.NewDaemonManager()
-	if err != nil {
-		return err
-	}
-	defer daemonManager.Close()
-
-	return Init(nodeConfig, c.skipPhases, daemonManager, log)
+	return Init(nodeProvider)
 }
 
-func Init(nodeConfig *api.NodeConfig, skipPhases []string, manager daemon.DaemonManager, log *zap.Logger) error {
-	aspects := system.NewNodeAspects(nodeConfig)
-
-	var daemons []daemon.Daemon
-	// If Hybrid w/ SSM is enabled, we need to make sure SSM daemon is configured first
-	// in order to register the instance first. This will provide us both aws credentials
-	// and managed instance ID which will override hostname in both kubelet configs & provider-id
-	if nodeConfig.IsSSM() {
-		daemons = append(daemons, ssm.NewSsmDaemon(manager))
+func Init(node nodeprovider.NodeProvider) error {
+	aspects := node.GetAspects()
+	node.Logger().Info("Setting up system aspects...")
+	for _, aspect := range aspects {
+		nameField := zap.String("name", aspect.Name())
+		node.Logger().Info("Setting up system aspect..", nameField)
+		if err := aspect.Setup(); err != nil {
+			return err
+		}
+		node.Logger().Info("Set up system aspect", nameField)
 	}
 
-	daemons = append(daemons,
-		containerd.NewContainerdDaemon(manager),
-		kubelet.NewKubeletDaemon(manager),
-	)
-
-	if !slices.Contains(skipPhases, configPhase) {
-		log.Info("Setting up system aspects...")
-		for _, aspect := range aspects {
-			nameField := zap.String("name", aspect.Name())
-			log.Info("Setting up system aspect..", nameField)
-			if err := aspect.Setup(nodeConfig); err != nil {
-				return err
-			}
-			log.Info("Set up system aspect", nameField)
-		}
-
-		log.Info("Configuring daemons...")
-		for _, daemon := range daemons {
-			nameField := zap.String("name", daemon.Name())
-
-			log.Info("Configuring daemon...", nameField)
-			if err := daemon.Configure(nodeConfig); err != nil {
-				return err
-			}
-			log.Info("Configured daemon", nameField)
-
-			// Check if SSM daemon and set node name
-			if daemon.Name() == ssm.SsmDaemonName {
-				registeredNodeName, err := ssm.GetManagedHybridInstanceId()
-				if err != nil {
-					return err
-				}
-				nodeNameField := zap.String("registered instance-id", registeredNodeName)
-				log.Info("Re-setting node name with registered managed instance id", nodeNameField)
-				nodeConfig.Spec.Hybrid.NodeName = registeredNodeName
-			}
-		}
+	node.Logger().Info("Configuring Pre-process daemons...")
+	if err := node.PreProcessDaemon(); err != nil {
+		return err
 	}
 
-	if !slices.Contains(skipPhases, runPhase) {
-		for _, daemon := range daemons {
-			nameField := zap.String("name", daemon.Name())
-
-			log.Info("Ensuring daemon is running..", nameField)
-			if err := daemon.EnsureRunning(); err != nil {
-				return err
-			}
-			log.Info("Daemon is running", nameField)
-
-			log.Info("Running post-launch tasks..", nameField)
-			if err := daemon.PostLaunch(nodeConfig); err != nil {
-				return err
-			}
-			log.Info("Finished post-launch tasks", nameField)
-		}
+	node.Logger().Info("Configuring Aws...")
+	if err := node.ConfigureAws(); err != nil {
+		return err
 	}
+
+	daemons, err := node.GetDaemons()
+	if err != nil {
+		return err
+	}
+	node.Logger().Info("Configuring daemons...")
+	for _, daemon := range daemons {
+		nameField := zap.String("name", daemon.Name())
+
+		node.Logger().Info("Configuring daemon...", nameField)
+		if err := daemon.Configure(); err != nil {
+			return err
+		}
+		node.Logger().Info("Configured daemon", nameField)
+	}
+
+	for _, daemon := range daemons {
+		nameField := zap.String("name", daemon.Name())
+
+		node.Logger().Info("Ensuring daemon is running..", nameField)
+		if err := daemon.EnsureRunning(); err != nil {
+			return err
+		}
+		node.Logger().Info("Daemon is running", nameField)
+
+		node.Logger().Info("Running post-launch tasks..", nameField)
+		if err := daemon.PostLaunch(); err != nil {
+			return err
+		}
+		node.Logger().Info("Finished post-launch tasks", nameField)
+	}
+	node.Cleanup()
 	return nil
 }

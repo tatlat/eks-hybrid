@@ -27,6 +27,13 @@ func (s *ssm) registerMachine(cfg *api.NodeConfig, force bool) error {
 	if err != nil {
 		return fmt.Errorf("running register machine command: %s, error: %v", out, err)
 	}
+
+	// Set the nodename on nodeconfig post registration
+	registeredNodeName, err := GetManagedHybridInstanceId()
+	if err != nil {
+		return err
+	}
+	s.nodeConfig.Spec.Hybrid.NodeName = registeredNodeName
 	return nil
 }
 
