@@ -19,11 +19,12 @@ func NewConfig(nodeCfg *api.NodeConfig) (Config, error) {
 				nodeCfg.Spec.Hybrid.IAMRolesAnywhere.AwsConfigPath = iamrolesanywhere.DefaultAWSConfigPath
 			}
 			if err := iamrolesanywhere.EnsureAWSConfig(iamrolesanywhere.AWSConfig{
-				TrustAnchorARN: nodeCfg.Spec.Hybrid.IAMRolesAnywhere.TrustAnchorARN,
-				ProfileARN:     nodeCfg.Spec.Hybrid.IAMRolesAnywhere.ProfileARN,
-				RoleARN:        nodeCfg.Spec.Hybrid.IAMRolesAnywhere.RoleARN,
-				Region:         nodeCfg.Spec.Cluster.Region,
-				ConfigPath:     nodeCfg.Spec.Hybrid.IAMRolesAnywhere.AwsConfigPath,
+				TrustAnchorARN:       nodeCfg.Spec.Hybrid.IAMRolesAnywhere.TrustAnchorARN,
+				ProfileARN:           nodeCfg.Spec.Hybrid.IAMRolesAnywhere.ProfileARN,
+				RoleARN:              nodeCfg.Spec.Hybrid.IAMRolesAnywhere.RoleARN,
+				Region:               nodeCfg.Spec.Cluster.Region,
+				ConfigPath:           nodeCfg.Spec.Hybrid.IAMRolesAnywhere.AwsConfigPath,
+				SigningHelperBinPath: iamrolesanywhere.SigningHelperBinPath,
 			}); err != nil {
 				return nil, err
 			}

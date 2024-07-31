@@ -19,11 +19,12 @@ func TestEnsureAWSConfig_Write(t *testing.T) {
 	}
 
 	cfg := iamrolesanywhere.AWSConfig{
-		TrustAnchorARN: "trust-anchor",
-		ProfileARN:     "profile",
-		RoleARN:        "role",
-		Region:         "region",
-		ConfigPath:     path,
+		TrustAnchorARN:       "trust-anchor",
+		ProfileARN:           "profile",
+		RoleARN:              "role",
+		Region:               "region",
+		ConfigPath:           path,
+		SigningHelperBinPath: "/random/path",
 	}
 
 	err = iamrolesanywhere.EnsureAWSConfig(cfg)
@@ -64,11 +65,12 @@ func TestEnsureAWSConfig_ExistsSameContent(t *testing.T) {
 	}
 
 	cfg := iamrolesanywhere.AWSConfig{
-		TrustAnchorARN: "trust-anchor",
-		ProfileARN:     "profile",
-		RoleARN:        "role",
-		Region:         "region",
-		ConfigPath:     path,
+		TrustAnchorARN:       "trust-anchor",
+		ProfileARN:           "profile",
+		RoleARN:              "role",
+		Region:               "region",
+		ConfigPath:           path,
+		SigningHelperBinPath: "/random/path",
 	}
 
 	err = iamrolesanywhere.EnsureAWSConfig(cfg)
