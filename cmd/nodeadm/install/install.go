@@ -20,6 +20,7 @@ import (
 	"github.com/aws/eks-hybrid/internal/kubectl"
 	"github.com/aws/eks-hybrid/internal/kubelet"
 	"github.com/aws/eks-hybrid/internal/ssm"
+	"github.com/aws/eks-hybrid/internal/system"
 	"github.com/aws/eks-hybrid/internal/tracker"
 )
 
@@ -85,6 +86,11 @@ func Install(ctx context.Context, eksRelease eks.PatchRelease, credentialProvide
 
 	if err := containerd.ValidateSystemdUnitFile(); err != nil {
 		return fmt.Errorf("please install systemd unit file for containerd: %v", err)
+	}
+
+	log.Info("Checking and installing OS dependencies...")
+	if err := system.InstallIptables(); err != nil {
+		return err
 	}
 
 	switch credentialProvider {
