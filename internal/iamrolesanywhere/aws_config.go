@@ -42,6 +42,9 @@ type AWSConfig struct {
 
 	// ConfigPath is a path to a configuration file to be verified. Defaults to /etc/aws/hybrid/profile.
 	ConfigPath string
+
+	// SigningHelperBinPath is a pth to the aws iam roles anywhere signer helper. Defaults to /usr/local/bin/aws_signing_helper
+	SigningHelperBinPath string
 }
 
 // EnsureAWSConfig ensures an AWS configuration file with contents appropriate for cfg exists
@@ -84,6 +87,10 @@ func validateAWSConfig(cfg AWSConfig) error {
 
 	if cfg.Region == "" {
 		errs = append(errs, errors.New("Region cannot be empty"))
+	}
+
+	if cfg.SigningHelperBinPath == "" {
+		errs = append(errs, errors.New("Singing helper path cannot be emtpyy"))
 	}
 
 	return errors.Join(errs...)

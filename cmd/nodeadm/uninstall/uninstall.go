@@ -97,6 +97,8 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		}
 	}
 
+	log.Info("Finished uninstallation tasks...")
+
 	return tracker.Clear()
 }
 
