@@ -1,0 +1,18 @@
+version: 0.2
+
+phases:
+  build:
+    commands:
+    - make build-cross-platform e2e-tests-binary
+    - aws s3 cp _bin/ s3://$ARTIFACTS_BUCKET --recursive
+    - aws s3 cp testdata/nodeconfig.yaml s3://$ARTIFACTS_BUCKET
+
+cache:
+  paths:
+    - '/root/.cache/go-build/**/*'
+    - '/go/pkg/mod/**/*'
+
+artifacts:
+  files:
+  - "_bin/**/*"
+  - "buildspecs/*"

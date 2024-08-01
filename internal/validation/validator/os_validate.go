@@ -127,4 +127,3 @@ func buildAcceptOSInfoString() string {
 	}
 	return acceptListString[:len(acceptListString)-2]
 }
-
