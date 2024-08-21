@@ -93,7 +93,7 @@ func FindLatestRelease(ctx context.Context, version string) (PatchRelease, error
 		return PatchRelease{}, fmt.Errorf("input semver did not match with available releases. Try again with major.minor version")
 	}
 
-	return PatchRelease{}, nil
+	return PatchRelease{}, fmt.Errorf("input semver did not match with any available releases")
 }
 
 // Read from the manifest file on s3 and parse into Manifest struct
