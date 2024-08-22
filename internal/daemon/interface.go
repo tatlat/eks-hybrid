@@ -1,10 +1,8 @@
 package daemon
 
-import "github.com/aws/eks-hybrid/internal/api"
-
 type Daemon interface {
 	// Configure configures the daemon.
-	Configure(*api.NodeConfig) error
+	Configure() error
 
 	// EnsureRunning ensures that the daemon is running.
 	// If the daemon is not running, it will be started.
@@ -13,7 +11,7 @@ type Daemon interface {
 
 	// PostLaunch runs any additional step that needs to occur after the service
 	// daemon as been started
-	PostLaunch(*api.NodeConfig) error
+	PostLaunch() error
 
 	// Stop stops the daemon
 	// If the daemon is already stopped, this will be a no-op

@@ -7,42 +7,16 @@ import (
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/ecr"
 	"github.com/aws/eks-hybrid/internal/aws/imds"
 	"github.com/aws/eks-hybrid/internal/system"
-
-	"github.com/aws/eks-hybrid/internal/api"
 )
 
 const hybridServicesDomain = "amazonaws.com"
 
 // Returns the base64 encoded authorization token string for ECR of the format "AWS:XXXXX"
-func GetAuthorizationToken(nodeCfg *api.NodeConfig) (string, error) {
-	var awsConfig aws.Config
-	var err error
-	if nodeCfg.IsHybridNode() {
-		if nodeCfg.IsIAMRolesAnywhere() {
-			awsConfig, err = config.LoadDefaultConfig(context.Background(),
-				config.WithRegion(nodeCfg.Spec.Cluster.Region),
-				config.WithSharedConfigFiles([]string{nodeCfg.Spec.Hybrid.IAMRolesAnywhere.AwsConfigPath}),
-				config.WithSharedConfigProfile("hybrid"))
-			if err != nil {
-				return "", err
-			}
-		} else if nodeCfg.IsSSM() {
-			awsConfig, err = config.LoadDefaultConfig(context.Background(), config.WithRegion(nodeCfg.Spec.Cluster.Region))
-			if err != nil {
-				return "", err
-			}
-		}
-	} else {
-		awsConfig, err = config.LoadDefaultConfig(context.Background(), config.WithRegion(nodeCfg.Status.Instance.Region))
-		if err != nil {
-			return "", err
-		}
-	}
-	ecrClient := ecr.NewFromConfig(awsConfig)
+func GetAuthorizationToken(awsConfig *aws.Config) (string, error) {
+	ecrClient := ecr.NewFromConfig(*awsConfig)
 	token, err := ecrClient.GetAuthorizationToken(context.Background(), &ecr.GetAuthorizationTokenInput{})
 	if err != nil {
 		return "", err

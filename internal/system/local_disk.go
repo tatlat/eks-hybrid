@@ -11,22 +11,24 @@ import (
 
 const localDiskAspectName = "local-disk"
 
-func NewLocalDiskAspect() SystemAspect {
-	return &localDiskAspect{}
+func NewLocalDiskAspect(cfg *api.NodeConfig) SystemAspect {
+	return &localDiskAspect{nodeConfig: cfg}
 }
 
-type localDiskAspect struct{}
+type localDiskAspect struct {
+	nodeConfig *api.NodeConfig
+}
 
 func (a *localDiskAspect) Name() string {
 	return localDiskAspectName
 }
 
-func (a *localDiskAspect) Setup(cfg *api.NodeConfig) error {
-	if cfg.Spec.Instance.LocalStorage.Strategy == "" {
+func (a *localDiskAspect) Setup() error {
+	if a.nodeConfig.Spec.Instance.LocalStorage.Strategy == "" {
 		zap.L().Info("Not configuring local disks!")
 		return nil
 	}
-	strategy := strings.ToLower(string(cfg.Spec.Instance.LocalStorage.Strategy))
+	strategy := strings.ToLower(string(a.nodeConfig.Spec.Instance.LocalStorage.Strategy))
 	// #nosec G204 Subprocess launched with variable
 	cmd := exec.Command("setup-local-disks", strategy)
 	cmd.Stdout = os.Stdout

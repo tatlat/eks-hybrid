@@ -10,11 +10,11 @@ import (
 
 func Init() {
 	encoderCfg := zapcore.EncoderConfig{
-		MessageKey:    "message",
-		LineEnding:    zapcore.DefaultLineEnding,
-		EncodeLevel:   zapcore.CapitalLevelEncoder,
-		EncodeCaller:  zapcore.ShortCallerEncoder,
-		EncodeName:    zapcore.FullNameEncoder,
+		MessageKey:   "message",
+		LineEnding:   zapcore.DefaultLineEnding,
+		EncodeLevel:  zapcore.CapitalLevelEncoder,
+		EncodeCaller: zapcore.ShortCallerEncoder,
+		EncodeName:   zapcore.FullNameEncoder,
 	}
 	encoder := zapcore.NewConsoleEncoder(encoderCfg)
 	stdoutSyncer := zapcore.Lock(os.Stdout)

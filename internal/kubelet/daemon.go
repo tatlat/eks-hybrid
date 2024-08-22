@@ -1,6 +1,7 @@
 package kubelet
 
 import (
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/eks-hybrid/internal/api"
 	"github.com/aws/eks-hybrid/internal/daemon"
 )
@@ -11,39 +12,43 @@ var _ daemon.Daemon = &kubelet{}
 
 type kubelet struct {
 	daemonManager daemon.DaemonManager
+	awsConfig     *aws.Config
+	nodeConfig    *api.NodeConfig
 	// environment variables to write for kubelet
 	environment map[string]string
 	// kubelet config flags without leading dashes
 	flags map[string]string
 }
 
-func NewKubeletDaemon(daemonManager daemon.DaemonManager) daemon.Daemon {
+func NewKubeletDaemon(daemonManager daemon.DaemonManager, cfg *api.NodeConfig, awsConfig *aws.Config) daemon.Daemon {
 	return &kubelet{
 		daemonManager: daemonManager,
+		nodeConfig:    cfg,
+		awsConfig:     awsConfig,
 		environment:   make(map[string]string),
 		flags:         make(map[string]string),
 	}
 }
 
-func (k *kubelet) Configure(cfg *api.NodeConfig) error {
-	if cfg.IsHybridNode() {
-		if err := k.ensureClusterDetails(cfg); err != nil {
+func (k *kubelet) Configure() error {
+	if k.nodeConfig.IsHybridNode() {
+		if err := k.ensureClusterDetails(); err != nil {
 			return err
 		}
 	}
-	if err := k.writeKubeletConfig(cfg); err != nil {
+	if err := k.writeKubeletConfig(); err != nil {
 		return err
 	}
-	if err := k.writeKubeconfig(cfg); err != nil {
+	if err := k.writeKubeconfig(); err != nil {
 		return err
 	}
-	if err := k.writeImageCredentialProviderConfig(cfg); err != nil {
+	if err := k.writeImageCredentialProviderConfig(); err != nil {
 		return err
 	}
-	if err := writeClusterCaCert(cfg.Spec.Cluster.CertificateAuthority); err != nil {
+	if err := writeClusterCaCert(k.nodeConfig.Spec.Cluster.CertificateAuthority); err != nil {
 		return err
 	}
-	if err := k.writeKubeletEnvironment(cfg); err != nil {
+	if err := k.writeKubeletEnvironment(); err != nil {
 		return err
 	}
 	return nil
@@ -60,7 +65,7 @@ func (k *kubelet) EnsureRunning() error {
 	return k.daemonManager.StartDaemon(KubeletDaemonName)
 }
 
-func (k *kubelet) PostLaunch(_ *api.NodeConfig) error {
+func (k *kubelet) PostLaunch() error {
 	return nil
 }
 

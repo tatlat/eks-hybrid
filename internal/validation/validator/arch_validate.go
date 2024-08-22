@@ -31,7 +31,7 @@ func NewArch(s string) *Arch {
 func (v *Arch) Validate() error {
 	archtype := v.string
 	info := fmt.Sprintf("%v | %v ", GetInfoStrString(prefixArch, archtype), GetInfoStrString(prefixAcptArch, getAcptArchStr()))
-	
+
 	// arch is accepted
 	ok := findArchExist(archtype)
 	if ok {

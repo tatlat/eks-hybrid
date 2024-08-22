@@ -19,13 +19,13 @@ var acceptedOS = map[OS]interface{}{
 	{"ubuntu", "20.04"}: nil,
 	{"ubuntu", "22.04"}: nil,
 	{"ubuntu", "24.04"}: nil,
-	{"rhel", "8"}: nil,
-	{"rhel", "9"}: nil,
-	{"amzn", "2023"}: nil,
+	{"rhel", "8"}:       nil,
+	{"rhel", "9"}:       nil,
+	{"amzn", "2023"}:    nil,
 }
 
 const (
-	prefixOS     = "Node OS ="
+	prefixOS       = "Node OS ="
 	prefixAcceptOS = "Accepted OS ="
 
 	prefixOSName = "ID="
@@ -57,7 +57,7 @@ func (v *NodeOS) Validate() error {
 		return err
 	}
 	info := fmt.Sprintf("%v | %v ", GetInfoStrString(prefixOS, nodeOS.Name+" "+nodeOS.Version), GetInfoStrString(prefixAcceptOS, buildAcceptOSInfoString()))
-	
+
 	if nodeOS.Name == specialOS {
 		versionList := strings.Split(nodeOS.Version, ".")
 		nodeOS.Version = versionList[0]

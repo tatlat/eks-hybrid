@@ -26,12 +26,12 @@ var (
 	kubeconfigBootstrapPath      = path.Join(kubeconfigRoot, kubeconfigBootstrapFile)
 )
 
-func (k *kubelet) writeKubeconfig(cfg *api.NodeConfig) error {
-	kubeconfig, err := generateKubeconfig(cfg)
+func (k *kubelet) writeKubeconfig() error {
+	kubeconfig, err := generateKubeconfig(k.nodeConfig)
 	if err != nil {
 		return err
 	}
-	if cfg.IsOutpostNode() {
+	if k.nodeConfig.IsOutpostNode() {
 		// kubelet bootstrap kubeconfig uses aws-iam-authenticator with cluster id to authenticate to cluster
 		//   - if "aws eks describe-cluster" is bypassed, for local outpost, the value of CLUSTER_NAME parameter will be cluster id.
 		//   - otherwise, the cluster id will use the id returned by "aws eks describe-cluster".

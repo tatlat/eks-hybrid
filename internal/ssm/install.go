@@ -40,7 +40,7 @@ func Install(ctx context.Context, tracker *tracker.Tracker, source Source) error
 	return nil
 }
 
-// Uninstall deregisters the managed instance and removes all files and components that
+// Uninstall de-registers the managed instance and removes all files and components that
 // make up the ssm agent component.
 func Uninstall() error {
 	instanceId, region, err := GetManagedHybridInstanceIdAndRegion()

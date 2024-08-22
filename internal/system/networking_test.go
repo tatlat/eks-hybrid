@@ -37,8 +37,8 @@ func Test_networkingAspect_generateEKSPrimaryENIOnlyConfiguration(t *testing.T) 
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			a := &networkingAspect{}
-			got, err := a.generateEKSPrimaryENIOnlyConfiguration(tt.args.cfg)
+			a := &networkingAspect{tt.args.cfg}
+			got, err := a.generateEKSPrimaryENIOnlyConfiguration()
 			if (err != nil) != tt.wantErr {
 				t.Errorf("generateEKSPrimaryENIOnlyConfiguration() error = %v, wantErr %v", err, tt.wantErr)
 				return

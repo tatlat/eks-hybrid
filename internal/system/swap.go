@@ -13,19 +13,21 @@ import (
 
 const swapAspectName = "swap"
 
-type swapAspect struct{}
+type swapAspect struct {
+	nodeConfig *api.NodeConfig
+}
 
 var _ SystemAspect = &swapAspect{}
 
-func NewSwapAspect() *swapAspect {
-	return &swapAspect{}
+func NewSwapAspect(cfg *api.NodeConfig) SystemAspect {
+	return &swapAspect{nodeConfig: cfg}
 }
 
 func (s *swapAspect) Name() string {
 	return swapAspectName
 }
 
-func (s *swapAspect) Setup(cfg *api.NodeConfig) error {
+func (s *swapAspect) Setup() error {
 	if err := swapOff(); err != nil {
 		return err
 	}

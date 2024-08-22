@@ -68,8 +68,7 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 
 	if artifacts.Kubelet {
 		log.Info("Uninstalling kubelet...")
-		kubeletDaemon := kubelet.NewKubeletDaemon(daemonManager)
-		if err := kubeletDaemon.Stop(); err != nil {
+		if err := daemonManager.StopDaemon(kubelet.KubeletDaemonName); err != nil {
 			return err
 		}
 		if err := kubelet.Uninstall(); err != nil {
@@ -78,8 +77,7 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	}
 	if artifacts.Ssm {
 		log.Info("Uninstalling and de-registering SSM agent...")
-		ssmDaemon := ssm.NewSsmDaemon(daemonManager)
-		if err := ssmDaemon.Stop(); err != nil {
+		if err := daemonManager.StopDaemon(ssm.SsmDaemonName); err != nil {
 			return err
 		}
 		if err := ssm.Uninstall(); err != nil {
@@ -88,8 +86,7 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	}
 	if artifacts.Containerd {
 		log.Info("Uninstalling containerd...")
-		containerdDaemon := containerd.NewContainerdDaemon(daemonManager)
-		if err := containerdDaemon.Stop(); err != nil {
+		if err := daemonManager.StopDaemon(containerd.ContainerdDaemonName); err != nil {
 			return err
 		}
 		if err := containerd.Uninstall(); err != nil {
