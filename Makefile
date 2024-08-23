@@ -77,6 +77,11 @@ test: crds generate fmt vet ## Run go test against code.
 test-e2e: build ## Run e2e tests.
 	test/e2e/run.sh
 
+COVERAGEFILE = -coverprofile=/var/folders/xx/l168fpg17qb0t0btg1n7rr7h0000gq/T/vscode-go526oRM/go-code-cove
+.PHONY: test-validate
+test-validate: ## Run validate tests.
+	go test $(COVERAGEFILE) github.com/aws/eks-hybrid/internal/validation/validator/
+
 ##@ Build
 
 ## Build binary.
@@ -148,6 +153,12 @@ update-deps:
 .PHONY: lint
 lint: $(GOLANGCI_LINT) ## Run golangci-lint
 	$(GOLANGCI_LINT) run --new-from-rev main
+
+.PHONY: mocks
+mocks: MOCKGEN := ${GOBIN}/mockgen --build_flags=--mod=mod
+mocks: ## Generate mocks
+	go install github.com/golang/mock/mockgen@v1.6.0
+	${MOCKGEN} -destination=internal/validation/util/mocks/client.go -package=mocks -source "internal/validation/util/netclient.go" NetClient
 
 $(GOLANGCI_LINT): $(LOCALBIN) $(GOLANGCI_LINT_CONFIG)
 	$(eval GOLANGCI_LINT_VERSION?=$(shell cat .github/workflows/golangci-lint.yml | yq e '.jobs.golangci.steps[] | select(.name == "golangci-lint") .with.version' -))
