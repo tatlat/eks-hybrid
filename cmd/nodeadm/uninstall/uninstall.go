@@ -12,8 +12,10 @@ import (
 	"github.com/aws/eks-hybrid/internal/iamauthenticator"
 	"github.com/aws/eks-hybrid/internal/iamrolesanywhere"
 	"github.com/aws/eks-hybrid/internal/imagecredentialprovider"
+	"github.com/aws/eks-hybrid/internal/iptables"
 	"github.com/aws/eks-hybrid/internal/kubectl"
 	"github.com/aws/eks-hybrid/internal/kubelet"
+	"github.com/aws/eks-hybrid/internal/packagemanager"
 	"github.com/aws/eks-hybrid/internal/ssm"
 	"github.com/aws/eks-hybrid/internal/tracker"
 )
@@ -62,7 +64,15 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	defer daemonManager.Close()
 
 	artifacts := installed.Artifacts
-	if err := UninstallBinaries(artifacts, log); err != nil {
+	log.Info("Creating package manager...")
+	containerdSource := containerd.GetContainerdSource(artifacts.Containerd)
+	log.Info("Configuring package manager with", zap.Reflect("containerd source", string(containerdSource)))
+	packageManager, err := packagemanager.New(containerdSource, log)
+	if err != nil {
+		return err
+	}
+
+	if err := UninstallBinaries(artifacts, packageManager, log); err != nil {
 		return err
 	}
 
@@ -80,16 +90,17 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		if err := daemonManager.StopDaemon(ssm.SsmDaemonName); err != nil {
 			return err
 		}
-		if err := ssm.Uninstall(); err != nil {
+		if err := ssm.Uninstall(packageManager); err != nil {
 			return err
 		}
 	}
-	if artifacts.Containerd {
+	if artifacts.Containerd != string(containerd.ContainerdSourceNone) {
 		log.Info("Uninstalling containerd...")
 		if err := daemonManager.StopDaemon(containerd.ContainerdDaemonName); err != nil {
 			return err
 		}
-		if err := containerd.Uninstall(); err != nil {
+
+		if err := containerd.Uninstall(packageManager); err != nil {
 			return err
 		}
 	}
@@ -99,7 +110,7 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	return tracker.Clear()
 }
 
-func UninstallBinaries(artifacts *tracker.InstalledArtifacts, log *zap.Logger) error {
+func UninstallBinaries(artifacts *tracker.InstalledArtifacts, packageManager *packagemanager.DistroPackageManger, log *zap.Logger) error {
 	if artifacts.Kubectl {
 		log.Info("Uninstalling kubectl...")
 		if err := kubectl.Uninstall(); err != nil {
@@ -127,6 +138,12 @@ func UninstallBinaries(artifacts *tracker.InstalledArtifacts, log *zap.Logger) e
 	if artifacts.ImageCredentialProvider {
 		log.Info("Uninstalling image credential provider...")
 		if err := imagecredentialprovider.Uninstall(); err != nil {
+			return err
+		}
+	}
+	if artifacts.Iptables {
+		log.Info("Uninstalling iptables...")
+		if err := iptables.Uninstall(packageManager); err != nil {
 			return err
 		}
 	}

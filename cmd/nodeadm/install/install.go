@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
 	"io/fs"
 
 	"github.com/integrii/flaggy"
@@ -17,10 +18,11 @@ import (
 	"github.com/aws/eks-hybrid/internal/iamauthenticator"
 	"github.com/aws/eks-hybrid/internal/iamrolesanywhere"
 	"github.com/aws/eks-hybrid/internal/imagecredentialprovider"
+	"github.com/aws/eks-hybrid/internal/iptables"
 	"github.com/aws/eks-hybrid/internal/kubectl"
 	"github.com/aws/eks-hybrid/internal/kubelet"
+	"github.com/aws/eks-hybrid/internal/packagemanager"
 	"github.com/aws/eks-hybrid/internal/ssm"
-	"github.com/aws/eks-hybrid/internal/system"
 	"github.com/aws/eks-hybrid/internal/tracker"
 )
 
@@ -31,6 +33,7 @@ func NewCommand() cli.Command {
 	fc.Description = "Install components required to join an EKS cluster"
 	fc.AddPositionalValue(&cmd.kubernetesVersion, "KUBERNETES_VERSION", 1, true, "The major[.minor[.patch]] version of Kubernetes to install")
 	fc.String(&cmd.credentialProvider, "p", "credential-provider", "Credential process to install. Allowed values are ssm & iam-ra")
+	fc.String(&cmd.containerdSource, "cs", "containerd-source", "Source for containerd artifact. Allowed values are none, distro & docker")
 
 	cmd.flaggy = fc
 
@@ -41,6 +44,7 @@ type command struct {
 	flaggy             *flaggy.Subcommand
 	kubernetesVersion  string
 	credentialProvider string
+	containerdSource   string
 }
 
 func (c *command) Flaggy() *flaggy.Subcommand {
@@ -60,6 +64,15 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return err
 	}
 
+	// Default containerd source to distro
+	if c.containerdSource == "" {
+		c.containerdSource = string(containerd.ContainerdSourceDistro)
+	}
+	containerdSource := containerd.GetContainerdSource(c.containerdSource)
+	if err := containerd.ValidateContainerdSource(containerdSource); err != nil {
+		return err
+	}
+
 	ctx := context.Background()
 	log.Info("Validating Kubernetes version", zap.Reflect("kubernetes version", c.kubernetesVersion))
 	// Create a Source for all EKS managed artifacts.
@@ -69,18 +82,30 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	}
 	log.Info("Using Kubernetes version", zap.Reflect("kubernetes version", release.Version))
 
-	return Install(ctx, release, credentialProvider, log)
+	return Install(ctx, release, credentialProvider, containerdSource, log)
 }
 
-func Install(ctx context.Context, eksRelease eks.PatchRelease, credentialProvider creds.CredentialProvider, log *zap.Logger) error {
+func Install(ctx context.Context, eksRelease eks.PatchRelease, credentialProvider creds.CredentialProvider, containerdSource containerd.SourceName, log *zap.Logger) error {
 	// Create tracker with existing changes or new tracker
 	trackerConf, err := tracker.GetCurrentState()
 	if err != nil {
 		return err
 	}
 
+	log.Info("Creating package manager...")
+	packageManager, err := packagemanager.New(containerdSource, log)
+	if err != nil {
+		return err
+	}
+
+	log.Info("Setting package manager config", zap.Reflect("containerd source", string(containerdSource)))
+	log.Info("Configuring package manager. This might take a while...")
+	if err := packageManager.Configure(); err != nil {
+		return err
+	}
+
 	log.Info("Installing containerd...")
-	if err := containerd.Install(trackerConf); err != nil && !errors.Is(err, fs.ErrExist) {
+	if err := containerd.Install(trackerConf, packageManager, containerdSource); err != nil {
 		return err
 	}
 
@@ -88,8 +113,8 @@ func Install(ctx context.Context, eksRelease eks.PatchRelease, credentialProvide
 		return fmt.Errorf("please install systemd unit file for containerd: %v", err)
 	}
 
-	log.Info("Checking and installing OS dependencies...")
-	if err := system.InstallIptables(); err != nil {
+	log.Info("Installing iptables...")
+	if err := iptables.Install(trackerConf, packageManager); err != nil {
 		return err
 	}
 

@@ -19,7 +19,7 @@ type Tracker struct {
 }
 
 type InstalledArtifacts struct {
-	Containerd              bool
+	Containerd              string
 	CniPlugins              bool
 	IamAuthenticator        bool
 	IamRolesAnywhere        bool
@@ -27,6 +27,7 @@ type InstalledArtifacts struct {
 	Kubectl                 bool
 	Kubelet                 bool
 	Ssm                     bool
+	Iptables                bool
 }
 
 // Add adds a components as installed to the tracker
@@ -46,12 +47,16 @@ func (tracker *Tracker) Add(componentName string) error {
 		tracker.Artifacts.Kubelet = true
 	case artifact.Ssm:
 		tracker.Artifacts.Ssm = true
-	case artifact.Containerd:
-		tracker.Artifacts.Containerd = true
+	case artifact.Iptables:
+		tracker.Artifacts.Iptables = true
 	default:
 		return fmt.Errorf("invalid artifact to track")
 	}
 	return nil
+}
+
+func (tracker *Tracker) MarkContainerd(source string) {
+	tracker.Artifacts.Containerd = source
 }
 
 // Save() saves the tracker to file

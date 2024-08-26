@@ -48,34 +48,20 @@ func InstallTarGz(dst string, src string) error {
 	return nil
 }
 
-func InstallPackage(packageName, packageManager string, updateOsPackages bool) error {
-	if updateOsPackages {
-		if err := updatePackages(packageManager); err != nil {
-			return err
-		}
-	}
-	installCmd := exec.Command(packageManager, "install", packageName, "-y")
+func InstallPackage(pkgSource Package) error {
+	installCmd := pkgSource.InstallCmd()
 	out, err := installCmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("running install command using package manager: %s, error: %v", out, err)
+		return fmt.Errorf("running install command using package manager: %s, err: %v", out, err)
 	}
 	return nil
 }
 
-func UninstallPackage(packageName, packageManager string) error {
-	removeCmd := exec.Command(packageManager, "remove", packageName, "-y")
-	out, err := removeCmd.CombinedOutput()
+func UninstallPackage(pkgSource Package) error {
+	uninstallCmd := pkgSource.UninstallCmd()
+	out, err := uninstallCmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("running uninstall command using package manager: %s, error: %v", out, err)
-	}
-	return nil
-}
-
-func updatePackages(packageManager string) error {
-	updateCmd := exec.Command(packageManager, "update", "-y")
-	out, err := updateCmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("running update command using package manager: %s, error: %v", out, err)
+		return fmt.Errorf("running uninstall command using package manager: %s, err: %v", out, err)
 	}
 	return nil
 }

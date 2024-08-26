@@ -341,7 +341,7 @@ func (k *kubelet) GenerateKubeletConfig() (*kubeletConfig, error) {
 		// This causes pods not being able to do successful dns lookups
 		// Setting Kubelet config to point to the right resolv.conf file
 		// https://coredns.io/plugins/loop/#troubleshooting-loops-in-kubernetes-clusters
-		if util.GetOsName() == system.Ubuntu {
+		if system.GetOsName() == system.UbuntuOsName {
 			kubeletConfig.withResolvConf(system.UbuntuResolvConfPath)
 		}
 	} else {

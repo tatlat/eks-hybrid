@@ -16,6 +16,7 @@ import (
 const ContainerRuntimeEndpoint = "unix:///run/containerd/containerd.sock"
 
 const (
+	containerdConfigDir               = "/etc/containerd"
 	containerdConfigFile              = "/etc/containerd/config.toml"
 	containerdConfigImportDir         = "/etc/containerd/config.d"
 	containerdKernelModulesConfigFile = "/etc/modules-load.d/containerd.conf"

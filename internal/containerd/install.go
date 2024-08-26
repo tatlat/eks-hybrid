@@ -2,53 +2,73 @@ package containerd
 
 import (
 	"fmt"
-	"io/fs"
 	"os"
+	"os/exec"
 
 	"github.com/aws/eks-hybrid/internal/artifact"
 	"github.com/aws/eks-hybrid/internal/daemon"
+	"github.com/aws/eks-hybrid/internal/system"
 	"github.com/aws/eks-hybrid/internal/tracker"
-	"github.com/aws/eks-hybrid/internal/util"
 )
+
+type SourceName string
 
 const (
+	ContainerdSourceNone   SourceName = "none"
+	ContainerdSourceDistro SourceName = "distro"
+	ContainerdSourceDocker SourceName = "docker"
+
 	containerdPackageName = "containerd"
-	containerdBinPath     = "/usr/bin/containerd"
-	runcBinPath           = "/usr/bin/runc"
+	runcPackageName       = "runc"
 )
 
-// Install installs containerd on the node using package manager
-// todo: Installs using docker builds with source options
-func Install(tracker *tracker.Tracker) error {
-	// check if containerd or runc is already installed
-	_, containerdErr := os.Stat(containerdBinPath)
-	_, runcErr := os.Stat(runcBinPath)
-	if os.IsNotExist(containerdErr) || os.IsNotExist(runcErr) {
-		pkgManagers, osName := util.GetOsPackageManagers()
-		if osName == util.RhelOsName {
-			return fmt.Errorf("installing containerd is not supported on RedHat Os. Please install containerd " +
-				"and systemd unit for containerd before running nodeadm")
-		}
-
-		for _, manager := range pkgManagers {
-			if err := artifact.InstallPackage(containerdPackageName, manager, true); err == nil {
-				return tracker.Add(artifact.Containerd)
-			}
-		}
-		return fmt.Errorf("no package managers qualified to install containerd. Please install before running nodeadm")
-	}
-
-	return fs.ErrExist
+// Source represents a source that serves a containerd binary.
+type Source interface {
+	GetContainerd() artifact.Package
 }
 
-func Uninstall() error {
-	pkgManagers, _ := util.GetOsPackageManagers()
-	for _, manager := range pkgManagers {
-		if err := artifact.UninstallPackage(containerdPackageName, manager); err == nil {
-			return nil
+func Install(tracker *tracker.Tracker, source Source, containerdSource SourceName) error {
+	if containerdSource == ContainerdSourceNone {
+		return nil
+	}
+	if isContainerdNotInstalled() {
+		containerd := source.GetContainerd()
+		if err := artifact.InstallPackage(containerd); err != nil {
+			return err
+		}
+		tracker.MarkContainerd(string(containerdSource))
+	}
+	return nil
+}
+
+func Uninstall(source Source) error {
+	if isContainerdInstalled() {
+		containerd := source.GetContainerd()
+		if err := artifact.UninstallPackage(containerd); err != nil {
+			return err
+		}
+
+		if err := os.RemoveAll(containerdConfigDir); err != nil {
+			return err
 		}
 	}
-	return fmt.Errorf("No package managers qualified to remove containerd package")
+	return nil
+}
+
+func ValidateContainerdSource(source SourceName) error {
+	osName := system.GetOsName()
+	if source == ContainerdSourceNone {
+		return nil
+	} else if source == ContainerdSourceDocker {
+		if osName == system.AmazonOsName {
+			return fmt.Errorf("docker source for containerd is not supported on AL2023. Please provide `none` or `distro` to the --containerd-source flag")
+		}
+	} else if source == ContainerdSourceDistro {
+		if osName == system.RhelOsName {
+			return fmt.Errorf("distro source for containerd is not supported on RHEL. Please provide `none` or `docker` to the --containerd-source flag")
+		}
+	}
+	return nil
 }
 
 func ValidateSystemdUnitFile() error {
@@ -64,4 +84,27 @@ func ValidateSystemdUnitFile() error {
 		return fmt.Errorf("containerd daemon not found")
 	}
 	return nil
+}
+
+func GetContainerdSource(containerdSource string) SourceName {
+	switch containerdSource {
+	case string(ContainerdSourceDistro):
+		return ContainerdSourceDistro
+	case string(ContainerdSourceDocker):
+		return ContainerdSourceDocker
+	default:
+		return ContainerdSourceNone
+	}
+}
+
+func isContainerdInstalled() bool {
+	_, containerdNotFoundErr := exec.LookPath(containerdPackageName)
+	return containerdNotFoundErr == nil
+}
+
+// isContainerdNotInstalled returns true only if both containerd and runc are not installed
+func isContainerdNotInstalled() bool {
+	_, containerdNotFoundErr := exec.LookPath(containerdPackageName)
+	_, runcNotFoundErr := exec.LookPath(runcPackageName)
+	return containerdNotFoundErr != nil || runcNotFoundErr != nil
 }

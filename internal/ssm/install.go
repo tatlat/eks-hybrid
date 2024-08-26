@@ -5,14 +5,11 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
-
-	"github.com/aws/eks-hybrid/internal/artifact"
-	"github.com/aws/eks-hybrid/internal/tracker"
-	"github.com/aws/eks-hybrid/internal/util"
 
 	"github.com/aws/aws-sdk-go-v2/config"
 	awsSsm "github.com/aws/aws-sdk-go-v2/service/ssm"
+	"github.com/aws/eks-hybrid/internal/artifact"
+	"github.com/aws/eks-hybrid/internal/tracker"
 )
 
 // InstallerPath is the path the SSM CLI installer is installed to.
@@ -21,6 +18,11 @@ const InstallerPath = "/opt/aws/ssm-setup-cli"
 // Source serves an SSM installer binary for the target platform.
 type Source interface {
 	GetSSMInstaller(context.Context) (io.ReadCloser, error)
+}
+
+// PkgSource serves and defines the package for target platform
+type PkgSource interface {
+	GetSSMPackage() artifact.Package
 }
 
 func Install(ctx context.Context, tracker *tracker.Tracker, source Source) error {
@@ -42,7 +44,7 @@ func Install(ctx context.Context, tracker *tracker.Tracker, source Source) error
 
 // Uninstall de-registers the managed instance and removes all files and components that
 // make up the ssm agent component.
-func Uninstall() error {
+func Uninstall(pkgSource PkgSource) error {
 	instanceId, region, err := GetManagedHybridInstanceIdAndRegion()
 
 	// If uninstall is being run just after running install and before running init
@@ -73,16 +75,9 @@ func Uninstall() error {
 		}
 	}
 
-	osToRemoveCommand := map[string]*exec.Cmd{
-		util.UbuntuOsName: exec.Command("snap", "remove", "amazon-ssm-agent"),
-		util.RhelOsName:   exec.Command("yum", "remove", "amazon-ssm-agent", "-y"),
-		util.AmazonOsName: exec.Command("yum", "remove", "amazon-ssm-agent", "-y"),
-	}
-	osName := util.GetOsName()
-	if cmd, ok := osToRemoveCommand[osName]; ok {
-		if _, err := cmd.CombinedOutput(); err != nil {
-			return err
-		}
+	ssmPkg := pkgSource.GetSSMPackage()
+	if err := artifact.UninstallPackage(ssmPkg); err != nil {
+		return err
 	}
 
 	if err := os.Remove(registrationFilePath); err != nil {
@@ -90,31 +85,4 @@ func Uninstall() error {
 	}
 
 	return os.RemoveAll(InstallerPath)
-}
-
-// UninstallWithoutDeregister uninstalls ssm agent and ssm installer without running de-register
-// instance against aws ssm
-func UninstallWithoutDeregister() error {
-	if err := os.RemoveAll(InstallerPath); err != nil {
-		return err
-	}
-	instanceId, _ := GetManagedHybridInstanceId()
-
-	// SSM register had a successful run, which mean the agent is running
-	// Removing the agent from node
-	if instanceId != "" {
-		osToRemoveCommand := map[string]*exec.Cmd{
-			util.UbuntuOsName: exec.Command("snap", "remove", "amazon-ssm-agent"),
-			util.RhelOsName:   exec.Command("yum", "remove", "amazon-ssm-agent", "-y"),
-			util.AmazonOsName: exec.Command("yum", "remove", "amazon-ssm-agent", "-y"),
-		}
-		osName := util.GetOsName()
-		if cmd, ok := osToRemoveCommand[osName]; ok {
-			if _, err := cmd.CombinedOutput(); err != nil {
-				return err
-			}
-		}
-	}
-
-	return nil
 }
