@@ -70,17 +70,19 @@ vet: ## Run go vet against code.
 	go vet ./...
 
 .PHONY: test
-test: crds generate fmt vet ## Run go test against code.
-	go test ./...
+test: ## Run validate tests.
+	go test ./... 
+
+COVERAGEFILE = $(LOCALBIN)/coverage.out
+.PHONY: coverage
+coverage: test
+	go test -coverprofile=$(COVERAGEFILE) ./...
+	go tool cover -html=$(COVERAGEFILE)
 
 .PHONY: test-e2e
 test-e2e: build ## Run e2e tests.
 	test/e2e/run.sh
 
-COVERAGEFILE = -coverprofile=/var/folders/xx/l168fpg17qb0t0btg1n7rr7h0000gq/T/vscode-go526oRM/go-code-cove
-.PHONY: test-validate
-test-validate: ## Run validate tests.
-	go test $(COVERAGEFILE) github.com/aws/eks-hybrid/internal/validation/validator/
 
 ##@ Build
 
@@ -89,6 +91,12 @@ test-validate: ## Run validate tests.
 build: LINKER_FLAGS :=-X github.com/aws/eks-hybrid/cmd/nodeadm/version.GitVersion=$(GIT_VERSION) -X github.com/aws/eks-hybrid/internal/aws/eks.manifestUrl=$(HYBRID_MANIFEST_URL) -s -w -buildid='' -extldflags -static
 build:
 	go build -ldflags "$(LINKER_FLAGS)" -trimpath -o $(LOCALBIN)/nodeadm cmd/nodeadm/main.go
+
+.PHONY: build-cross-platform
+build-cross-platform: LINKER_FLAGS :=-X github.com/aws/eks-hybrid/cmd/nodeadm/version.GitVersion=$(GIT_VERSION) -X github.com/aws/eks-hybrid/internal/aws/eks.manifestUrl=$(HYBRID_MANIFEST_URL) -s -w -buildid='' -extldflags -static
+build-cross-platform:
+	GOARCH=amd64 go build -ldflags "$(LINKER_FLAGS)" -trimpath -o $(LOCALBIN)/amd64/nodeadm cmd/nodeadm/main.go
+	GOARCH=arm64 go build -ldflags "$(LINKER_FLAGS)" -trimpath -o $(LOCALBIN)/arm64/nodeadm cmd/nodeadm/main.go
 
 .PHONY: run
 run: build ## Run binary
@@ -163,3 +171,7 @@ mocks: ## Generate mocks
 $(GOLANGCI_LINT): $(LOCALBIN) $(GOLANGCI_LINT_CONFIG)
 	$(eval GOLANGCI_LINT_VERSION?=$(shell cat .github/workflows/golangci-lint.yml | yq e '.jobs.golangci.steps[] | select(.name == "golangci-lint") .with.version' -))
 	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(LOCALBIN) $(GOLANGCI_LINT_VERSION)
+
+.PHONY: e2e-tests-binary
+e2e-tests-binary:
+	GOMAXPROCS=10 go test ./test/e2e/validate -c -o "./_bin/e2e.test" -tags "e2e"

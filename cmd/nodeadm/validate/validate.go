@@ -29,7 +29,7 @@ func (c *validateCmd) Flaggy() *flaggy.Subcommand {
 func (c *validateCmd) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	logger.Init()
 
-	logger.Info("Loading configuration.." + opts.ConfigSource)
+	logger.Info(fmt.Sprintf("Loading node configuration: %s", opts.ConfigSource))
 	provider, err := configprovider.BuildConfigProvider(opts.ConfigSource)
 	if err != nil {
 		return err
@@ -41,6 +41,7 @@ func (c *validateCmd) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	logger.Info("Loaded configuration")
 
 	regionCode := nodeConfig.Spec.Cluster.Region
+	logger.Info(fmt.Sprintf("Running validations for region: %s", regionCode))
 
 	runner := validator.NewRunner()
 

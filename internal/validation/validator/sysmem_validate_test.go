@@ -48,13 +48,13 @@ func TestSysMemValidatePass(t *testing.T) {
 }
 
 func FakeSysMemFail() uint64 {
-	return uint64(1) * validator.GB
+	return uint64(validator.GbToB(1))
 }
 
 func FakeSysMemWarning() uint64 {
-	return uint64(3) * validator.GB
+	return uint64(validator.GbToB(3))
 }
 
 func FakeSysMemPass() uint64 {
-	return uint64(5) * validator.GB
+	return uint64(validator.GbToB(5))
 }

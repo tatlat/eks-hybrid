@@ -2,5 +2,6 @@ _dist
 _bin
 
 cover.out
+coverage.out
 .idea
 .DS_Store
