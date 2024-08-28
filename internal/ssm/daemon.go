@@ -5,7 +5,7 @@ import (
 
 	"github.com/aws/eks-hybrid/internal/api"
 	"github.com/aws/eks-hybrid/internal/daemon"
-	"github.com/aws/eks-hybrid/internal/util"
+	"github.com/aws/eks-hybrid/internal/system"
 )
 
 var (
@@ -64,11 +64,11 @@ func (s *ssm) Name() string {
 
 func setDaemonName() {
 	osToDaemonName := map[string]string{
-		util.UbuntuOsName: "snap.amazon-ssm-agent.amazon-ssm-agent",
-		util.RhelOsName:   "amazon-ssm-agent",
-		util.AmazonOsName: "amazon-ssm-agent",
+		system.UbuntuOsName: "snap.amazon-ssm-agent.amazon-ssm-agent",
+		system.RhelOsName:   "amazon-ssm-agent",
+		system.AmazonOsName: "amazon-ssm-agent",
 	}
-	osName := util.GetOsName()
+	osName := system.GetOsName()
 	if daemonName, ok := osToDaemonName[osName]; ok {
 		SsmDaemonName = daemonName
 	}

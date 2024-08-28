@@ -9,4 +9,5 @@ const (
 	Kubelet                 = "kubelet"
 	Ssm                     = "ssm"
 	Containerd              = "containerd"
+	Iptables                = "iptables"
 )

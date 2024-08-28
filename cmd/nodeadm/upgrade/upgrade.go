@@ -17,6 +17,7 @@ import (
 	"github.com/aws/eks-hybrid/internal/daemon"
 	"github.com/aws/eks-hybrid/internal/kubelet"
 	"github.com/aws/eks-hybrid/internal/node"
+	"github.com/aws/eks-hybrid/internal/packagemanager"
 	"github.com/aws/eks-hybrid/internal/ssm"
 	"github.com/aws/eks-hybrid/internal/tracker"
 )
@@ -82,7 +83,15 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	}
 
 	artifacts := installed.Artifacts
-	if err := uninstall.UninstallBinaries(artifacts, log); err != nil {
+	log.Info("Creating package manager...")
+	containerdSource := containerd.GetContainerdSource(artifacts.Containerd)
+	log.Info("Configuring package manager with", zap.Reflect("containerd source", string(containerdSource)))
+	packageManager, err := packagemanager.New(containerdSource, log)
+	if err != nil {
+		return err
+	}
+
+	if err := uninstall.UninstallBinaries(artifacts, packageManager, log); err != nil {
 		return err
 	}
 
@@ -107,16 +116,16 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		if err := daemonManager.StopDaemon(ssm.SsmDaemonName); err != nil {
 			return err
 		}
-		if err := ssm.Uninstall(); err != nil {
+		if err := ssm.Uninstall(packageManager); err != nil {
 			return err
 		}
 	}
-	if artifacts.Containerd {
+	if artifacts.Containerd != string(containerd.ContainerdSourceNone) {
 		log.Info("Uninstalling containerd...")
 		if err := daemonManager.StopDaemon(containerd.ContainerdDaemonName); err != nil {
 			return err
 		}
-		if err := containerd.Uninstall(); err != nil {
+		if err := containerd.Uninstall(packageManager); err != nil {
 			return err
 		}
 	}
@@ -131,7 +140,7 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	}
 
 	// Installing new version of artifacts
-	if err := install.Install(ctx, release, credsProvider, log); err != nil {
+	if err := install.Install(ctx, release, credsProvider, containerdSource, log); err != nil {
 		return err
 	}
 

@@ -57,7 +57,7 @@ func (v *NodeOS) Validate() error {
 		return err
 	}
 	info := fmt.Sprintf("%v | %v ", GetInfoStrString(prefixOS, nodeOS.Name+" "+nodeOS.Version), GetInfoStrString(prefixAcceptOS, buildAcceptOSInfoString()))
-	
+
 	if nodeOS.Name == rhelOSType {
 		versionList := strings.Split(nodeOS.Version, ".")
 		nodeOS.Version = versionList[0]
