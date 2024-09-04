@@ -12,8 +12,8 @@ import (
 	"github.com/aws/eks-hybrid/internal/tracker"
 )
 
-// InstallerPath is the path the SSM CLI installer is installed to.
-const InstallerPath = "/opt/aws/ssm-setup-cli"
+// installerPath is the path the SSM CLI installer is installed to.
+const installerPath = "/opt/aws/ssm-setup-cli"
 
 // Source serves an SSM installer binary for the target platform.
 type Source interface {
@@ -32,7 +32,7 @@ func Install(ctx context.Context, tracker *tracker.Tracker, source Source) error
 	}
 	defer installer.Close()
 
-	if err := artifact.InstallFile(InstallerPath, installer, 0755); err != nil {
+	if err := artifact.InstallFile(installerPath, installer, 0755); err != nil {
 		return fmt.Errorf("ssm installer: %w", err)
 	}
 	if err = tracker.Add(artifact.Ssm); err != nil {
@@ -51,7 +51,7 @@ func Uninstall(pkgSource PkgSource) error {
 	// SSM would not be fully installed and registered, hence it's not required to run
 	// deregister instance.
 	if err != nil && os.IsNotExist(err) {
-		return os.RemoveAll(InstallerPath)
+		return os.RemoveAll(installerPath)
 	} else if err != nil {
 		return err
 	}
@@ -84,5 +84,21 @@ func Uninstall(pkgSource PkgSource) error {
 		return err
 	}
 
-	return os.RemoveAll(InstallerPath)
+	return os.RemoveAll(installerPath)
+}
+
+// redownloadInstaller deletes and downloads a new ssm installer
+func redownloadInstaller() error {
+	if err := os.RemoveAll(installerPath); err != nil {
+		return err
+	}
+	trackerConf, err := tracker.GetCurrentState()
+	if err != nil {
+		return err
+	}
+	installer := NewSSMInstaller()
+	if err := Install(context.Background(), trackerConf, installer); err != nil {
+		return err
+	}
+	return trackerConf.Save()
 }

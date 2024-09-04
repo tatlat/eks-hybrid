@@ -2,6 +2,9 @@ package ssm
 
 import (
 	"os"
+	"regexp"
+
+	"go.uber.org/zap"
 
 	"github.com/aws/eks-hybrid/internal/api"
 	"github.com/aws/eks-hybrid/internal/daemon"
@@ -11,33 +14,52 @@ import (
 var (
 	_             daemon.Daemon = &ssm{}
 	SsmDaemonName               = "amazon-ssm-agent"
+
+	checksumMismatchErrorRegex = regexp.MustCompile(`.*checksum mismatch with latest ssm-setup-cli*`)
 )
 
 type ssm struct {
 	daemonManager daemon.DaemonManager
 	nodeConfig    *api.NodeConfig
+	logger        *zap.Logger
 }
 
-func NewSsmDaemon(daemonManager daemon.DaemonManager, cfg *api.NodeConfig) daemon.Daemon {
+func NewSsmDaemon(daemonManager daemon.DaemonManager, cfg *api.NodeConfig, logger *zap.Logger) daemon.Daemon {
 	setDaemonName()
 	return &ssm{
 		daemonManager: daemonManager,
 		nodeConfig:    cfg,
+		logger:        logger,
 	}
 }
 
 func (s *ssm) Configure() error {
+	registerOverride := false
 	_, err := GetManagedHybridInstanceId()
 	if err != nil && os.IsNotExist(err) {
 		// The node is not registered with SSM
 		// In some cases, while the node is not registered, there might be some leftover
 		// registration data from previous registrations. Setting force to true, will override
 		// leftover registration data from the service cache.
-		return s.registerMachine(s.nodeConfig, true)
+		registerOverride = true
 	} else if err != nil {
 		return err
 	}
-	return s.registerMachine(s.nodeConfig, false)
+	err = s.registerMachine(s.nodeConfig, registerOverride)
+	if err != nil {
+		// SSM register command will download a new ssm agent installer and verify checksums to match with
+		// downloaded and current running agent installer. If checksums do not match, re-download and run
+		// register again.
+		if match := checksumMismatchErrorRegex.MatchString(err.Error()); match {
+			s.logger.Info("Encountered checksum mismatch on SSM agent installer. Re-downloading...")
+			if err := redownloadInstaller(); err != nil {
+				return err
+			}
+			return s.registerMachine(s.nodeConfig, registerOverride)
+		}
+		return err
+	}
+	return nil
 }
 
 func (s *ssm) EnsureRunning() error {

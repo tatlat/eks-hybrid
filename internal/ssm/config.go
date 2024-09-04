@@ -17,7 +17,7 @@ type HybridInstanceRegistration struct {
 }
 
 func (s *ssm) registerMachine(cfg *api.NodeConfig, force bool) error {
-	registerCmd := exec.Command(InstallerPath, "-register", "-activation-code", cfg.Spec.Hybrid.SSM.ActivationCode,
+	registerCmd := exec.Command(installerPath, "-register", "-activation-code", cfg.Spec.Hybrid.SSM.ActivationCode,
 		"-activation-id", cfg.Spec.Hybrid.SSM.ActivationID, "-region", cfg.Spec.Cluster.Region)
 	if force {
 		registerCmd.Args = append(registerCmd.Args, "-override")
