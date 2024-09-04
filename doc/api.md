@@ -61,7 +61,6 @@ _Appears in:_
 | `trustAnchorArn` _string_ | TrustAnchorARN is the ARN of the trust anchor. |
 | `profileArn` _string_ | ProfileARN is the ARN of the profile linked with the Hybrid IAM Role. |
 | `roleArn` _string_ | RoleARN is the role to IAM roles anywhere gets authorized as to get temporary credentials. |
-| `assumeRoleArn` _string_ | AssumeRoleARN is the role to assume after authorized as RoleARN. This role will have permissions to add a node to the cluster. |
 | `awsConfigPath` _string_ | AwsConfigPath is the path where the Aws config is stored for hybrid nodes. This field is only used to init phase |
 
 #### InstanceOptions

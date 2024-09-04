@@ -23,11 +23,12 @@ func TestEnsureAWSConfig_Write(t *testing.T) {
 		ProfileARN:           "profile",
 		RoleARN:              "role",
 		Region:               "region",
+		NodeName:             "test01",
 		ConfigPath:           path,
 		SigningHelperBinPath: "/random/path",
 	}
 
-	err = iamrolesanywhere.EnsureAWSConfig(cfg)
+	err = iamrolesanywhere.WriteAWSConfig(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,12 +69,13 @@ func TestEnsureAWSConfig_ExistsSameContent(t *testing.T) {
 		TrustAnchorARN:       "trust-anchor",
 		ProfileARN:           "profile",
 		RoleARN:              "role",
+		NodeName:             "test01",
 		Region:               "region",
 		ConfigPath:           path,
 		SigningHelperBinPath: "/random/path",
 	}
 
-	err = iamrolesanywhere.EnsureAWSConfig(cfg)
+	err = iamrolesanywhere.WriteAWSConfig(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,11 +102,12 @@ func TestEnsureAWSConfig_ExistsDifferentContent(t *testing.T) {
 		TrustAnchorARN: "trust-anchor",
 		ProfileARN:     "profile",
 		RoleARN:        "role",
+		NodeName:       "test01",
 		Region:         "region",
 		ConfigPath:     path,
 	}
 
-	err := iamrolesanywhere.EnsureAWSConfig(cfg)
+	err := iamrolesanywhere.WriteAWSConfig(cfg)
 	if err == nil {
 		t.Fatal("Expeted error, received nil")
 	}

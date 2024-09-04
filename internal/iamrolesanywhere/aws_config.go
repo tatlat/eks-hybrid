@@ -2,7 +2,6 @@ package iamrolesanywhere
 
 import (
 	"bytes"
-	"crypto/sha256"
 	_ "embed"
 	"errors"
 	"fmt"
@@ -40,6 +39,9 @@ type AWSConfig struct {
 	// Region is the region to target when authenticating.
 	Region string
 
+	// NodeName is the name of the node. Used to set session name on IAM
+	NodeName string
+
 	// ConfigPath is a path to a configuration file to be verified. Defaults to /etc/aws/hybrid/profile.
 	ConfigPath string
 
@@ -47,24 +49,14 @@ type AWSConfig struct {
 	SigningHelperBinPath string
 }
 
-// EnsureAWSConfig ensures an AWS configuration file with contents appropriate for cfg exists
-// at cfg.ConfigPath.
-func EnsureAWSConfig(cfg AWSConfig) error {
+// WriteAWSConfig writes an AWS configuration file with contents appropriate for node config
+func WriteAWSConfig(cfg AWSConfig) error {
 	if cfg.ConfigPath == "" {
 		cfg.ConfigPath = DefaultAWSConfigPath
 	}
 
 	if err := validateAWSConfig(cfg); err != nil {
 		return err
-	}
-
-	exists, err := configFileExists(cfg)
-	if err != nil {
-		return err
-	}
-
-	if exists {
-		return verifyConfigFile(cfg)
 	}
 
 	return writeConfigFile(cfg)
@@ -89,67 +81,15 @@ func validateAWSConfig(cfg AWSConfig) error {
 		errs = append(errs, errors.New("Region cannot be empty"))
 	}
 
+	if cfg.NodeName == "" {
+		errs = append(errs, errors.New("NodeName cannot be empty"))
+	}
+
 	if cfg.SigningHelperBinPath == "" {
 		errs = append(errs, errors.New("Singing helper path cannot be emtpyy"))
 	}
 
 	return errors.Join(errs...)
-}
-
-func configFileExists(cfg AWSConfig) (bool, error) {
-	_, err := os.Stat(cfg.ConfigPath)
-	if err == nil {
-		return true, nil
-	}
-
-	if os.IsNotExist(err) {
-		return false, nil
-	}
-
-	return false, err
-}
-
-func verifyConfigFile(cfg AWSConfig) error {
-	var buf bytes.Buffer
-	if err := awsConfigTpl.Execute(&buf, cfg); err != nil {
-		return err
-	}
-
-	tplChecksum := sha256.Sum256(buf.Bytes())
-
-	configContents, err := getConfigFileContents(cfg)
-	if err != nil {
-		return err
-	}
-
-	profileChecksum := sha256.Sum256(configContents)
-
-	if tplChecksum != profileChecksum {
-		return fmt.Errorf("hybrid profile already exists at %v but its contents do not align with the expected configuration", cfg.ConfigPath)
-	}
-
-	return nil
-}
-
-func getConfigFileContents(cfg AWSConfig) ([]byte, error) {
-	fh, err := os.Open(cfg.ConfigPath)
-	if err != nil {
-		return nil, err
-	}
-	defer fh.Close()
-
-	// Protect against a malicious file by doing a chunk read. With ARNs we don't expect more than
-	// 500 bytes so 2048 should be plenty.
-	rawBuf := make([]byte, 2048)
-	readCount, err := fh.Read(rawBuf)
-	if err != nil {
-		return nil, err
-	}
-	if readCount == 2048 {
-		return nil, fmt.Errorf("unexpected amount of data in file: %v", cfg.ConfigPath)
-	}
-
-	return rawBuf[:readCount], nil
 }
 
 func writeConfigFile(cfg AWSConfig) error {
