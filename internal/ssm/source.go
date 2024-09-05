@@ -13,22 +13,24 @@ import (
 
 // Initial region ssm installer is downloaded from. When installer runs, it will
 // down the agent from the proper region configured in the nodeConfig during init command
-const ssmInstallerRegion = "us-west-2"
+const DefaultSsmInstallerRegion = "us-west-2"
 
 // SSMInstaller provides a Source that retrieves the SSM installer from the official
 // release endpoint.
-func NewSSMInstaller() Source {
+func NewSSMInstaller(region string) Source {
 	return ssmInstallerSource{
 		client: http.Client{Timeout: 120 * time.Second},
+		region: region,
 	}
 }
 
 type ssmInstallerSource struct {
 	client http.Client
+	region string
 }
 
 func (s ssmInstallerSource) GetSSMInstaller(ctx context.Context) (io.ReadCloser, error) {
-	endpoint, err := buildSSMURL()
+	endpoint, err := buildSSMURL(s.region)
 	if err != nil {
 		return nil, err
 	}
@@ -45,14 +47,14 @@ func (s ssmInstallerSource) GetSSMInstaller(ctx context.Context) (io.ReadCloser,
 	return resp.Body, nil
 }
 
-func buildSSMURL() (string, error) {
+func buildSSMURL(region string) (string, error) {
 	variant, err := detectPlatformVariant()
 	if err != nil {
 		return "", err
 	}
 
 	platform := fmt.Sprintf("%v_%v", variant, runtime.GOARCH)
-	return fmt.Sprintf("https://amazon-ssm-%v.s3.%v.amazonaws.com/latest/%v/ssm-setup-cli", ssmInstallerRegion, ssmInstallerRegion, platform), nil
+	return fmt.Sprintf("https://amazon-ssm-%v.s3.%v.amazonaws.com/latest/%v/ssm-setup-cli", region, region, platform), nil
 }
 
 // detectPlatformVariant returns a portion of the SSM installers URL that is dependent on the
