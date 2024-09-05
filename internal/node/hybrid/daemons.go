@@ -30,7 +30,7 @@ func (hnp *hybridNodeProvider) GetDaemons() ([]daemon.Daemon, error) {
 
 func (hnp *hybridNodeProvider) PreProcessDaemon() error {
 	if hnp.nodeConfig.IsSSM() {
-		ssmDaemon := ssm.NewSsmDaemon(hnp.daemonManager, hnp.nodeConfig)
+		ssmDaemon := ssm.NewSsmDaemon(hnp.daemonManager, hnp.nodeConfig, hnp.logger)
 		if err := ssmDaemon.Configure(); err != nil {
 			return err
 		}
