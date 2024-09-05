@@ -49,10 +49,11 @@ func (s *ssm) Configure() error {
 	if err != nil {
 		// SSM register command will download a new ssm agent installer and verify checksums to match with
 		// downloaded and current running agent installer. If checksums do not match, re-download and run
-		// register again.
+		// register again. Checksum mismatch can happen due to new ssm agent releases or switching regions.
 		if match := checksumMismatchErrorRegex.MatchString(err.Error()); match {
-			s.logger.Info("Encountered checksum mismatch on SSM agent installer. Re-downloading...")
-			if err := redownloadInstaller(); err != nil {
+			s.logger.Info("Encountered checksum mismatch on SSM agent installer. Re-downloading installer from",
+				zap.Reflect("region", s.nodeConfig.Spec.Cluster.Region))
+			if err := redownloadInstaller(s.nodeConfig.Spec.Cluster.Region); err != nil {
 				return err
 			}
 			return s.registerMachine(s.nodeConfig, registerOverride)

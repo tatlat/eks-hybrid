@@ -127,7 +127,7 @@ func Install(ctx context.Context, eksRelease eks.PatchRelease, credentialProvide
 			return err
 		}
 	case creds.SsmCredentialProvider:
-		ssmInstaller := ssm.NewSSMInstaller()
+		ssmInstaller := ssm.NewSSMInstaller(ssm.DefaultSsmInstallerRegion)
 
 		log.Info("Installing SSM agent installer...")
 		if err := ssm.Install(ctx, trackerConf, ssmInstaller); err != nil && !errors.Is(err, fs.ErrExist) {

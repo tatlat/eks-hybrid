@@ -88,7 +88,7 @@ func Uninstall(pkgSource PkgSource) error {
 }
 
 // redownloadInstaller deletes and downloads a new ssm installer
-func redownloadInstaller() error {
+func redownloadInstaller(region string) error {
 	if err := os.RemoveAll(installerPath); err != nil {
 		return err
 	}
@@ -96,7 +96,7 @@ func redownloadInstaller() error {
 	if err != nil {
 		return err
 	}
-	installer := NewSSMInstaller()
+	installer := NewSSMInstaller(region)
 	if err := Install(context.Background(), trackerConf, installer); err != nil {
 		return err
 	}
