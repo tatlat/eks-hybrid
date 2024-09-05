@@ -1,17 +1,15 @@
 package init
 
 import (
+	"os"
+
 	"github.com/aws/eks-hybrid/internal/cli"
 	"github.com/aws/eks-hybrid/internal/node"
 	"github.com/aws/eks-hybrid/internal/nodeprovider"
+	"github.com/aws/eks-hybrid/internal/tracker"
 
 	"github.com/integrii/flaggy"
 	"go.uber.org/zap"
-)
-
-const (
-	configPhase = "config"
-	runPhase    = "run"
 )
 
 func NewInitCommand() cli.Command {
@@ -38,6 +36,15 @@ func (c *initCmd) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return err
 	} else if !root {
 		return cli.ErrMustRunAsRoot
+	}
+
+	log.Info("Loading installed components")
+	_, err = tracker.GetInstalledArtifacts()
+	if err != nil && os.IsNotExist(err) {
+		log.Info("Nodeadm components are not installed. Please run `nodeadm install` before running init")
+		return nil
+	} else if err != nil {
+		return err
 	}
 
 	nodeProvider, err := node.NewNodeProvider(opts.ConfigSource, log)
