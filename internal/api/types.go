@@ -154,7 +154,6 @@ type IAMRolesAnywhere struct {
 	TrustAnchorARN string `json:"trustAnchorArn,omitempty"`
 	ProfileARN     string `json:"profileArn,omitempty"`
 	RoleARN        string `json:"roleArn,omitempty"`
-	AssumeRoleARN  string `json:"assumeRoleARN,omitempty"`
 	AwsConfigPath  string `json:"awsConfigPath,omitempty"`
 }
 

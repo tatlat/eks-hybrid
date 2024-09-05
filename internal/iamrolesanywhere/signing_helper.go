@@ -10,7 +10,7 @@ import (
 	"github.com/aws/eks-hybrid/internal/artifact"
 )
 
-const signingHelperVersion = "1.1.1"
+const signingHelperVersion = "1.2.0"
 
 type signingHelperSource struct {
 	client http.Client

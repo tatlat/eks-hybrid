@@ -22,11 +22,12 @@ func (hnp *hybridNodeProvider) ConfigureAws() error {
 		if hnp.nodeConfig.Spec.Hybrid.IAMRolesAnywhere.AwsConfigPath == "" {
 			hnp.nodeConfig.Spec.Hybrid.IAMRolesAnywhere.AwsConfigPath = iamrolesanywhere.DefaultAWSConfigPath
 		}
-		if err := iamrolesanywhere.EnsureAWSConfig(iamrolesanywhere.AWSConfig{
+		if err := iamrolesanywhere.WriteAWSConfig(iamrolesanywhere.AWSConfig{
 			TrustAnchorARN:       hnp.nodeConfig.Spec.Hybrid.IAMRolesAnywhere.TrustAnchorARN,
 			ProfileARN:           hnp.nodeConfig.Spec.Hybrid.IAMRolesAnywhere.ProfileARN,
 			RoleARN:              hnp.nodeConfig.Spec.Hybrid.IAMRolesAnywhere.RoleARN,
 			Region:               hnp.nodeConfig.Spec.Cluster.Region,
+			NodeName:             hnp.nodeConfig.Spec.Hybrid.NodeName,
 			ConfigPath:           hnp.nodeConfig.Spec.Hybrid.IAMRolesAnywhere.AwsConfigPath,
 			SigningHelperBinPath: iamrolesanywhere.SigningHelperBinPath,
 		}); err != nil {

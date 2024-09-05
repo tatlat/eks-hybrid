@@ -140,10 +140,6 @@ type IAMRolesAnywhere struct {
 	// RoleARN is the role to IAM roles anywhere gets authorized as to get temporary credentials.
 	RoleARN string `json:"roleArn,omitempty"`
 
-	// AssumeRoleARN is the role to assume after authorized as RoleARN.
-	// This role will have permissions to add a node to the cluster.
-	AssumeRoleARN string `json:"assumeRoleArn,omitempty"`
-
 	// AwsConfigPath is the path where the Aws config is stored for hybrid nodes.
 	// This field is only used to init phase
 	// +optional

@@ -21,9 +21,6 @@ func (hnp *hybridNodeProvider) withHybridValidators() {
 			return fmt.Errorf("Only one of IAMRolesAnywhere or SSM must be provided for hybrid node configuration")
 		}
 		if cfg.IsIAMRolesAnywhere() {
-			if cfg.Spec.Hybrid.IAMRolesAnywhere.AssumeRoleARN == "" {
-				return fmt.Errorf("AssumeRoleARN is missing in hybrid iam roles anywhere configuration")
-			}
 			if cfg.Spec.Hybrid.IAMRolesAnywhere.RoleARN == "" {
 				return fmt.Errorf("RoleARN is missing in hybrid iam roles anywhere configuration")
 			}

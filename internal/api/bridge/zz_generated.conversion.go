@@ -214,7 +214,6 @@ func autoConvert_v1alpha1_IAMRolesAnywhere_To_api_IAMRolesAnywhere(in *v1alpha1.
 	out.TrustAnchorARN = in.TrustAnchorARN
 	out.ProfileARN = in.ProfileARN
 	out.RoleARN = in.RoleARN
-	out.AssumeRoleARN = in.AssumeRoleARN
 	out.AwsConfigPath = in.AwsConfigPath
 	return nil
 }
@@ -228,7 +227,6 @@ func autoConvert_api_IAMRolesAnywhere_To_v1alpha1_IAMRolesAnywhere(in *api.IAMRo
 	out.TrustAnchorARN = in.TrustAnchorARN
 	out.ProfileARN = in.ProfileARN
 	out.RoleARN = in.RoleARN
-	out.AssumeRoleARN = in.AssumeRoleARN
 	out.AwsConfigPath = in.AwsConfigPath
 	return nil
 }
