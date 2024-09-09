@@ -85,11 +85,6 @@ spec:
                     description: IAMRolesAnywhere includes IAM Roles Anywhere specific
                       configuration and is mutually exclusive with SSM.
                     properties:
-                      assumeRoleArn:
-                        description: AssumeRoleARN is the role to assume after authorized
-                          as RoleARN. This role will have permissions to add a node
-                          to the cluster.
-                        type: string
                       awsConfigPath:
                         description: AwsConfigPath is the path where the Aws config
                           is stored for hybrid nodes. This field is only used to init

@@ -70,7 +70,6 @@ func TestOSValidateGetOSError(t *testing.T) {
 	}
 }
 
-
 func FakeOSUbuntuFail() (validator.OS, error) {
 
 	return validator.OS{"ubuntu", "18.04"}, nil

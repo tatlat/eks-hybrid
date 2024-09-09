@@ -21,13 +21,13 @@ const (
 	passVolumeSize = int64(30)
 	failVolumeSize = int64(10)
 
-	passUbuntuEC2Type                = "t2.large"
+	passUbuntuEC2Type                = "t3.large"
 	failNotEnoughMemoryUbuntuEC2Type = "t3.micro"
-	failNotEnoughCPUUbuntuEC2Type    = "t2.small"
+	failNotEnoughCPUUbuntuEC2Type    = "t3.small"
 	passRhelEC2Type                  = "t4g.xlarge"
 	failNotEnoughMemoryRhelEC2Type   = "t4g.micro"
 	failNotEnoughCPURhelEC2Type      = "c6g.medium"
-	failSuseEC2Type                  = "t2.large"
+	failSuseEC2Type                  = "t3.large"
 
 	ubuntuUserData = `#!/bin/bash
 	echo "ssh_pwauth: false" >> /etc/cloud/cloud.cfg`
