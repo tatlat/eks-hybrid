@@ -14,7 +14,8 @@ SHELL = /usr/bin/env bash -o pipefail
 .SHELLFLAGS = -ec
 
 GIT_VERSION?=0.0.0
-HYBRID_MANIFEST_URL?=https://do-not-delete-temp-hybrid-manifest.s3.amazonaws.com/manifest.yaml
+MANIFEST_HOST?=hybrid-assets.eks.amazonaws.com
+HYBRID_MANIFEST_URL=https://$(MANIFEST_HOST)/manifest.yaml
 
 .PHONY: all
 all: crds generate fmt vet build
