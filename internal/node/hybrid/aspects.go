@@ -6,5 +6,6 @@ func (hnp *hybridNodeProvider) GetAspects() []system.SystemAspect {
 	return []system.SystemAspect{
 		system.NewSysctlAspect(hnp.nodeConfig),
 		system.NewSwapAspect(hnp.nodeConfig),
+		system.NewPortsAspect(hnp.nodeConfig, hnp.logger),
 	}
 }
