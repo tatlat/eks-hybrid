@@ -28,12 +28,12 @@ func Install(ctx context.Context, tracker *tracker.Tracker, src Source) error {
 	if err := artifact.InstallFile(BinPath, imageCredentialProvider, 0755); err != nil {
 		return fmt.Errorf("image-credential-provider: %w", err)
 	}
-	if err = tracker.Add(artifact.ImageCredentialProvider); err != nil {
-		return err
-	}
 
 	if !imageCredentialProvider.VerifyChecksum() {
 		return fmt.Errorf("image-credential-provider: %w", artifact.NewChecksumError(imageCredentialProvider))
+	}
+	if err = tracker.Add(artifact.ImageCredentialProvider); err != nil {
+		return err
 	}
 
 	return nil

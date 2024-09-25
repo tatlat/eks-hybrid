@@ -5,8 +5,6 @@ import (
 	"errors"
 	"fmt"
 
-	"io/fs"
-
 	"github.com/integrii/flaggy"
 	"go.uber.org/zap"
 
@@ -123,14 +121,14 @@ func Install(ctx context.Context, eksRelease eks.PatchRelease, credentialProvide
 		signingHelper := iamrolesanywhere.NewSigningHelper()
 
 		log.Info("Installing AWS signing helper...")
-		if err := iamrolesanywhere.Install(ctx, trackerConf, signingHelper); err != nil && !errors.Is(err, fs.ErrExist) {
+		if err := iamrolesanywhere.Install(ctx, trackerConf, signingHelper); err != nil {
 			return err
 		}
 	case creds.SsmCredentialProvider:
 		ssmInstaller := ssm.NewSSMInstaller(ssm.DefaultSsmInstallerRegion)
 
 		log.Info("Installing SSM agent installer...")
-		if err := ssm.Install(ctx, trackerConf, ssmInstaller); err != nil && !errors.Is(err, fs.ErrExist) {
+		if err := ssm.Install(ctx, trackerConf, ssmInstaller); err != nil {
 			return err
 		}
 	default:
@@ -138,27 +136,27 @@ func Install(ctx context.Context, eksRelease eks.PatchRelease, credentialProvide
 	}
 
 	log.Info("Installing kubelet...")
-	if err := kubelet.Install(ctx, trackerConf, eksRelease); err != nil && !errors.Is(err, fs.ErrExist) {
+	if err := kubelet.Install(ctx, trackerConf, eksRelease); err != nil {
 		return err
 	}
 
 	log.Info("Installing kubectl...")
-	if err := kubectl.Install(ctx, trackerConf, eksRelease); err != nil && !errors.Is(err, fs.ErrExist) {
+	if err := kubectl.Install(ctx, trackerConf, eksRelease); err != nil {
 		return err
 	}
 
 	log.Info("Installing cni-plugins...")
-	if err := cni.Install(ctx, trackerConf, eksRelease); err != nil && !errors.Is(err, fs.ErrExist) {
+	if err := cni.Install(ctx, trackerConf, eksRelease); err != nil {
 		return err
 	}
 
 	log.Info("Installing image credential provider...")
-	if err := imagecredentialprovider.Install(ctx, trackerConf, eksRelease); err != nil && !errors.Is(err, fs.ErrExist) {
+	if err := imagecredentialprovider.Install(ctx, trackerConf, eksRelease); err != nil {
 		return err
 	}
 
 	log.Info("Installing IAM authenticator...")
-	if err := iamauthenticator.Install(ctx, trackerConf, eksRelease); err != nil && !errors.Is(err, fs.ErrExist) {
+	if err := iamauthenticator.Install(ctx, trackerConf, eksRelease); err != nil {
 		return err
 	}
 

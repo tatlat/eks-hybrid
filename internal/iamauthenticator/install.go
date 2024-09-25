@@ -29,12 +29,12 @@ func Install(ctx context.Context, tracker *tracker.Tracker, iamAuthSrc IAMAuthen
 	if err := artifact.InstallFile(IAMAuthenticatorBinPath, authenticator, 0755); err != nil {
 		return fmt.Errorf("aws-iam-authenticator: %w", err)
 	}
-	if err = tracker.Add(artifact.IamAuthenticator); err != nil {
-		return err
-	}
 
 	if !authenticator.VerifyChecksum() {
 		return fmt.Errorf("aws-iam-authenticator: %w", artifact.NewChecksumError(authenticator))
+	}
+	if err = tracker.Add(artifact.IamAuthenticator); err != nil {
+		return err
 	}
 
 	return nil

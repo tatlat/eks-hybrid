@@ -52,7 +52,7 @@ func TestInstallFile_FileExists(t *testing.T) {
 	}
 
 	err := artifact.InstallFile(dst, src, perms)
-	if !os.IsExist(err) {
+	if err != nil {
 		t.Fatal(err)
 	}
 }
