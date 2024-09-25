@@ -1,4 +1,4 @@
-name: build-and-test
+name: build-and-unit-test
 on:
   push:
     tags:
@@ -25,7 +25,7 @@ jobs:
       - name: build application
         run: make build
   test:
-    name: test
+    name: unit-test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
