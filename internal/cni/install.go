@@ -32,12 +32,12 @@ func Install(ctx context.Context, tracker *tracker.Tracker, src Source) error {
 	if err := artifact.InstallFile(TgzPath, cniPlugins, 0755); err != nil {
 		return fmt.Errorf("cni-plugins: %w", err)
 	}
-	if err = tracker.Add(artifact.CniPlugins); err != nil {
-		return err
-	}
 
 	if !cniPlugins.VerifyChecksum() {
 		return fmt.Errorf("cni-plugins: %w", artifact.NewChecksumError(cniPlugins))
+	}
+	if err = tracker.Add(artifact.CniPlugins); err != nil {
+		return err
 	}
 
 	if err := artifact.InstallTarGz(BinPath, TgzPath); err != nil {

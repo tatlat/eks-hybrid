@@ -20,7 +20,7 @@ func InstallFile(dst string, src io.Reader, perms fs.FileMode) error {
 		return err
 	}
 
-	fh, err := os.OpenFile(dst, os.O_CREATE|os.O_EXCL|os.O_RDWR, perms)
+	fh, err := os.OpenFile(dst, os.O_CREATE|os.O_RDWR|os.O_TRUNC, perms)
 	if err != nil {
 		return err
 	}
@@ -32,6 +32,9 @@ func InstallFile(dst string, src io.Reader, perms fs.FileMode) error {
 
 // InstallTarGz untars the src file into the dst directory and deletes the src tgz file
 func InstallTarGz(dst string, src string) error {
+	if err := os.RemoveAll(dst); err != nil {
+		return err
+	}
 	if err := os.MkdirAll(dst, DefaultDirPerms); err != nil {
 		return err
 	}

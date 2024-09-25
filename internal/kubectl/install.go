@@ -28,12 +28,12 @@ func Install(ctx context.Context, tracker *tracker.Tracker, src Source) error {
 	if err := artifact.InstallFile(BinPath, kubectl, 0755); err != nil {
 		return fmt.Errorf("kubectl: %w", err)
 	}
-	if err = tracker.Add(artifact.Kubectl); err != nil {
-		return err
-	}
 
 	if !kubectl.VerifyChecksum() {
 		return fmt.Errorf("kubectl: %w", artifact.NewChecksumError(kubectl))
+	}
+	if err = tracker.Add(artifact.Kubectl); err != nil {
+		return err
 	}
 
 	return nil

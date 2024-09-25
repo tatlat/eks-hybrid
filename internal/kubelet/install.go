@@ -39,12 +39,12 @@ func Install(ctx context.Context, tracker *tracker.Tracker, src Source) error {
 	if err := artifact.InstallFile(BinPath, kubelet, 0755); err != nil {
 		return fmt.Errorf("kubelet: %w", err)
 	}
-	if err = tracker.Add(artifact.Kubelet); err != nil {
-		return err
-	}
 
 	if !kubelet.VerifyChecksum() {
 		return fmt.Errorf("kubelet: %w", artifact.NewChecksumError(kubelet))
+	}
+	if err = tracker.Add(artifact.Kubelet); err != nil {
+		return err
 	}
 
 	buf := bytes.NewBuffer(kubeletUnitFile)
