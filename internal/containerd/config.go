@@ -9,7 +9,6 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/aws/eks-hybrid/internal/api"
-	"github.com/aws/eks-hybrid/internal/daemon"
 	"github.com/aws/eks-hybrid/internal/util"
 )
 
@@ -21,8 +20,6 @@ const (
 	containerdConfigImportDir         = "/etc/containerd/config.d"
 	containerdKernelModulesConfigFile = "/etc/modules-load.d/containerd.conf"
 	containerdConfigPerm              = 0644
-
-	kernelModulesSystemdUnit = "systemd-modules-load"
 )
 
 var (
@@ -67,9 +64,6 @@ func generateContainerdConfig(cfg *api.NodeConfig) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func writeContainerdKernelModulesConfig(daemonManager daemon.DaemonManager) error {
-	if err := util.WriteFileWithDir(containerdKernelModulesConfigFile, []byte(containerdKernelModulesFileData), containerdConfigPerm); err != nil {
-		return err
-	}
-	return daemonManager.RestartDaemon(kernelModulesSystemdUnit)
+func writeContainerdKernelModulesConfig() error {
+	return util.WriteFileWithDir(containerdKernelModulesConfigFile, []byte(containerdKernelModulesFileData), containerdConfigPerm)
 }

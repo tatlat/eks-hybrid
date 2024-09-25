@@ -28,12 +28,14 @@ func NewUpgradeCommand() cli.Command {
 	fc := flaggy.NewSubcommand("upgrade")
 	fc.Description = "Upgrade components installed using the install sub-command"
 	fc.AddPositionalValue(&cmd.kubernetesVersion, "KUBERNETES_VERSION", 1, true, "The major[.minor[.patch]] version of Kubernetes to install")
+	fc.StringSlice(&cmd.skipPhases, "s", "skip", "phases of the bootstrap you want to skip")
 	cmd.flaggy = fc
 	return &cmd
 }
 
 type command struct {
 	flaggy            *flaggy.Subcommand
+	skipPhases        []string
 	kubernetesVersion string
 }
 
@@ -144,5 +146,5 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return err
 	}
 
-	return initialize.Init(nodeProvider)
+	return initialize.Init(nodeProvider, c.skipPhases)
 }

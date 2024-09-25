@@ -6,7 +6,10 @@ import (
 	"github.com/aws/eks-hybrid/internal/daemon"
 )
 
-const ContainerdDaemonName = "containerd"
+const (
+	ContainerdDaemonName     = "containerd"
+	kernelModulesSystemdUnit = "systemd-modules-load"
+)
 
 var _ daemon.Daemon = &containerd{}
 
@@ -28,13 +31,16 @@ func (cd *containerd) Configure() error {
 	if err := writeContainerdConfig(cd.nodeConfig); err != nil {
 		return err
 	}
-	return writeContainerdKernelModulesConfig(cd.daemonManager)
+	return writeContainerdKernelModulesConfig()
 }
 
 // EnsureRunning ensures containerd is running with the written configuration
 // With some installations, containerd daemon is already in an running state
 // This enables the daemon and restarts or starts depending on the state of daemon
 func (cd *containerd) EnsureRunning() error {
+	if err := cd.daemonManager.RestartDaemon(kernelModulesSystemdUnit); err != nil {
+		return err
+	}
 	err := cd.daemonManager.EnableDaemon(ContainerdDaemonName)
 	if err != nil {
 		return err

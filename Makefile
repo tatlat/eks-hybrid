@@ -80,8 +80,8 @@ coverage: test
 	go tool cover -html=$(COVERAGEFILE)
 
 .PHONY: test-e2e
-test-e2e: build ## Run e2e tests.
-	test/e2e/run.sh
+test-integration: ## Run integration tests.
+	test/integration/run.sh
 
 
 ##@ Build
