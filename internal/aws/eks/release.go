@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/pkg/errors"
 	"golang.org/x/mod/semver"
@@ -71,21 +72,28 @@ func FindLatestRelease(ctx context.Context, version string) (PatchRelease, error
 	patch, hasPatchVersion := strings.CutPrefix(version, majorMinorVersion+".")
 
 	// Find the patch release
+	var matchedPatchReleases []PatchRelease
 	for _, supportedRelease := range manifest.SupportedReleases {
 		if supportedRelease.MajorMinorVersion == majorMinorVersion {
 			for _, release := range supportedRelease.PatchReleases {
 				// Check if patch version was provided in the input
 				if hasPatchVersion {
 					if release.PatchVersion == patch {
-						return release, nil
+						matchedPatchReleases = append(matchedPatchReleases, release)
 					}
 				} else {
 					if release.PatchVersion == supportedRelease.LatestPatchVersion {
-						return release, nil
+						matchedPatchReleases = append(matchedPatchReleases, release)
 					}
 				}
 			}
 		}
+	}
+
+	if len(matchedPatchReleases) == 1 {
+		return matchedPatchReleases[0], nil
+	} else if len(matchedPatchReleases) > 1 {
+		return getLatestDatePatchRelease(matchedPatchReleases)
 	}
 
 	// If patch version was provided in the input and associated release was not found, throw an error
@@ -108,6 +116,28 @@ func getReleaseManifest(ctx context.Context) (*Manifest, error) {
 		return nil, errors.Wrap(err, "invalid yaml data in release manifest")
 	}
 	return &manifest, nil
+}
+
+func getLatestDatePatchRelease(patchReleases []PatchRelease) (PatchRelease, error) {
+	if len(patchReleases) == 0 {
+		return PatchRelease{}, fmt.Errorf("input semver did not match with any available releases")
+	}
+	dateLayout := "2006-01-02"
+	latestRelease := patchReleases[0]
+	for _, release := range patchReleases {
+		latestReleaseDate, err := time.Parse(dateLayout, latestRelease.ReleaseDate)
+		if err != nil {
+			return PatchRelease{}, err
+		}
+		parsedReleaseDate, err := time.Parse(dateLayout, release.ReleaseDate)
+		if err != nil {
+			return PatchRelease{}, err
+		}
+		if parsedReleaseDate.After(latestReleaseDate) {
+			latestRelease = release
+		}
+	}
+	return latestRelease, nil
 }
 
 // GetKubelet satisfies kubelet.Source.
