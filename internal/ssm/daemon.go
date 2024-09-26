@@ -1,6 +1,7 @@
 package ssm
 
 import (
+	"fmt"
 	"os"
 	"regexp"
 
@@ -16,6 +17,7 @@ var (
 	SsmDaemonName               = "amazon-ssm-agent"
 
 	checksumMismatchErrorRegex = regexp.MustCompile(`.*checksum mismatch with latest ssm-setup-cli*`)
+	activationErrorRegex       = regexp.MustCompile(`.*ActivationExpired*`)
 )
 
 type ssm struct {
@@ -57,6 +59,8 @@ func (s *ssm) Configure() error {
 				return err
 			}
 			return s.registerMachine(s.nodeConfig, registerOverride)
+		} else if match := activationErrorRegex.MatchString(err.Error()); match {
+			return fmt.Errorf("SSM activation expired. Please use a valid activation")
 		}
 		return err
 	}
