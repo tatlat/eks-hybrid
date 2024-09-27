@@ -47,6 +47,30 @@ function assert::file-contains() {
   fi
 }
 
+function assert::path-exists() {
+  if [ "$#" -ne 1 ]; then
+    echo "Usage: assert::path-exists INPUT_PATH"
+    exit 1
+  fi
+  local INPUT_PATH=$1
+  if ! [[ -e "$INPUT_PATH" ]]; then
+      echo "Path $INPUT_PATH does not exist"
+      exit 1
+  fi
+}
+
+function assert::path-not-exist() {
+  if [ "$#" -ne 1 ]; then
+    echo "Usage: assert::path-not-exist INPUT_PATH"
+    exit 1
+  fi
+  local INPUT_PATH=$1
+  if [ -e "$INPUT_PATH" ]; then
+      echo "Path $INPUT_PATH exists!"
+      exit 1
+  fi
+}
+
 function assert::file-not-contains() {
   if [ "$#" -ne 2 ]; then
     echo "Usage: assert::file-not-contains FILE PATTERN"
