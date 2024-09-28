@@ -99,6 +99,46 @@ function assert::is-substring() {
   fi
 }
 
+function assert::swap-disabled() {
+  if [ "$#" -ne 0 ]; then
+    echo "Usage: assert::swap-disabled"
+    exit 1
+  fi
+  if [[ $(swapon --show) ]]; then
+    echo "Swap is not disabled!"
+    exit 1
+  fi
+}
+
+function assert::swap-disabled-validate-path() {
+  if [ "$#" -ne 0 ]; then
+    echo "Usage: assert::swap-disabled-validate-path"
+    exit 1
+  fi
+  # read /proc/swaps file and skip the first line, check if swapfile path still exists,
+  # (1) If swap is disabled, then swap will not appear in /proc/swaps
+  # (2) If the filepath of a swap does not exist, then the swap invalid, and will be treated as if it has been disabled
+  tail -n +2 /proc/swaps | while IFS=$'\t' read -r filename type size used priority; do
+    # echo "First Var is $key - Remaining Line Contents Are $value"
+    if [ -e "$filename" ]; then
+      echo "Swap is not disabled for swapfile $filename"
+      exit 1
+    fi
+  done
+}
+
+function assert::allowed-by-firewalld() {
+  if [ "$#" -ne 2 ]; then
+    echo "Usage: assert::allowed-by-firewalld [port(range)] [protocol]"
+    exit 1
+  fi
+  local PATTERN="$1/$2"
+  if ! [[ $(firewall-cmd --list-ports | grep $PATTERN) ]]; then
+    echo "Port $PATTERN is not allowed by firewalld!"
+    exit 1
+  fi
+}
+
 function mock::kubelet() {
   if [ "$#" -ne 1 ]; then
     echo "Usage: mock::kubelet VERSION"

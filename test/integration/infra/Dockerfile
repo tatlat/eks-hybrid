@@ -14,7 +14,7 @@ RUN mv _bin/nodeadm /nodeadm
 
 FROM public.ecr.aws/amazonlinux/amazonlinux:2023
 RUN dnf -y update && \
-    dnf -y install systemd containerd jq python3 awscli tar && \
+    dnf -y install systemd containerd jq python3 awscli tar procps && \
     dnf clean all
 RUN curl -O https://bootstrap.pypa.io/get-pip.py && \
     python3 get-pip.py && \

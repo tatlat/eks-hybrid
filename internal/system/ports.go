@@ -2,6 +2,7 @@ package system
 
 import (
 	"fmt"
+
 	"go.uber.org/zap"
 
 	"github.com/aws/eks-hybrid/internal/api"
@@ -58,7 +59,7 @@ func (s *portsAspect) Setup() error {
 			return err
 		}
 		s.logger.Info("Allowing port on firewall", zap.Reflect("node-port-services",
-			fmt.Sprintf("%s-%s", nodePortStartRangePort, nodePortStartRangePort)))
+			fmt.Sprintf("%s-%s", nodePortStartRangePort, nodePortEndRangePort)))
 		if err = s.firewallManager.AllowTcpPortRange(nodePortStartRangePort, nodePortEndRangePort); err != nil {
 			return err
 		}
