@@ -80,7 +80,7 @@ coverage: test
 	go test -coverprofile=$(COVERAGEFILE) ./...
 	go tool cover -html=$(COVERAGEFILE)
 
-.PHONY: test-e2e
+.PHONY: test-integration
 test-integration: ## Run integration tests.
 	test/integration/run.sh
 
