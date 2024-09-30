@@ -83,7 +83,7 @@ func Init(node nodeprovider.NodeProvider, skipPhases []string) error {
 		if err := aspect.Setup(); err != nil {
 			return err
 		}
-		node.Logger().Info("Set up system aspect", nameField)
+		node.Logger().Info("Finished setting up system aspect", nameField)
 	}
 
 	if !slices.Contains(skipPhases, preprocessPhase) {
