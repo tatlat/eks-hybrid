@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -43,6 +44,18 @@ type NetworkConfig struct {
 	PublicSubnetCidr  string `yaml:"publicSubnetCidr"`
 	PodCidr           string `yaml:"podCidr"`
 }
+
+type ResourceConfig struct {
+	ClusterName        string   `json:"ClusterName"`
+	ClusterVpcID       string   `json:"ClusterVpcID"`
+	HybridVpcID        string   `json:"HybridVpcID"`
+	PeeringConnID      string   `json:"PeeringConnID"`
+	RoleArn            string   `json:"RoleArn"`
+	KubernetesVersions []string `json:"KubernetesVersions"`
+	ClusterRegion      string   `json:"ClusterRegion"`
+}
+
+const outputDir = "/tmp/eks-hybrid"
 
 var awsNodePatchContent = `
 spec:
@@ -178,7 +191,7 @@ func (t *TestRunner) CreateResources() error {
 		}
 
 		// Save kubeconfig file for the created cluster under /tmp/eks-hybrid/CULSTERNAME-kubeconfig dir to use it late in e2e test run
-		kubeconfigFilePath := filepath.Join("/tmp/eks-hybrid", fmt.Sprintf("%s.kubeconfig", clusterName))
+		kubeconfigFilePath := filepath.Join(outputDir, fmt.Sprintf("%s.kubeconfig", clusterName))
 		err = saveKubeconfig(clusterName, t.Spec.ClusterRegion, kubeconfigFilePath)
 		if err != nil {
 			return fmt.Errorf("error saving kubeconfig for %s EKS cluster: %v", kubernetesVersion, err)
@@ -199,6 +212,12 @@ func (t *TestRunner) CreateResources() error {
 		if err != nil {
 			return fmt.Errorf("error applying aws-auth ConfigMap for %s EKS cluster: %v", kubernetesVersion, err)
 		}
+	}
+
+	// After resources are created, write the config to a file to consume it during cleanup resources
+	configFilePath := fmt.Sprintf("%s/setup-resources-output.json", outputDir)
+	if err := config.writeConfigToFile(configFilePath); err != nil {
+		return fmt.Errorf("failed to write config to file: %v", err)
 	}
 
 	return nil
@@ -242,5 +261,34 @@ func applyAwsAuth(kubeconfig string) error {
 	}
 
 	fmt.Println("Successfully applied aws-auth ConfigMap with empty mapRoles")
+	return nil
+}
+
+func (config *ClusterConfig) writeConfigToFile(filePath string) error {
+	resourceConfig := ResourceConfig{
+		ClusterName:        config.ClusterName,
+		ClusterVpcID:       config.ClusterVpcID,
+		HybridVpcID:        config.HybridVpcID,
+		PeeringConnID:      config.PeeringConnID,
+		RoleArn:            config.RoleArn,
+		KubernetesVersions: config.KubernetesVersions,
+		ClusterRegion:      config.ClusterRegion,
+	}
+
+	// Create or overwrite the config file
+	file, err := os.Create(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to create config file: %v", err)
+	}
+	defer file.Close()
+
+	// Write the config data in JSON format to the file
+	encoder := json.NewEncoder(file)
+	encoder.SetIndent("", "  ")
+	if err := encoder.Encode(resourceConfig); err != nil {
+		return fmt.Errorf("failed to write config data to file: %v", err)
+	}
+
+	fmt.Printf("Configuration data written to %s\n", filePath)
 	return nil
 }
