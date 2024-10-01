@@ -24,7 +24,7 @@ const eksClusterPolicyArn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
 
 func (t *TestRunner) createEKSClusterRole() error {
 	svc := iam.New(t.Session)
-	roleName := fmt.Sprintf("%s-eks-role", t.Spec.ClusterName)
+	roleName := getRoleName(t.Spec.ClusterName)
 
 	// Create IAM role
 	role, err := svc.CreateRole(&iam.CreateRoleInput{
@@ -46,4 +46,35 @@ func (t *TestRunner) createEKSClusterRole() error {
 	t.Status.RoleArn = *role.Role.Arn
 	fmt.Printf("Successfully created IAM role: %s\n", *role.Role.Arn)
 	return nil
+}
+
+// deleteIamRoles deletes the IAM roles used for the cluster.
+func (t *TestRunner) deleteIamRole() error {
+	roleName := getRoleName(t.Spec.ClusterName)
+	svc := iam.New(t.Session)
+
+	_, err := svc.DetachRolePolicy(&iam.DetachRolePolicyInput{
+		RoleName:  aws.String(roleName),
+		PolicyArn: aws.String(eksClusterPolicyArn),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to detach AmazonEKSClusterPolicy from role %s: %v", roleName, err)
+	}
+
+	fmt.Printf("Detached AmazonEKSClusterPolicy from role %s\n", roleName)
+
+	_, err = svc.DeleteRole(&iam.DeleteRoleInput{
+		RoleName: aws.String(roleName),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to delete role %s: %v", roleName, err)
+	}
+
+	fmt.Printf("Deleted IAM role: %s\n", roleName)
+
+	return nil
+}
+
+func getRoleName(name string) string {
+	return fmt.Sprintf("%s-eks-hybrid-role", name)
 }

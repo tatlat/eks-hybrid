@@ -24,7 +24,6 @@ type TestResourceSpec struct {
 	ClusterRegion      string        `yaml:"clusterRegion"`
 	ClusterNetwork     NetworkConfig `yaml:"clusterNetwork"`
 	HybridNetwork      NetworkConfig `yaml:"hybridNetwork"`
-	HybridPodCidr      string        `yaml:"hybridPodCidr"`
 	KubernetesVersions []string      `yaml:"kubernetesVersions"`
 	Cni                []string      `yaml:"cni"`
 }
@@ -81,34 +80,26 @@ data:
   mapRoles: |
 `
 
-func newAWSSession(region string) (*session.Session, error) {
+func (t *TestRunner) NewAWSSession() (*session.Session, error) {
 	// Create a new session using shared credentials or environment variables
 	sess, err := session.NewSession(&aws.Config{
-		Region: aws.String(region),
+		Region: aws.String(t.Spec.ClusterRegion),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create new AWS session: %v", err)
 	}
 
 	// Optionally, you can log the region for debugging purposes
-	fmt.Printf("AWS session initialized in region: %s\n", region)
+	fmt.Printf("AWS session initialized in region: %s\n", t.Spec.ClusterRegion)
 
 	return sess, nil
 }
 
 func (t *TestRunner) CreateResources() error {
-	// Create AWS session
-	session, err := newAWSSession(t.Spec.ClusterRegion)
-	if err != nil {
-		return fmt.Errorf("failed to create AWS session: %v", err)
-	}
-
-	t.Session = session
-
 	// Temporary code, remove this when AWS CLI supports creating hybrid EKS cluster
 	awsPatchLocation := "s3://eks-hybrid-beta/v0.0.0-beta.1/awscli/aws-eks-cli-beta.json"
 	localFilePath := "/tmp/awsclipatch"
-	err = patchEksServiceModel(awsPatchLocation, localFilePath)
+	err := patchEksServiceModel(awsPatchLocation, localFilePath)
 	if err != nil {
 		return fmt.Errorf("failed to download aws cli patch that contains hybrid nodes API: %v", err)
 	}
@@ -148,6 +139,7 @@ func (t *TestRunner) CreateResources() error {
 		return fmt.Errorf("error creating EC2 hybrid nodes VPC: %v", err)
 	}
 	t.Status.HybridVpcID = hybridNodesVpcConfig.vpcID
+	t.Status.HybridSubnetIDs = hybridNodesVpcConfig.subnetIDs
 
 	// Create VPC Peering Connection between the cluster VPC and EC2 hybrid nodes VPC
 	fmt.Println("Creating VPC peering connection...")
@@ -166,7 +158,7 @@ func (t *TestRunner) CreateResources() error {
 	// Create the EKS Cluster using the IAM role and VPC
 	for _, kubernetesVersion := range t.Spec.KubernetesVersions {
 		fmt.Printf("Creating EKS cluster with the kubernetes version %s..", kubernetesVersion)
-		clusterName := fmt.Sprintf("%s-%s", t.Spec.ClusterName, strings.Replace(kubernetesVersion, ".", "-", -1))
+		clusterName := clusterName(t.Spec.ClusterName, kubernetesVersion)
 		err := t.createEKSCluster(clusterName, kubernetesVersion)
 		if err != nil {
 			return fmt.Errorf("error creating %s EKS cluster: %v", kubernetesVersion, err)
@@ -211,6 +203,10 @@ func (t *TestRunner) CreateResources() error {
 	}
 
 	return nil
+}
+
+func clusterName(clusterName, kubernetesVersion string) string {
+	return fmt.Sprintf("%s-%s", clusterName, replaceDotsWithDashes(kubernetesVersion))
 }
 
 // saveKubeconfig saves the kubeconfig for the cluster
@@ -265,4 +261,9 @@ func (t *TestRunner) saveSetupConfigAsYAML(outputFile string) error {
 
 	fmt.Printf("Successfully saved resource configuration to %s\n", outputFile)
 	return nil
+}
+
+// replaceDotsWithDashes replaces dots in the Kubernetes version with dashes
+func replaceDotsWithDashes(version string) string {
+	return strings.Replace(version, ".", "-", -1)
 }

@@ -198,3 +198,65 @@ func (t *TestRunner) updateRouteTablesForPeering() error {
 	fmt.Println("Routes updated for VPC peering connection")
 	return nil
 }
+
+// deleteVpcPeering deletes the VPC peering connections.
+func (t *TestRunner) deleteVpcPeering() error {
+	fmt.Println("deleting VPC peering connection...")
+
+	svc := ec2.New(t.Session)
+	input := &ec2.DeleteVpcPeeringConnectionInput{
+		VpcPeeringConnectionId: aws.String(t.Status.PeeringConnID),
+	}
+
+	_, err := svc.DeleteVpcPeeringConnection(input)
+	if err != nil {
+		return fmt.Errorf("failed to delete VPC peering connection: %v", err)
+	}
+
+	fmt.Println("successfully deleted VPC peering connection")
+	return nil
+}
+
+// deleteVpcs deletes the VPC and their associated subnets.
+func (t *TestRunner) deleteVpc(vpc vpcConfig) error {
+	fmt.Printf("Deleting VPC %s...\n", vpc.vpcID)
+
+	svc := ec2.New(t.Session)
+	// Delete subnets in the VPC
+	for _, subnetID := range vpc.subnetIDs {
+		err := t.deleteSubnet(subnetID)
+		if err != nil {
+			return fmt.Errorf("failed to delete subnet %s: %v", subnetID, err)
+		}
+	}
+
+	// Delete the VPC
+	input := &ec2.DeleteVpcInput{
+		VpcId: aws.String(vpc.vpcID),
+	}
+
+	_, err := svc.DeleteVpc(input)
+	if err != nil {
+		return fmt.Errorf("failed to delete VPC: %v", err)
+	}
+
+	fmt.Printf("Successfully deleted VPC %s\n", vpc.vpcID)
+	return nil
+}
+
+func (t *TestRunner) deleteSubnet(subnetID string) error {
+	fmt.Printf("Deleting subnet %s...\n", subnetID)
+
+	svc := ec2.New(t.Session)
+	input := &ec2.DeleteSubnetInput{
+		SubnetId: aws.String(subnetID),
+	}
+
+	_, err := svc.DeleteSubnet(input)
+	if err != nil {
+		return fmt.Errorf("failed to delete subnet: %v", err)
+	}
+
+	fmt.Printf("Successfully deleted subnet %s\n", subnetID)
+	return nil
+}
