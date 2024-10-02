@@ -86,6 +86,19 @@ function assert::file-not-contains() {
   fi
 }
 
+function assert::is-substring() {
+  if [ "$#" -ne 2 ]; then
+    echo "Usage: assert::is-substring STRING PATTERN"
+    exit 1
+  fi
+  local STRING=$1
+  local PATTERN=$2
+  if ! [[ $STRING == *"$PATTERN"* ]]; then
+    echo "$STRING does not contain substring $PATTERN"
+    exit 1
+  fi
+}
+
 function mock::kubelet() {
   if [ "$#" -ne 1 ]; then
     echo "Usage: mock::kubelet VERSION"
