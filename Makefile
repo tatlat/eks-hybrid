@@ -179,4 +179,4 @@ e2e-tests-binary:
 
 .PHONY: e2e-setup
 e2e-setup:
-	go build -o _bin/e2e-test-runner ./cmd/nodeadm/e2e-test-runner/main.go 
+	go build -o _bin/e2e-test-runner ./cmd/e2e-test-runner/main.go 

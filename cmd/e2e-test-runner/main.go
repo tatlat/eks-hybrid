@@ -1,11 +1,12 @@
 package main
 
 import (
-	cleanup "github.com/aws/eks-hybrid/cmd/nodeadm/e2e-test-runner/cmd/cleanup"
-	setup "github.com/aws/eks-hybrid/cmd/nodeadm/e2e-test-runner/cmd/setup"
-	"github.com/aws/eks-hybrid/internal/cli"
 	"github.com/integrii/flaggy"
 	"go.uber.org/zap"
+
+	cleanup "github.com/aws/eks-hybrid/cmd/e2e-test-runner/cleanup"
+	setup "github.com/aws/eks-hybrid/cmd/e2e-test-runner/setup"
+	"github.com/aws/eks-hybrid/internal/cli"
 )
 
 func main() {

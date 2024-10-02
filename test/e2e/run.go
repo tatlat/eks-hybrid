@@ -8,28 +8,40 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 )
 
-type ClusterConfig struct {
-	Session                  *session.Session
-	ClusterName              string
-	ClusterVpcCidr           string
-	ClusterPrivateSubnetCidr string
-	ClusterPublicSubnetCidr  string
-	ClusterRegion            string
-	PatchLocation            string
-	HybridNodeCidr           string
-	HybridPubicSubnetCidr    string
-	HybridPrivateSubnetCidr  string
-	HybridPodCidr            string
-	KubernetesVersions       []string
-	Networking               []string
-	RoleArn                  string
-	ClusterVpcID             string
-	ClusterSubnetIDs         []string
-	HybridVpcID              string
-	PeeringConnID            string
+type TestRunner struct {
+	Session *session.Session
+	Spec    TestResourceSpec
+	Status  TestResourceStatus
+}
+
+type TestResourceSpec struct {
+	ClusterName        string        `yaml:"clusterName"`
+	ClusterRegion      string        `yaml:"clusterRegion"`
+	ClusterNetwork     NetworkConfig `yaml:"clusterNetwork"`
+	HybridNetwork      NetworkConfig `yaml:"hybridNetwork"`
+	HybridPodCidr      string        `yaml:"hybridPodCidr"`
+	KubernetesVersions []string      `yaml:"kubernetesVersions"`
+	Cni                []string      `yaml:"cni"`
+}
+
+type TestResourceStatus struct {
+	ClusterVpcID     string   `yaml:"clusterVpcID"`
+	ClusterSubnetIDs []string `yaml:"clusterSubnetIDs"`
+	HybridVpcID      string   `yaml:"hybridVpcID"`
+	HybridSubnetIDs  []string `yaml:"hybridSubnetIDs"`
+	PeeringConnID    string   `yaml:"peeringConnID"`
+	RoleArn          string   `yaml:"roleArn"`
+}
+
+type NetworkConfig struct {
+	VpcCidr           string `yaml:"vpcCidr"`
+	PrivateSubnetCidr string `yaml:"privateSubnetCidr"`
+	PublicSubnetCidr  string `yaml:"publicSubnetCidr"`
+	PodCidr           string `yaml:"podCidr"`
 }
 
 var awsNodePatchContent = `
@@ -66,70 +78,93 @@ data:
   mapRoles: |
 `
 
-func CreateResources(config *ClusterConfig) error {
+func newAWSSession(region string) (*session.Session, error) {
+	// Create a new session using shared credentials or environment variables
+	sess, err := session.NewSession(&aws.Config{
+		Region: aws.String(region),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create new AWS session: %v", err)
+	}
+
+	// Optionally, you can log the region for debugging purposes
+	fmt.Printf("AWS session initialized in region: %s\n", region)
+
+	return sess, nil
+}
+
+func (t *TestRunner) CreateResources() error {
+	// Create AWS session
+	session, err := newAWSSession(t.Spec.ClusterRegion)
+	if err != nil {
+		return fmt.Errorf("failed to create AWS session: %v", err)
+	}
+
+	t.Session = session
+
 	// Temporary code, remove this when AWS CLI supports creating hybrid EKS cluster
 	awsPatchLocation := "s3://eks-hybrid-beta/v0.0.0-beta.1/awscli/aws-eks-cli-beta.json"
 	localFilePath := "/tmp/awsclipatch"
-	err := patchEksServiceModel(awsPatchLocation, localFilePath)
+	err = patchEksServiceModel(awsPatchLocation, localFilePath)
 	if err != nil {
 		return fmt.Errorf("failed to download aws cli patch that contains hybrid nodes API: %v", err)
 	}
 
 	// Create EKS cluster role
 	fmt.Println("Creating EKS cluster IAM Role...")
-	config.RoleArn, err = config.createEKSClusterRole()
+	err = t.createEKSClusterRole()
 	if err != nil {
 		return fmt.Errorf("error creating IAM role: %v", err)
 	}
 
 	// Create EKS cluster VPC
 	clusterVpcParam := vpcSubnetParams{
-		vpcName:           fmt.Sprintf("%s-vpc", config.ClusterName),
-		vpcCidr:           config.ClusterVpcCidr,
-		publicSubnetCidr:  config.ClusterPublicSubnetCidr,
-		privateSubnetCidr: config.ClusterPrivateSubnetCidr,
+		vpcName:           fmt.Sprintf("%s-vpc", t.Spec.ClusterName),
+		vpcCidr:           t.Spec.ClusterNetwork.VpcCidr,
+		publicSubnetCidr:  t.Spec.ClusterNetwork.PublicSubnetCidr,
+		privateSubnetCidr: t.Spec.ClusterNetwork.PrivateSubnetCidr,
 	}
 	fmt.Println("Creating EKS cluster VPC...")
-	clusterVpcConfig, err := config.createVPC(clusterVpcParam)
+	clusterVpcConfig, err := t.createVPC(clusterVpcParam)
 	if err != nil {
 		return fmt.Errorf("error creating cluster VPC: %v", err)
 	}
-	config.ClusterVpcID = clusterVpcConfig.vpcID
-	config.ClusterSubnetIDs = clusterVpcConfig.subnetIDs
+	t.Status.ClusterVpcID = clusterVpcConfig.vpcID
+	t.Status.ClusterSubnetIDs = clusterVpcConfig.subnetIDs
 
 	// Create hybrid nodes VPC
 	hybridNodesVpcParam := vpcSubnetParams{
-		vpcName:           fmt.Sprintf("%s-hybrid-node-vpc", config.ClusterName),
-		vpcCidr:           config.HybridNodeCidr,
-		publicSubnetCidr:  config.HybridPubicSubnetCidr,
-		privateSubnetCidr: config.HybridPrivateSubnetCidr,
+		vpcName:           fmt.Sprintf("%s-hybrid-node-vpc", t.Spec.ClusterName),
+		vpcCidr:           t.Spec.HybridNetwork.VpcCidr,
+		publicSubnetCidr:  t.Spec.HybridNetwork.PublicSubnetCidr,
+		privateSubnetCidr: t.Spec.HybridNetwork.PrivateSubnetCidr,
 	}
 	fmt.Println("Creating EC2 hybrid nodes VPC...")
-	hybridNodesVpcConfig, err := config.createVPC(hybridNodesVpcParam)
+	hybridNodesVpcConfig, err := t.createVPC(hybridNodesVpcParam)
 	if err != nil {
 		return fmt.Errorf("error creating EC2 hybrid nodes VPC: %v", err)
 	}
-	config.HybridVpcID = hybridNodesVpcConfig.vpcID
+	t.Status.HybridVpcID = hybridNodesVpcConfig.vpcID
 
 	// Create VPC Peering Connection between the cluster VPC and EC2 hybrid nodes VPC
 	fmt.Println("Creating VPC peering connection...")
-	config.PeeringConnID, err = config.createVPCPeering()
+	t.Status.PeeringConnID, err = t.createVPCPeering()
 	if err != nil {
 		return fmt.Errorf("error creating VPC peering connection: %v", err)
 	}
 
 	// Update route tables for peering connection
 	fmt.Println("Updating route tables for VPC peering...")
-	err = config.updateRouteTablesForPeering()
+	err = t.updateRouteTablesForPeering()
 	if err != nil {
 		return fmt.Errorf("error updating route tables: %v", err)
 	}
 
 	// Create the EKS Cluster using the IAM role and VPC
-	for _, kubernetesVersion := range config.KubernetesVersions {
+	for _, kubernetesVersion := range t.Spec.KubernetesVersions {
 		fmt.Printf("Creating EKS cluster with the kubernetes version %s..", kubernetesVersion)
-		clusterName := fmt.Sprintf("%s-%s", config.ClusterName, strings.Replace(kubernetesVersion, ".", "-", -1))
-		err := config.createEKSCluster(clusterName, kubernetesVersion)
+		clusterName := fmt.Sprintf("%s-%s", t.Spec.ClusterName, strings.Replace(kubernetesVersion, ".", "-", -1))
+		err := t.createEKSCluster(clusterName, kubernetesVersion)
 		if err != nil {
 			return fmt.Errorf("error creating %s EKS cluster: %v", kubernetesVersion, err)
 		}
@@ -137,14 +172,14 @@ func CreateResources(config *ClusterConfig) error {
 		fmt.Printf("Cluster creation of kubernetes version %s process started successfully..", kubernetesVersion)
 
 		// Wait for the cluster to be ready
-		err = config.waitForClusterCreation(clusterName)
+		err = t.waitForClusterCreation(clusterName)
 		if err != nil {
 			return fmt.Errorf("error while waiting for cluster creation: %v", err)
 		}
 
 		// Save kubeconfig file for the created cluster under /tmp/eks-hybrid/CULSTERNAME-kubeconfig dir to use it late in e2e test run
 		kubeconfigFilePath := filepath.Join("/tmp/eks-hybrid", fmt.Sprintf("%s.kubeconfig", clusterName))
-		err = saveKubeconfig(clusterName, config.ClusterRegion, kubeconfigFilePath)
+		err = saveKubeconfig(clusterName, t.Spec.ClusterRegion, kubeconfigFilePath)
 		if err != nil {
 			return fmt.Errorf("error saving kubeconfig for %s EKS cluster: %v", kubernetesVersion, err)
 		}

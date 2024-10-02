@@ -22,9 +22,9 @@ const assumeRolePolicyDocument = `{
 
 const eksClusterPolicyArn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
 
-func (config *ClusterConfig) createEKSClusterRole() (string, error) {
-	svc := iam.New(config.Session)
-	roleName := fmt.Sprintf("%s-eks-role", config.ClusterName)
+func (t *TestRunner) createEKSClusterRole() error {
+	svc := iam.New(t.Session)
+	roleName := fmt.Sprintf("%s-eks-role", t.Spec.ClusterName)
 
 	// Create IAM role
 	role, err := svc.CreateRole(&iam.CreateRoleInput{
@@ -32,7 +32,7 @@ func (config *ClusterConfig) createEKSClusterRole() (string, error) {
 		AssumeRolePolicyDocument: aws.String(assumeRolePolicyDocument),
 	})
 	if err != nil {
-		return "", fmt.Errorf("failed to create role: %v", err)
+		return fmt.Errorf("failed to create role: %v", err)
 	}
 
 	// Attach AmazonEKSClusterPolicy
@@ -41,9 +41,9 @@ func (config *ClusterConfig) createEKSClusterRole() (string, error) {
 		PolicyArn: aws.String(eksClusterPolicyArn),
 	})
 	if err != nil {
-		return "", fmt.Errorf("failed to attach policy: %v", err)
+		return fmt.Errorf("failed to attach policy: %v", err)
 	}
-
+	t.Status.RoleArn = *role.Role.Arn
 	fmt.Printf("Successfully created IAM role: %s\n", *role.Role.Arn)
-	return *role.Role.Arn, nil
+	return nil
 }
