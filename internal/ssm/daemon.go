@@ -3,6 +3,7 @@ package ssm
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 
 	"go.uber.org/zap"
@@ -18,6 +19,9 @@ var (
 
 	checksumMismatchErrorRegex = regexp.MustCompile(`.*checksum mismatch with latest ssm-setup-cli*`)
 	activationErrorRegex       = regexp.MustCompile(`.*ActivationExpired*`)
+	defaultAWSConfigPath       = "/root/.aws"
+	eksHybridPath              = "/eks-hybrid"
+	symlinkedAWSConfigPath     = filepath.Join(eksHybridPath, ".aws")
 )
 
 type ssm struct {
@@ -76,6 +80,24 @@ func (s *ssm) EnsureRunning() error {
 }
 
 func (s *ssm) PostLaunch() error {
+	if s.nodeConfig.Spec.Hybrid.EnableCredentialsFile {
+		s.logger.Info("Creating symlink for AWS credentials", zap.String("Symoblic link path", symlinkedAWSConfigPath))
+		err := os.MkdirAll(filepath.Dir(eksHybridPath), 0755)
+		if err != nil {
+			return fmt.Errorf("creating path: %v", err)
+		}
+
+		err = os.RemoveAll(symlinkedAWSConfigPath)
+		if err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("removing directory %s: %v", symlinkedAWSConfigPath, err)
+		}
+
+		err = os.Symlink(defaultAWSConfigPath, symlinkedAWSConfigPath)
+		if err != nil {
+			return fmt.Errorf("creating symlink: %v", err)
+		}
+	}
+
 	return nil
 }
 

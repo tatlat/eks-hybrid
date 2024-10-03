@@ -1,9 +1,10 @@
 package uninstall
 
 import (
+	"os"
+
 	"github.com/integrii/flaggy"
 	"go.uber.org/zap"
-	"os"
 
 	"github.com/aws/eks-hybrid/internal/cli"
 	"github.com/aws/eks-hybrid/internal/cni"
@@ -92,6 +93,15 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		}
 		if err := ssm.Uninstall(packageManager); err != nil {
 			return err
+		}
+	}
+	if artifacts.IamRolesAnywhere {
+		log.Info("Removing aws_signing_helper_update daemon...")
+		if status, err := daemonManager.GetDaemonStatus(iamrolesanywhere.DaemonName); err == nil || status != daemon.DaemonStatusUnknown {
+			if err = daemonManager.StopDaemon(iamrolesanywhere.DaemonName); err != nil {
+				log.Info("Stopping aws_signing_helper_update daemon...")
+				return err
+			}
 		}
 	}
 	if artifacts.Containerd != string(containerd.ContainerdSourceNone) {

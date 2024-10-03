@@ -84,6 +84,11 @@ func Uninstall(pkgSource PkgSource) error {
 		return err
 	}
 
+	err = os.RemoveAll(symlinkedAWSConfigPath)
+	if err != nil {
+		return fmt.Errorf("removing directory %s: %v", symlinkedAWSConfigPath, err)
+	}
+
 	return os.RemoveAll(installerPath)
 }
 
