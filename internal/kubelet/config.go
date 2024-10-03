@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"net/url"
 	"os"
@@ -295,6 +296,51 @@ func (ksc *kubeletConfig) withDefaultReservedResources(cfg *api.NodeConfig) {
 	}
 }
 
+// withHybridReservedResources reserves cpu and memory according to below computation
+// for kubelet in order for safe cluster management operation
+func (ksc *kubeletConfig) withHybridReservedResources() error {
+	ksc.SystemReservedCgroup = ptr.String("/system")
+	ksc.KubeReservedCgroup = ptr.String("/runtime")
+
+	// calculate kube reserved memory
+	totalMemory, err := system.GetMachineMemoryCapacity()
+	if err != nil {
+		return err
+	}
+	// Convert bytes to GiB
+	totalMemoryGiB := totalMemory / (1024 * 1024 * 1024)
+	var reserveMemoryString string
+
+	// For memory resources, nodeadm will reserve according to the following table for hybrid nodes
+	// 255 MiB when total memory is < 1GiB
+	// 25% of first 4GiB of total memory
+	// 20% of next 4GiB of total memory
+	// 10% of next 8 GiB of total memory
+	// 6% of next 112 GiB of total memory
+	// 2% of remaining total memory
+	switch {
+	case totalMemoryGiB < 1:
+		reserveMemoryString = fmt.Sprintf("%dMi", 255)
+	case totalMemoryGiB < 4:
+		reserveMemoryString = fmt.Sprintf("%dGi", int(math.Round(float64(totalMemoryGiB)*0.25)))
+	case totalMemoryGiB < 8:
+		reserveMemoryString = fmt.Sprintf("%dGi", int(math.Round((0.25*4)+float64(totalMemoryGiB-4)*0.2)))
+	case totalMemoryGiB < 16:
+		reserveMemoryString = fmt.Sprintf("%dGi", int(math.Round((0.25*4)+(0.20*4)+float64(totalMemoryGiB-8)*0.1)))
+	case totalMemoryGiB <= 128:
+		reserveMemoryString = fmt.Sprintf("%dGi", int(math.Round((0.25*4)+(0.20*4)+(0.10*8)+float64(totalMemoryGiB-16)*0.06)))
+	case totalMemoryGiB > 128:
+		reserveMemoryString = fmt.Sprintf("%dGi", int(math.Round((0.25*4)+(0.20*4)+(0.10*8)+(0.06*112)+float64(totalMemoryGiB-128)*0.02)))
+	}
+
+	ksc.KubeReserved = map[string]string{
+		"cpu":               fmt.Sprintf("%dm", getCPUMillicoresToReserve()),
+		"ephemeral-storage": "1Gi",
+		"memory":            reserveMemoryString,
+	}
+	return nil
+}
+
 // withPodInfraContainerImage determines whether to add the
 // '--pod-infra-container-image' flag, which is used to ensure the sandbox image
 // is not garbage collected.
@@ -336,6 +382,9 @@ func (k *kubelet) GenerateKubeletConfig() (*kubeletConfig, error) {
 	if k.nodeConfig.IsHybridNode() {
 		kubeletConfig.withHybridCloudProvider(k.nodeConfig, k.flags)
 		kubeletConfig.withHybridNodeLabels(k.nodeConfig, k.flags)
+		if err := kubeletConfig.withHybridReservedResources(); err != nil {
+			return nil, err
+		}
 
 		// On Ubuntu, systemd-resolved adds loopback address as nameserver to /etc/resolv.conf
 		// This causes pods not being able to do successful dns lookups
