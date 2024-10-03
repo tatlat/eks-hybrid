@@ -105,6 +105,7 @@ func CreateEC2(sess *session.Session, instance EC2Instance) (*ec2.EC2, string, e
 			},
 		},
 		UserData: &userDataEncoded,
+		MetadataOptions: &ec2.InstanceMetadataOptionsRequest{HttpTokens: aws.String("required"), HttpPutResponseHopLimit: aws.Int64(int64(2))},
 	})
 
 	if err != nil {
