@@ -12,9 +12,10 @@ import (
 )
 
 var (
-	cpuDirRegExp = regexp.MustCompile(`/cpu(\d+)`)
-	nodeDir      = "/sys/devices/system/node"
-	cpusPath     = "/sys/devices/system/cpu"
+	cpuDirRegExp         = regexp.MustCompile(`/cpu(\d+)`)
+	memoryCapacityRegexp = regexp.MustCompile(`MemTotal:\s*([0-9]+) kB`)
+	nodeDir              = "/sys/devices/system/node"
+	cpusPath             = "/sys/devices/system/cpu"
 )
 
 const (
@@ -269,4 +270,34 @@ func isCpuOnline(path string, cpuID uint16) (bool, error) {
 	}
 
 	return false, nil
+}
+
+// GetMachineMemoryCapacity returns the machine's total memory from /proc/meminfo.
+// Returns the total memory capacity as number of bytes.
+func GetMachineMemoryCapacity() (uint64, error) {
+	out, err := os.ReadFile("/proc/meminfo")
+	if err != nil {
+		return 0, err
+	}
+	memoryCapacity, err := parseCapacity(out, memoryCapacityRegexp)
+	if err != nil {
+		return 0, err
+	}
+	return memoryCapacity, err
+}
+
+// parseCapacity matches a Regexp in a []byte, returning the resulting value in bytes.
+// Assumes that the value matched by the Regexp is in KB.
+func parseCapacity(b []byte, r *regexp.Regexp) (uint64, error) {
+	matches := r.FindSubmatch(b)
+	if len(matches) != 2 {
+		return 0, fmt.Errorf("failed to match regexp in output: %q", string(b))
+	}
+	m, err := strconv.ParseUint(string(matches[1]), 10, 64)
+	if err != nil {
+		return 0, err
+	}
+
+	// Convert to bytes.
+	return m * 1024, err
 }
