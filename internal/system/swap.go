@@ -3,24 +3,32 @@ package system
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"strings"
 
 	"github.com/aws/eks-hybrid/internal/api"
+	"go.uber.org/zap"
 )
 
-const swapAspectName = "swap"
+const (
+	swapAspectName    = "swap"
+	swapTypePartition = "partition"
+	swapTypeFile      = "file"
+)
 
 type swapAspect struct {
 	nodeConfig *api.NodeConfig
+	logger     *zap.Logger
 }
 
 var _ SystemAspect = &swapAspect{}
 
-func NewSwapAspect(cfg *api.NodeConfig) SystemAspect {
-	return &swapAspect{nodeConfig: cfg}
+func NewSwapAspect(cfg *api.NodeConfig, logger *zap.Logger) SystemAspect {
+	return &swapAspect{nodeConfig: cfg, logger: logger}
 }
 
 func (s *swapAspect) Name() string {
@@ -28,19 +36,95 @@ func (s *swapAspect) Name() string {
 }
 
 func (s *swapAspect) Setup() error {
-	if err := swapOff(); err != nil {
+	hasSwapPartition, err := partitionSwapExists()
+	if err != nil {
+		return err
+	}
+	if hasSwapPartition {
+		return fmt.Errorf("failed to disable swap: partition type swap found on the host")
+	}
+	if err = s.swapOff(); err != nil {
 		return err
 	}
 	return disableSwapOnFstab()
 }
 
-func swapOff() error {
-	offCmd := exec.Command("swapoff", "--all")
-	out, err := offCmd.CombinedOutput()
+// Check if there are swaps of type partition exist on host because currently
+// nodeadm can only disable file type swap, if it's partition type, nodeadm
+// can only temporarily disable the swap, and swap will come back after host reboot.
+// If partition type swap exists, user needs to manually remove the partition swap before
+// running nodeadm init.
+func partitionSwapExists() (bool, error) {
+	cmd := "swapon -s | awk '$2==\"partition\" {print}'"
+	out, err := exec.Command("bash", "-c", cmd).CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("failed to turn off swap: %s, error: %v", out, err)
+		return false, fmt.Errorf("failed to check if partition type swap exists: %v", err)
+	}
+	if len(string(out)) != 0 {
+		return true, nil
+	}
+	return false, nil
+}
+
+func (s *swapAspect) swapOff() error {
+	swapfilePaths, err := getSwapfilePaths()
+	if err != nil {
+		return err
+	}
+	for _, path := range swapfilePaths {
+		if _, err := os.Stat(path); err == nil {
+			s.logger.Info("Disabling swap...", zap.Reflect("swapfile path", path))
+			offCmd := exec.Command("swapoff", path)
+			out, err := offCmd.CombinedOutput()
+			if err != nil {
+				return fmt.Errorf("failed to turn of swap on %s, command output: %s, %v", path, out, err)
+			}
+		} else if errors.Is(err, fs.ErrNotExist) {
+			// path to swapfile does not exist
+			s.logger.Warn("swapfile path does not exists", zap.Reflect("swapfile path", path))
+		} else {
+			// file may or may not exist. See err for details.
+			return fmt.Errorf("unexpced error while trying to open /proc/swaps file: %v", err)
+		}
 	}
 	return nil
+}
+
+// Read swapfile paths from /proc/fstab file and return them as a list of string
+// /proc/fstab file format will be like:
+// Filename                          Type         Size     Used    Priority
+// <path-to-swap-file>   	     file/partition   524280   0       -1
+func getSwapfilePaths() ([]string, error) {
+	var paths []string
+	file, err := os.OpenFile("/proc/swaps", os.O_RDONLY, 0444)
+	if err != nil {
+		return paths, err
+	}
+	defer file.Close()
+	scanner := bufio.NewScanner(file)
+	lineNo := 0
+	for scanner.Scan() {
+		lineNo++
+		if lineNo == 1 {
+			continue
+		}
+		swap, err := parseProcSwapsLine(scanner.Text())
+		if err != nil {
+			return nil, fmt.Errorf("/proc/swaps file syntax error at line %d: %s", lineNo, err)
+		}
+		if swap.swapType == swapTypePartition {
+			return nil, fmt.Errorf("partition type swapfile %s found in /proc/swaps, please remove the swapfile", swap.filePath)
+		}
+		paths = append(paths, swap.filePath)
+	}
+	return paths, nil
+}
+
+type swap struct {
+	// path of swap file
+	filePath string
+	// type of swap, value is one of partition and file
+	swapType string
 }
 
 // Mount represets the filesystem info
@@ -106,4 +190,19 @@ func parseFstabLine(line string) (*mount, error) {
 	}
 
 	return fstabMount, nil
+}
+
+func parseProcSwapsLine(line string) (*swap, error) {
+	line = strings.TrimSpace(line)
+	if (line == "") || (line[0] == '#') {
+		return nil, nil
+	}
+	fields := strings.Fields(line)
+	if len(fields) != 5 {
+		return nil, fmt.Errorf("Error in /proc/swaps file, line (%s) has %d fields, 5 are expected", line, len(fields))
+	}
+	return &swap{
+		filePath: fields[0],
+		swapType: fields[1],
+	}, nil
 }
