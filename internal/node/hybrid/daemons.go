@@ -5,6 +5,7 @@ import (
 
 	"github.com/aws/eks-hybrid/internal/containerd"
 	"github.com/aws/eks-hybrid/internal/daemon"
+	"github.com/aws/eks-hybrid/internal/iamrolesanywhere"
 	"github.com/aws/eks-hybrid/internal/kubelet"
 	"github.com/aws/eks-hybrid/internal/ssm"
 )
@@ -36,6 +37,20 @@ func (hnp *hybridNodeProvider) PreProcessDaemon() error {
 		}
 		if err := ssmDaemon.EnsureRunning(); err != nil {
 			return err
+		}
+		if err := ssmDaemon.PostLaunch(); err != nil {
+			return err
+		}
+	} else if hnp.nodeConfig.IsIAMRolesAnywhere() {
+		if hnp.nodeConfig.Spec.Hybrid.EnableCredentialsFile {
+			hnp.logger.Info("Configuring aws_signing_helper_update daemon")
+			signingHelper := iamrolesanywhere.NewSigningHelperDaemon(hnp.daemonManager, &hnp.nodeConfig.Spec)
+			if err := signingHelper.Configure(); err != nil {
+				return err
+			}
+			if err := signingHelper.EnsureRunning(); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

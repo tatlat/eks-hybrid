@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path"
 
 	"github.com/aws/eks-hybrid/internal/artifact"
 	"github.com/aws/eks-hybrid/internal/tracker"
@@ -39,5 +40,11 @@ func Install(ctx context.Context, tracker *tracker.Tracker, signingHelperSrc Sig
 }
 
 func Uninstall() error {
+	if err := os.RemoveAll(SigningHelperServiceFilePath); err != nil {
+		return err
+	}
+	if err := os.RemoveAll(path.Dir(EksHybridAwsCredentialsPath)); err != nil {
+		return err
+	}
 	return os.RemoveAll(SigningHelperBinPath)
 }

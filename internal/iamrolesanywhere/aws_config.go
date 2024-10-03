@@ -86,7 +86,7 @@ func validateAWSConfig(cfg AWSConfig) error {
 	}
 
 	if cfg.SigningHelperBinPath == "" {
-		errs = append(errs, errors.New("Singing helper path cannot be emtpyy"))
+		errs = append(errs, errors.New("Signing helper path cannot be empty"))
 	}
 
 	return errors.Join(errs...)

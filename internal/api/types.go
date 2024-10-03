@@ -117,9 +117,10 @@ const (
 )
 
 type HybridOptions struct {
-	NodeName         string            `json:"nodeName,omitempty"`
-	IAMRolesAnywhere *IAMRolesAnywhere `json:"iamRolesAnywhere,omitempty"`
-	SSM              *SSM              `json:"ssm,omitempty"`
+	NodeName              string            `json:"nodeName,omitempty"`
+	EnableCredentialsFile bool              `json:"enableCredentialsFile,omitempty"`
+	IAMRolesAnywhere      *IAMRolesAnywhere `json:"iamRolesAnywhere,omitempty"`
+	SSM                   *SSM              `json:"ssm,omitempty"`
 }
 
 func (nc NodeConfig) IsHybridNode() bool {
