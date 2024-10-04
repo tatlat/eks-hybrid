@@ -81,7 +81,7 @@ func (s *ssm) EnsureRunning() error {
 
 func (s *ssm) PostLaunch() error {
 	if s.nodeConfig.Spec.Hybrid.EnableCredentialsFile {
-		s.logger.Info("Creating symlink for AWS credentials", zap.String("Symoblic link path", symlinkedAWSConfigPath))
+		s.logger.Info("Creating symlink for AWS credentials", zap.String("Symbolic link path", symlinkedAWSConfigPath))
 		err := os.MkdirAll(filepath.Dir(eksHybridPath), 0755)
 		if err != nil {
 			return fmt.Errorf("creating path: %v", err)

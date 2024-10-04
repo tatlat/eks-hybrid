@@ -4,8 +4,9 @@ import (
 	"bytes"
 	"context"
 	_ "embed"
-	"fmt"
 	"os"
+
+	"github.com/pkg/errors"
 
 	"github.com/aws/eks-hybrid/internal/artifact"
 	"github.com/aws/eks-hybrid/internal/tracker"
@@ -32,16 +33,16 @@ type Source interface {
 func Install(ctx context.Context, tracker *tracker.Tracker, src Source) error {
 	kubelet, err := src.GetKubelet(ctx)
 	if err != nil {
-		return fmt.Errorf("kubelet: %w", err)
+		return errors.Wrap(err, "failed to get kubelet source")
 	}
 	defer kubelet.Close()
 
 	if err := artifact.InstallFile(BinPath, kubelet, 0755); err != nil {
-		return fmt.Errorf("kubelet: %w", err)
+		return errors.Wrap(err, "failed to install kubelet")
 	}
 
 	if !kubelet.VerifyChecksum() {
-		return fmt.Errorf("kubelet: %w", artifact.NewChecksumError(kubelet))
+		return errors.Errorf("kubelet checksum mismatch: %v", artifact.NewChecksumError(kubelet))
 	}
 	if err = tracker.Add(artifact.Kubelet); err != nil {
 		return err
@@ -50,7 +51,7 @@ func Install(ctx context.Context, tracker *tracker.Tracker, src Source) error {
 	buf := bytes.NewBuffer(kubeletUnitFile)
 
 	if err := artifact.InstallFile(UnitPath, buf, 0644); err != nil {
-		return fmt.Errorf("kubelet systemd unit: %w", err)
+		return errors.Errorf("failed to install kubelet systemd unit: %v", err)
 	}
 
 	return nil

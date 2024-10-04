@@ -2,7 +2,6 @@ package install
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/integrii/flaggy"
@@ -132,7 +131,7 @@ func Install(ctx context.Context, eksRelease eks.PatchRelease, credentialProvide
 			return err
 		}
 	default:
-		return errors.New("unable to detect hybrid auth method")
+		return fmt.Errorf("unable to detect hybrid auth method")
 	}
 
 	log.Info("Installing kubelet...")

@@ -2,8 +2,9 @@ package kubectl
 
 import (
 	"context"
-	"fmt"
 	"os"
+
+	"github.com/pkg/errors"
 
 	"github.com/aws/eks-hybrid/internal/artifact"
 	"github.com/aws/eks-hybrid/internal/tracker"
@@ -21,22 +22,18 @@ type Source interface {
 func Install(ctx context.Context, tracker *tracker.Tracker, src Source) error {
 	kubectl, err := src.GetKubectl(ctx)
 	if err != nil {
-		return fmt.Errorf("kubectl: %w", err)
+		return errors.Wrap(err, "failed to get kubectl source")
 	}
 	defer kubectl.Close()
 
 	if err := artifact.InstallFile(BinPath, kubectl, 0755); err != nil {
-		return fmt.Errorf("kubectl: %w", err)
+		return errors.Wrap(err, "failed to install kubectl")
 	}
 
 	if !kubectl.VerifyChecksum() {
-		return fmt.Errorf("kubectl: %w", artifact.NewChecksumError(kubectl))
+		return errors.Errorf("kubectl checksum mismatch: %v", artifact.NewChecksumError(kubectl))
 	}
-	if err = tracker.Add(artifact.Kubectl); err != nil {
-		return err
-	}
-
-	return nil
+	return tracker.Add(artifact.Kubectl)
 }
 
 func Uninstall() error {

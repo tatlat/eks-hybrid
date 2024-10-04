@@ -2,8 +2,9 @@ package imagecredentialprovider
 
 import (
 	"context"
-	"fmt"
 	"os"
+
+	"github.com/pkg/errors"
 
 	"github.com/aws/eks-hybrid/internal/artifact"
 	"github.com/aws/eks-hybrid/internal/tracker"
@@ -21,16 +22,16 @@ type Source interface {
 func Install(ctx context.Context, tracker *tracker.Tracker, src Source) error {
 	imageCredentialProvider, err := src.GetImageCredentialProvider(ctx)
 	if err != nil {
-		return fmt.Errorf("image-credential-provider: %w", err)
+		return errors.Wrap(err, "failed to image-credential-provider source")
 	}
 	defer imageCredentialProvider.Close()
 
 	if err := artifact.InstallFile(BinPath, imageCredentialProvider, 0755); err != nil {
-		return fmt.Errorf("image-credential-provider: %w", err)
+		return errors.Wrap(err, "failed to install image-credential-provider")
 	}
 
 	if !imageCredentialProvider.VerifyChecksum() {
-		return fmt.Errorf("image-credential-provider: %w", artifact.NewChecksumError(imageCredentialProvider))
+		return errors.Errorf("image-credential-provider checksum mismatch: %v", artifact.NewChecksumError(imageCredentialProvider))
 	}
 	if err = tracker.Add(artifact.ImageCredentialProvider); err != nil {
 		return err

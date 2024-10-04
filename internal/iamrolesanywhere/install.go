@@ -2,9 +2,10 @@ package iamrolesanywhere
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"path"
+
+	"github.com/pkg/errors"
 
 	"github.com/aws/eks-hybrid/internal/artifact"
 	"github.com/aws/eks-hybrid/internal/tracker"
@@ -21,19 +22,19 @@ type SigningHelperSource interface {
 func Install(ctx context.Context, tracker *tracker.Tracker, signingHelperSrc SigningHelperSource) error {
 	signingHelper, err := signingHelperSrc.GetSigningHelper(ctx)
 	if err != nil {
-		return fmt.Errorf("aws_signing_helper: %w", err)
+		return errors.Wrap(err, "failed to get source for aws_signing_helper")
 	}
 	defer signingHelper.Close()
 
 	if err := artifact.InstallFile(SigningHelperBinPath, signingHelper, 0755); err != nil {
-		return fmt.Errorf("aws_signing_helper: %w", err)
+		return errors.Wrap(err, "failed to install aws_signer_helper")
 	}
 	if err = tracker.Add(artifact.IamRolesAnywhere); err != nil {
 		return err
 	}
 
 	if !signingHelper.VerifyChecksum() {
-		return fmt.Errorf("aws_signing_helper: %w", artifact.NewChecksumError(signingHelper))
+		return errors.Errorf("aws_signer_helper checksum mismatch: %v", artifact.NewChecksumError(signingHelper))
 	}
 
 	return nil
