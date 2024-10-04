@@ -120,8 +120,12 @@ func TestProviderID(t *testing.T) {
 func TestHybridCloudProvider(t *testing.T) {
 	nodeConfig := api.NodeConfig{
 		Spec: api.NodeConfigSpec{
+			Cluster: api.ClusterDetails{
+				Name:   "my-cluster",
+				Region: "us-west-2",
+			},
 			Hybrid: &api.HybridOptions{
-				NodeName: "dummy-hybrid",
+				NodeName: "my-node",
 				IAMRolesAnywhere: &api.IAMRolesAnywhere{
 					TrustAnchorARN: "arn:aws:iam::222211113333:role/AmazonEKSConnectorAgentRole",
 					ProfileARN:     "dummy-profile-arn",
@@ -130,7 +134,7 @@ func TestHybridCloudProvider(t *testing.T) {
 			},
 		},
 	}
-	expectedProviderId := getHybridProviderId(nodeConfig.Spec.Hybrid.NodeName)
+	expectedProviderId := "eks-hybrid:///us-west-2/my-cluster/my-node"
 	kubeletArgs := make(map[string]string)
 	kubeletConfig := defaultKubeletSubConfig()
 	kubeletConfig.withHybridCloudProvider(&nodeConfig, kubeletArgs)
