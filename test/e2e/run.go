@@ -14,9 +14,9 @@ import (
 )
 
 type TestRunner struct {
-	Session *session.Session
-	Spec    TestResourceSpec
-	Status  TestResourceStatus
+	Session *session.Session   `yaml:"-"`
+	Spec    TestResourceSpec   `yaml:"spec"`
+	Status  TestResourceStatus `yaml:"status"`
 }
 
 type TestResourceSpec struct {
