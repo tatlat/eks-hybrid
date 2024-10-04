@@ -10,6 +10,7 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
+	"gopkg.in/yaml.v2"
 )
 
 type TestRunner struct {
@@ -43,6 +44,8 @@ type NetworkConfig struct {
 	PublicSubnetCidr  string `yaml:"publicSubnetCidr"`
 	PodCidr           string `yaml:"podCidr"`
 }
+
+const outputDir = "/tmp/eks-hybrid"
 
 var awsNodePatchContent = `
 spec:
@@ -178,7 +181,7 @@ func (t *TestRunner) CreateResources() error {
 		}
 
 		// Save kubeconfig file for the created cluster under /tmp/eks-hybrid/CULSTERNAME-kubeconfig dir to use it late in e2e test run
-		kubeconfigFilePath := filepath.Join("/tmp/eks-hybrid", fmt.Sprintf("%s.kubeconfig", clusterName))
+		kubeconfigFilePath := filepath.Join(outputDir, fmt.Sprintf("%s.kubeconfig", clusterName))
 		err = saveKubeconfig(clusterName, t.Spec.ClusterRegion, kubeconfigFilePath)
 		if err != nil {
 			return fmt.Errorf("error saving kubeconfig for %s EKS cluster: %v", kubernetesVersion, err)
@@ -199,6 +202,12 @@ func (t *TestRunner) CreateResources() error {
 		if err != nil {
 			return fmt.Errorf("error applying aws-auth ConfigMap for %s EKS cluster: %v", kubernetesVersion, err)
 		}
+	}
+
+	// After resources are created, write the config to a file
+	configFilePath := filepath.Join(outputDir, "setup-resources-output.yaml")
+	if err := t.saveSetupConfigAsYAML(configFilePath); err != nil {
+		return fmt.Errorf("failed to write config to file: %v", err)
 	}
 
 	return nil
@@ -242,5 +251,18 @@ func applyAwsAuth(kubeconfig string) error {
 	}
 
 	fmt.Println("Successfully applied aws-auth ConfigMap with empty mapRoles")
+	return nil
+}
+
+func (t *TestRunner) saveSetupConfigAsYAML(outputFile string) error {
+	testRunnerContent, err := yaml.Marshal(t)
+	if err != nil {
+		return fmt.Errorf("error marshaling test runner config: %v", err)
+	}
+	if err = os.WriteFile(outputFile, testRunnerContent, 0o644); err != nil {
+		return err
+	}
+
+	fmt.Printf("Successfully saved resource configuration to %s\n", outputFile)
 	return nil
 }
