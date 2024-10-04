@@ -22,8 +22,8 @@ type vpcSubnetParams struct {
 }
 
 // CreateVPC creates a VPC and the associated subnets (public and private)
-func (config *ClusterConfig) createVPC(vpcSubnetParams vpcSubnetParams) (*vpcConfig, error) {
-	svc := ec2.New(config.Session)
+func (t *TestRunner) createVPC(vpcSubnetParams vpcSubnetParams) (*vpcConfig, error) {
+	svc := ec2.New(t.Session)
 
 	// Create VPC
 	vpcOutput, err := svc.CreateVpc(&ec2.CreateVpcInput{
@@ -55,7 +55,7 @@ func (config *ClusterConfig) createVPC(vpcSubnetParams vpcSubnetParams) (*vpcCon
 	publicSubnet, err := svc.CreateSubnet(&ec2.CreateSubnetInput{
 		VpcId:            aws.String(vpcId),
 		CidrBlock:        aws.String(vpcSubnetParams.publicSubnetCidr),
-		AvailabilityZone: aws.String(config.ClusterRegion + "a"),
+		AvailabilityZone: aws.String(t.Spec.ClusterRegion + "a"),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create public subnet: %v", err)
@@ -82,7 +82,7 @@ func (config *ClusterConfig) createVPC(vpcSubnetParams vpcSubnetParams) (*vpcCon
 	privateSubnet, err := svc.CreateSubnet(&ec2.CreateSubnetInput{
 		VpcId:            aws.String(vpcId),
 		CidrBlock:        aws.String(vpcSubnetParams.privateSubnetCidr),
-		AvailabilityZone: aws.String(config.ClusterRegion + "b"),
+		AvailabilityZone: aws.String(t.Spec.ClusterRegion + "b"),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create private subnet: %v", err)
@@ -115,13 +115,13 @@ func (config *ClusterConfig) createVPC(vpcSubnetParams vpcSubnetParams) (*vpcCon
 }
 
 // CreateVPCPeering creates a VPC peering connection between two VPCs
-func (config *ClusterConfig) createVPCPeering() (string, error) {
-	svc := ec2.New(config.Session)
+func (t *TestRunner) createVPCPeering() (string, error) {
+	svc := ec2.New(t.Session)
 
 	// Create VPC peering connection
 	result, err := svc.CreateVpcPeeringConnection(&ec2.CreateVpcPeeringConnectionInput{
-		VpcId:     aws.String(config.ClusterVpcID),
-		PeerVpcId: aws.String(config.HybridVpcID),
+		VpcId:     aws.String(t.Status.ClusterVpcID),
+		PeerVpcId: aws.String(t.Status.HybridVpcID),
 	})
 	if err != nil {
 		return "", fmt.Errorf("failed to create VPC peering connection: %v", err)
@@ -144,54 +144,54 @@ func (config *ClusterConfig) createVPCPeering() (string, error) {
 }
 
 // UpdateRouteTablesForPeering updates the route tables to allow traffic between peered VPCs
-func (config *ClusterConfig) updateRouteTablesForPeering() error {
-	svc := ec2.New(config.Session)
+func (t *TestRunner) updateRouteTablesForPeering() error {
+	svc := ec2.New(t.Session)
 
 	// Get the route tables for both VPCs
 	routeTables1, err := svc.DescribeRouteTables(&ec2.DescribeRouteTablesInput{
 		Filters: []*ec2.Filter{
 			{
 				Name:   aws.String("vpc-id"),
-				Values: []*string{aws.String(config.ClusterVpcID)},
+				Values: []*string{aws.String(t.Status.ClusterVpcID)},
 			},
 		},
 	})
 	if err != nil {
-		return fmt.Errorf("failed to describe route tables for VPC %s: %v", config.ClusterVpcID, err)
+		return fmt.Errorf("failed to describe route tables for VPC %s: %v", t.Status.ClusterVpcID, err)
 	}
 
 	routeTables2, err := svc.DescribeRouteTables(&ec2.DescribeRouteTablesInput{
 		Filters: []*ec2.Filter{
 			{
 				Name:   aws.String("vpc-id"),
-				Values: []*string{aws.String(config.HybridVpcID)},
+				Values: []*string{aws.String(t.Status.HybridVpcID)},
 			},
 		},
 	})
 	if err != nil {
-		return fmt.Errorf("failed to describe route tables for VPC %s: %v", config.HybridVpcID, err)
+		return fmt.Errorf("failed to describe route tables for VPC %s: %v", t.Status.HybridVpcID, err)
 	}
 
 	// Add routes to the route tables for both VPCs
 	for _, rt := range routeTables1.RouteTables {
 		_, err = svc.CreateRoute(&ec2.CreateRouteInput{
 			RouteTableId:           rt.RouteTableId,
-			DestinationCidrBlock:   aws.String(config.HybridNodeCidr),
-			VpcPeeringConnectionId: aws.String(config.PeeringConnID),
+			DestinationCidrBlock:   aws.String(t.Spec.HybridNetwork.VpcCidr),
+			VpcPeeringConnectionId: aws.String(t.Status.PeeringConnID),
 		})
 		if err != nil {
-			return fmt.Errorf("failed to create route in VPC %s: %v", config.ClusterVpcID, err)
+			return fmt.Errorf("failed to create route in VPC %s: %v", t.Status.ClusterVpcID, err)
 		}
 	}
 
 	for _, rt := range routeTables2.RouteTables {
 		_, err = svc.CreateRoute(&ec2.CreateRouteInput{
 			RouteTableId:           rt.RouteTableId,
-			DestinationCidrBlock:   aws.String(config.ClusterVpcCidr),
-			VpcPeeringConnectionId: aws.String(config.PeeringConnID),
+			DestinationCidrBlock:   aws.String(t.Spec.ClusterNetwork.VpcCidr),
+			VpcPeeringConnectionId: aws.String(t.Status.PeeringConnID),
 		})
 		if err != nil {
-			return fmt.Errorf("failed to create route in VPC %s: %v", config.HybridVpcID, err)
+			return fmt.Errorf("failed to create route in VPC %s: %v", t.Status.HybridVpcID, err)
 		}
 	}
 
