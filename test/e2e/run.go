@@ -2,7 +2,6 @@ package e2e
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -11,6 +10,7 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
+	"gopkg.in/yaml.v2"
 )
 
 type TestRunner struct {
@@ -43,16 +43,6 @@ type NetworkConfig struct {
 	PrivateSubnetCidr string `yaml:"privateSubnetCidr"`
 	PublicSubnetCidr  string `yaml:"publicSubnetCidr"`
 	PodCidr           string `yaml:"podCidr"`
-}
-
-type ResourceConfig struct {
-	ClusterName        string   `json:"ClusterName"`
-	ClusterVpcID       string   `json:"ClusterVpcID"`
-	HybridVpcID        string   `json:"HybridVpcID"`
-	PeeringConnID      string   `json:"PeeringConnID"`
-	RoleArn            string   `json:"RoleArn"`
-	KubernetesVersions []string `json:"KubernetesVersions"`
-	ClusterRegion      string   `json:"ClusterRegion"`
 }
 
 const outputDir = "/tmp/eks-hybrid"
@@ -214,9 +204,9 @@ func (t *TestRunner) CreateResources() error {
 		}
 	}
 
-	// After resources are created, write the config to a file to consume it during cleanup resources
-	configFilePath := fmt.Sprintf("%s/setup-resources-output.json", outputDir)
-	if err := config.writeConfigToFile(configFilePath); err != nil {
+	// After resources are created, write the config to a file
+	configFilePath := filepath.Join(outputDir, "setup-resources-output.yaml")
+	if err := t.saveSetupConfigAsYAML(configFilePath); err != nil {
 		return fmt.Errorf("failed to write config to file: %v", err)
 	}
 
@@ -264,31 +254,15 @@ func applyAwsAuth(kubeconfig string) error {
 	return nil
 }
 
-func (config *ClusterConfig) writeConfigToFile(filePath string) error {
-	resourceConfig := ResourceConfig{
-		ClusterName:        config.ClusterName,
-		ClusterVpcID:       config.ClusterVpcID,
-		HybridVpcID:        config.HybridVpcID,
-		PeeringConnID:      config.PeeringConnID,
-		RoleArn:            config.RoleArn,
-		KubernetesVersions: config.KubernetesVersions,
-		ClusterRegion:      config.ClusterRegion,
-	}
-
-	// Create or overwrite the config file
-	file, err := os.Create(filePath)
+func (t *TestRunner) saveSetupConfigAsYAML(outputFile string) error {
+	testRunnerContent, err := yaml.Marshal(t)
 	if err != nil {
-		return fmt.Errorf("failed to create config file: %v", err)
+		return fmt.Errorf("error marshaling test runner config: %v", err)
 	}
-	defer file.Close()
-
-	// Write the config data in JSON format to the file
-	encoder := json.NewEncoder(file)
-	encoder.SetIndent("", "  ")
-	if err := encoder.Encode(resourceConfig); err != nil {
-		return fmt.Errorf("failed to write config data to file: %v", err)
+	if err = os.WriteFile(outputFile, testRunnerContent, 0o644); err != nil {
+		return err
 	}
 
-	fmt.Printf("Configuration data written to %s\n", filePath)
+	fmt.Printf("Successfully saved resource configuration to %s\n", outputFile)
 	return nil
 }
