@@ -22,16 +22,16 @@ type IAMAuthenticatorSource interface {
 func Install(ctx context.Context, tracker *tracker.Tracker, iamAuthSrc IAMAuthenticatorSource) error {
 	authenticator, err := iamAuthSrc.GetIAMAuthenticator(ctx)
 	if err != nil {
-		return fmt.Errorf("aws-iam-authenticator: %w", err)
+		return fmt.Errorf("failed to get aws-iam-authenticator source: %w", err)
 	}
 	defer authenticator.Close()
 
 	if err := artifact.InstallFile(IAMAuthenticatorBinPath, authenticator, 0755); err != nil {
-		return fmt.Errorf("aws-iam-authenticator: %w", err)
+		return fmt.Errorf("failed to install aws-iam-authenticator: %w", err)
 	}
 
 	if !authenticator.VerifyChecksum() {
-		return fmt.Errorf("aws-iam-authenticator: %w", artifact.NewChecksumError(authenticator))
+		return fmt.Errorf("aws-iam-authenticator checksum mismatch: %w", artifact.NewChecksumError(authenticator))
 	}
 	if err = tracker.Add(artifact.IamAuthenticator); err != nil {
 		return err

@@ -2,8 +2,9 @@ package cni
 
 import (
 	"context"
-	"fmt"
 	"os"
+
+	"github.com/pkg/errors"
 
 	"github.com/aws/eks-hybrid/internal/artifact"
 	"github.com/aws/eks-hybrid/internal/tracker"
@@ -25,23 +26,23 @@ type Source interface {
 func Install(ctx context.Context, tracker *tracker.Tracker, src Source) error {
 	cniPlugins, err := src.GetCniPlugins(ctx)
 	if err != nil {
-		return fmt.Errorf("cni-plugins: %w", err)
+		return errors.Wrap(err, "failed to get cni-plugins source")
 	}
 	defer cniPlugins.Close()
 
 	if err := artifact.InstallFile(TgzPath, cniPlugins, 0755); err != nil {
-		return fmt.Errorf("cni-plugins: %w", err)
+		return errors.Wrap(err, "failed to install cni-plugins archive")
 	}
 
 	if !cniPlugins.VerifyChecksum() {
-		return fmt.Errorf("cni-plugins: %w", artifact.NewChecksumError(cniPlugins))
+		return errors.Errorf("cni-plugins checksum mismatch: %v", artifact.NewChecksumError(cniPlugins))
 	}
 	if err = tracker.Add(artifact.CniPlugins); err != nil {
 		return err
 	}
 
 	if err := artifact.InstallTarGz(BinPath, TgzPath); err != nil {
-		return fmt.Errorf("cni-plugins: %w", err)
+		return errors.Wrap(err, "failed to extract and install cni-plugins")
 	}
 	return nil
 }

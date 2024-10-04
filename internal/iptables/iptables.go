@@ -1,6 +1,7 @@
 package iptables
 
 import (
+	"github.com/pkg/errors"
 	"os/exec"
 
 	"github.com/aws/eks-hybrid/internal/artifact"
@@ -19,7 +20,7 @@ func Install(tracker *tracker.Tracker, source Source) error {
 	if !isIptablesInstalled() {
 		iptablesSrc := source.GetIptables()
 		if err := artifact.InstallPackage(iptablesSrc); err != nil {
-			return err
+			return errors.Wrap(err, "failed to install iptables")
 		}
 		return tracker.Add(artifact.Iptables)
 	}
@@ -31,7 +32,7 @@ func Uninstall(source Source) error {
 	if isIptablesInstalled() {
 		iptablesSrc := source.GetIptables()
 		if err := artifact.UninstallPackage(iptablesSrc); err != nil {
-			return err
+			return errors.Wrap(err, "failed to uninstall iptables")
 		}
 	}
 	return nil

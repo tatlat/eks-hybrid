@@ -2,9 +2,10 @@ package ssm
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"os"
+
+	"github.com/pkg/errors"
 
 	"github.com/aws/aws-sdk-go-v2/config"
 	awsSsm "github.com/aws/aws-sdk-go-v2/service/ssm"
@@ -33,13 +34,10 @@ func Install(ctx context.Context, tracker *tracker.Tracker, source Source) error
 	defer installer.Close()
 
 	if err := artifact.InstallFile(installerPath, installer, 0755); err != nil {
-		return fmt.Errorf("ssm installer: %w", err)
-	}
-	if err = tracker.Add(artifact.Ssm); err != nil {
-		return err
+		return errors.Wrap(err, "failed to install ssm installer")
 	}
 
-	return nil
+	return tracker.Add(artifact.Ssm)
 }
 
 // Uninstall de-registers the managed instance and removes all files and components that
@@ -64,29 +62,29 @@ func Uninstall(pkgSource PkgSource) error {
 	ssmClient := awsSsm.NewFromConfig(awsConfig)
 	managed, err := isInstanceManaged(ssmClient, instanceId)
 	if err != nil {
-		return err
+		return errors.Wrapf(err, "failed to get managed instance information")
 	}
 
 	// Only deregister the instance if init/ssm init was run and
 	// if instances is actively listed as managed
 	if managed {
 		if err := deregister(ssmClient, instanceId); err != nil {
-			return err
+			return errors.Wrapf(err, "failed to deregister ssm managed instance")
 		}
 	}
 
 	ssmPkg := pkgSource.GetSSMPackage()
 	if err := artifact.UninstallPackage(ssmPkg); err != nil {
-		return err
+		return errors.Wrapf(err, "failed to uninstall ssm")
 	}
 
 	if err := os.Remove(registrationFilePath); err != nil {
-		return err
+		return errors.Wrapf(err, "failed to uninstall ssm config files")
 	}
 
 	err = os.RemoveAll(symlinkedAWSConfigPath)
 	if err != nil {
-		return fmt.Errorf("removing directory %s: %v", symlinkedAWSConfigPath, err)
+		return errors.Wrapf(err, "removing directory %s", symlinkedAWSConfigPath)
 	}
 
 	return os.RemoveAll(installerPath)
@@ -103,7 +101,7 @@ func redownloadInstaller(region string) error {
 	}
 	installer := NewSSMInstaller(region)
 	if err := Install(context.Background(), trackerConf, installer); err != nil {
-		return err
+		return errors.Wrapf(err, "failed to install ssm installer")
 	}
 	return trackerConf.Save()
 }

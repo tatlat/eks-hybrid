@@ -5,6 +5,8 @@ import (
 	"os"
 	"os/exec"
 
+	"github.com/pkg/errors"
+
 	"github.com/aws/eks-hybrid/internal/artifact"
 	"github.com/aws/eks-hybrid/internal/daemon"
 	"github.com/aws/eks-hybrid/internal/system"
@@ -34,7 +36,7 @@ func Install(tracker *tracker.Tracker, source Source, containerdSource SourceNam
 	if isContainerdNotInstalled() {
 		containerd := source.GetContainerd()
 		if err := artifact.InstallPackage(containerd); err != nil {
-			return err
+			return errors.Wrap(err, "failed to install containerd")
 		}
 		tracker.MarkContainerd(string(containerdSource))
 	}
@@ -45,11 +47,11 @@ func Uninstall(source Source) error {
 	if isContainerdInstalled() {
 		containerd := source.GetContainerd()
 		if err := artifact.UninstallPackage(containerd); err != nil {
-			return err
+			return errors.Wrap(err, "failed to uninstall containerd")
 		}
 
 		if err := os.RemoveAll(containerdConfigDir); err != nil {
-			return err
+			return errors.Wrap(err, "failed to uninstall containerd config files")
 		}
 	}
 	return nil
