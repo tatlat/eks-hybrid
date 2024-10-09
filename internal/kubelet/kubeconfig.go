@@ -6,7 +6,12 @@ import (
 	"path"
 	"text/template"
 
+	"github.com/pkg/errors"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/clientcmd"
+
 	"github.com/aws/eks-hybrid/internal/api"
+	"github.com/aws/eks-hybrid/internal/iamauthenticator"
 	"github.com/aws/eks-hybrid/internal/util"
 )
 
@@ -44,13 +49,14 @@ func (k *kubelet) writeKubeconfig() error {
 }
 
 type kubeconfigTemplateVars struct {
-	Cluster           string
-	Region            string
-	APIServerEndpoint string
-	CaCertPath        string
-	SessionName       string
-	AssumeRole        string
-	AwsConfigPath     string
+	Cluster                 string
+	Region                  string
+	APIServerEndpoint       string
+	CaCertPath              string
+	SessionName             string
+	AssumeRole              string
+	AwsConfigPath           string
+	AwsIamAuthenticatorPath string
 }
 
 func newKubeconfigTemplateVars(cfg *api.NodeConfig) *kubeconfigTemplateVars {
@@ -72,6 +78,7 @@ func (kct *kubeconfigTemplateVars) withHybridTemplateVars(cfg *api.NodeConfig) {
 	} else if cfg.IsSSM() {
 		kct.withSsmHybridVars(cfg)
 	}
+	kct.AwsIamAuthenticatorPath = iamauthenticator.IAMAuthenticatorBinPath
 }
 
 func (kct *kubeconfigTemplateVars) withIamRolesAnywhereHybridVars(cfg *api.NodeConfig) {
@@ -105,4 +112,14 @@ func generateKubeconfig(cfg *api.NodeConfig) ([]byte, error) {
 		return nil, err
 	}
 	return buf.Bytes(), nil
+}
+
+// GetKubeClientFromKubeConfig gets kubernetes client from kubeconfig on the disk
+func GetKubeClientFromKubeConfig() (*kubernetes.Clientset, error) {
+	// Use the current context in the kubeconfig file
+	config, err := clientcmd.BuildConfigFromFlags("", kubeconfigPath)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to build config from kubeconfig")
+	}
+	return kubernetes.NewForConfig(config)
 }

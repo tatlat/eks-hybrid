@@ -11,17 +11,20 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
 	"dario.cat/mergo"
-
+	"github.com/pkg/errors"
 	"go.uber.org/zap"
 	"golang.org/x/mod/semver"
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8skubelet "k8s.io/kubelet/config/v1beta1"
+	"sigs.k8s.io/yaml"
 
 	"github.com/aws/aws-sdk-go-v2/feature/ec2/imds"
 	"github.com/aws/smithy-go/ptr"
@@ -39,7 +42,11 @@ const (
 	kubeletConfigPerm = 0644
 
 	hybridNodeLabel = "eks.amazonaws.com/compute-type=hybrid"
+
+	hybridProviderIdPrefix = "eks-hybrid"
 )
+
+var nodeNameProviderIdRegexPattern = regexp.MustCompile(`^eks-hybrid:///[^/]+/[^/]+/(.+)$`)
 
 func (k *kubelet) writeKubeletConfig() error {
 	kubeletVersion, err := GetKubeletVersion()
@@ -491,7 +498,7 @@ func getProviderId(availabilityZone, instanceId string) string {
 }
 
 func getHybridProviderId(cfg *api.NodeConfig) string {
-	return fmt.Sprintf("eks-hybrid:///%s/%s/%s", cfg.Spec.Cluster.Region, cfg.Spec.Cluster.Name, cfg.Spec.Hybrid.NodeName)
+	return fmt.Sprintf("%s:///%s/%s/%s", hybridProviderIdPrefix, cfg.Spec.Cluster.Region, cfg.Spec.Cluster.Name, cfg.Spec.Hybrid.NodeName)
 }
 
 // Get the IP of the node depending on the ipFamily configured for the cluster
@@ -563,4 +570,31 @@ func getResourceToReserveInRange(totalCPU, startRange, endRange, percentage int)
 
 func getMemoryMebibytesToReserve(maxPods int32) int32 {
 	return 11*maxPods + 255
+}
+
+func getKubeletConfigFromDisk() (*kubeletConfig, error) {
+	data, err := os.ReadFile(filepath.Join(kubeletConfigRoot, kubeletConfigFile))
+	if err != nil {
+		return nil, err
+	}
+
+	var kubeletConf kubeletConfig
+	if err = yaml.Unmarshal(data, &kubeletConf); err != nil {
+		return nil, err
+	}
+	return &kubeletConf, nil
+}
+
+// GetNodeName gets the current node name from the providerId in kubelet config
+func GetNodeName() (string, error) {
+	kubeletConf, err := getKubeletConfigFromDisk()
+	if err != nil {
+		return "", errors.Wrap(err, "failed to get kubelet configuration from disk")
+	}
+	matches := nodeNameProviderIdRegexPattern.FindStringSubmatch(*kubeletConf.ProviderID)
+	// matches have entire string, 1st match, 2nd match, etc
+	if len(matches) > 1 {
+		return matches[1], nil
+	}
+	return "", errors.New("failed to get node name from provider id")
 }
