@@ -33,7 +33,7 @@ do
 
     assert::files-equal /opt/aws/nodeadm-tracker expected-nodeadm-tracker
 
-    nodeadm uninstall
+    nodeadm uninstall --skip node-validation,pod-validation
 
     assert::path-not-exist /usr/sbin/iptables
     assert::path-not-exist /usr/bin/kubelet

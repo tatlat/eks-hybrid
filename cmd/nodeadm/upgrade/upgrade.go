@@ -6,6 +6,7 @@ import (
 
 	"github.com/integrii/flaggy"
 	"go.uber.org/zap"
+	"k8s.io/utils/strings/slices"
 
 	initialize "github.com/aws/eks-hybrid/cmd/nodeadm/init"
 	"github.com/aws/eks-hybrid/cmd/nodeadm/install"
@@ -22,13 +23,18 @@ import (
 	"github.com/aws/eks-hybrid/internal/tracker"
 )
 
+const (
+	skipPodPreflightCheck  = "pod-validation"
+	skipNodePreflightCheck = "node-validation"
+)
+
 func NewUpgradeCommand() cli.Command {
 	cmd := command{}
 
 	fc := flaggy.NewSubcommand("upgrade")
 	fc.Description = "Upgrade components installed using the install sub-command"
 	fc.AddPositionalValue(&cmd.kubernetesVersion, "KUBERNETES_VERSION", 1, true, "The major[.minor[.patch]] version of Kubernetes to install")
-	fc.StringSlice(&cmd.skipPhases, "s", "skip", "phases of the bootstrap you want to skip")
+	fc.StringSlice(&cmd.skipPhases, "s", "skip", "phases of the upgrade you want to skip")
 	cmd.flaggy = fc
 	return &cmd
 }
@@ -52,6 +58,20 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return cli.ErrMustRunAsRoot
 	}
 
+	ctx := context.Background()
+	if !slices.Contains(c.skipPhases, skipPodPreflightCheck) {
+		log.Info("Validating if pods have been drained...")
+		if err := node.IsDrained(ctx); err != nil {
+			return err
+		}
+	}
+	if !slices.Contains(c.skipPhases, skipNodePreflightCheck) {
+		log.Info("Validating if node has been marked unschedulable...")
+		if err := node.IsUnscheduled(ctx); err != nil {
+			return err
+		}
+	}
+
 	log.Info("Loading configuration..", zap.String("configSource", opts.ConfigSource))
 	nodeProvider, err := node.NewNodeProvider(opts.ConfigSource, log)
 	if err != nil {
@@ -66,7 +86,6 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return err
 	}
 
-	ctx := context.Background()
 	log.Info("Validating Kubernetes version", zap.Reflect("kubernetes version", c.kubernetesVersion))
 	// Create a Source for all EKS managed artifacts.
 	release, err := eks.FindLatestRelease(ctx, c.kubernetesVersion)
