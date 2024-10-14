@@ -101,7 +101,6 @@ func (t *TestRunner) cleanupEKSHybridClusters(ctx context.Context) error {
 			fmt.Printf("error cleaning up EKS hybrid cluster %s: %v\n", clusterName, err)
 			return err
 		}
-		fmt.Printf("successfully deleted EKS hybrid cluster: %s\n", clusterName)
 	}
 	return nil
 }
@@ -141,25 +140,24 @@ func waitForClusterDeletion(ctx context.Context, svc *eks.EKS, clusterName strin
 		defer close(statusCh)
 		defer close(errCh)
 		for {
+			describeInput := &eks.DescribeClusterInput{
+				Name: aws.String(clusterName),
+			}
+			_, err := svc.DescribeCluster(describeInput)
+			if err != nil {
+				if isClusterNotFoundError(err) {
+					statusCh <- true
+					return
+				}
+				errCh <- fmt.Errorf("failed to describe cluster %s: %v", clusterName, err)
+				return
+			}
 			select {
 			case <-ctx.Done(): // Check if the context is done (timeout/canceled)
 				errCh <- fmt.Errorf("context canceled or timed out while waiting for cluster %s deletion: %v", clusterName, ctx.Err())
 				return
 			case <-time.After(30 * time.Second): // Retry after 30 secs
-				// Continue checking for deletion
-			default:
-				describeInput := &eks.DescribeClusterInput{
-					Name: aws.String(clusterName),
-				}
-				_, err := svc.DescribeCluster(describeInput)
-				if err != nil {
-					if isClusterNotFoundError(err) {
-						statusCh <- true
-						return
-					}
-					errCh <- fmt.Errorf("failed to describe cluster %s: %v", clusterName, err)
-					return
-				}
+				fmt.Printf("waiting for cluster %s to be deleted.\n", clusterName)
 			}
 		}
 	}(ctx)
@@ -171,8 +169,6 @@ func waitForClusterDeletion(ctx context.Context, svc *eks.EKS, clusterName strin
 		return nil
 	case err := <-errCh:
 		return err
-	case <-ctx.Done():
-		return fmt.Errorf("timed out waiting for cluster %s deletion", clusterName)
 	}
 }
 
