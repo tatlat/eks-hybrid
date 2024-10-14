@@ -17,7 +17,7 @@ type command struct {
 	configFilePath string
 }
 
-func NewSetupCommand() cli.Command {
+func NewCommand() cli.Command {
 	cmd := command{}
 
 	setupCmd := flaggy.NewSubcommand("setup")
@@ -43,9 +43,14 @@ func (s *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 
 	testRunner := &e2e.TestRunner{}
 
-	err = yaml.Unmarshal(file, &testRunner)
-	if err != nil {
+	if err = yaml.Unmarshal(file, &testRunner); err != nil {
 		return fmt.Errorf("failed to unmarshal configuration from YAML: %v", err)
+	}
+
+	// Create AWS session
+	testRunner.Session, err = testRunner.NewAWSSession()
+	if err != nil {
+		return fmt.Errorf("failed to create AWS session: %v", err)
 	}
 
 	// Create resources using TestRunner object

@@ -14,8 +14,8 @@ func main() {
 	flaggy.SetDescription("An E2E test runner for setting up test architecture for E2E tests")
 
 	cmds := []cli.Command{
-		setup.NewSetupCommand(),
-		cleanup.NewCleanupCommand(),
+		setup.NewCommand(),
+		cleanup.NewCommand(),
 	}
 
 	for _, cmd := range cmds {

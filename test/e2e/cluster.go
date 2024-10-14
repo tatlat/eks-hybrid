@@ -8,10 +8,14 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/service/eks"
 )
 
-const createClusterTimeout = 15 * time.Minute
+const (
+	createClusterTimeout = 15 * time.Minute
+	deleteClusterTimeout = 5 * time.Minute
+)
 
 func (t *TestRunner) createEKSCluster(clusterName, kubernetesVersion string) error {
 	// Join the subnet IDs into a single comma-separated string
@@ -84,4 +88,94 @@ func (t *TestRunner) waitForClusterCreation(clusterName string) error {
 	case <-ctx.Done():
 		return fmt.Errorf("timed out waiting for cluster %s creation", clusterName)
 	}
+}
+
+// cleanupEKSHybridClusters cleans up all the clusters for all the kubernetes version.
+func (t *TestRunner) cleanupEKSHybridClusters(ctx context.Context) error {
+	for _, kubernetesVersion := range t.Spec.KubernetesVersions {
+		clusterName := clusterName(t.Spec.ClusterName, kubernetesVersion)
+
+		fmt.Printf("cleaning up EKS hybrid cluster: %s\n", clusterName)
+		err := t.deleteEKSCluster(ctx, clusterName)
+		if err != nil {
+			fmt.Printf("error cleaning up EKS hybrid cluster %s: %v\n", clusterName, err)
+			return err
+		}
+	}
+	return nil
+}
+
+// deleteEKSCluster deletes the given EKS cluster
+func (t *TestRunner) deleteEKSCluster(ctx context.Context, clusterName string) error {
+	svc := eks.New(t.Session)
+	fmt.Printf("deleting cluster %s\n", clusterName)
+	_, err := svc.DeleteCluster(&eks.DeleteClusterInput{
+		Name: aws.String(clusterName),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to delete EKS hybrid cluster %s: %v", clusterName, err)
+	}
+
+	fmt.Printf("cluster deletion initiated for: %s\n", clusterName)
+
+	// Wait for the cluster to be fully deleted to check for any errors during the delete.
+	err = waitForClusterDeletion(ctx, svc, clusterName)
+	if err != nil {
+		return fmt.Errorf("error waiting for cluster %s deletion: %v", clusterName, err)
+	}
+
+	return nil
+}
+
+// waitForClusterDeletion waits for the cluster to be deleted.
+func waitForClusterDeletion(ctx context.Context, svc *eks.EKS, clusterName string) error {
+	// Create a context that automatically cancels after the specified timeout
+	ctx, cancel := context.WithTimeout(ctx, deleteClusterTimeout)
+	defer cancel()
+
+	statusCh := make(chan bool)
+	errCh := make(chan error)
+
+	go func(ctx context.Context) {
+		defer close(statusCh)
+		defer close(errCh)
+		for {
+			describeInput := &eks.DescribeClusterInput{
+				Name: aws.String(clusterName),
+			}
+			_, err := svc.DescribeCluster(describeInput)
+			if err != nil {
+				if isClusterNotFoundError(err) {
+					statusCh <- true
+					return
+				}
+				errCh <- fmt.Errorf("failed to describe cluster %s: %v", clusterName, err)
+				return
+			}
+			select {
+			case <-ctx.Done(): // Check if the context is done (timeout/canceled)
+				errCh <- fmt.Errorf("context canceled or timed out while waiting for cluster %s deletion: %v", clusterName, ctx.Err())
+				return
+			case <-time.After(30 * time.Second): // Retry after 30 secs
+				fmt.Printf("waiting for cluster %s to be deleted.\n", clusterName)
+			}
+		}
+	}(ctx)
+
+	// Wait for the cluster to be deleted or for the timeout to expire
+	select {
+	case <-statusCh:
+		fmt.Printf("cluster %s successfully deleted.\n", clusterName)
+		return nil
+	case err := <-errCh:
+		return err
+	}
+}
+
+// isClusterNotFoundError checks if the error is due to the cluster not being found
+func isClusterNotFoundError(err error) bool {
+	if awsErr, ok := err.(awserr.Error); ok {
+		return awsErr.Code() == eks.ErrCodeResourceNotFoundException
+	}
+	return false
 }

@@ -1,23 +1,31 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
+	"os"
 
-	"github.com/aws/eks-hybrid/internal/cli"
 	"github.com/integrii/flaggy"
 	"go.uber.org/zap"
+	"gopkg.in/yaml.v2"
+
+	"github.com/aws/eks-hybrid/internal/cli"
+	"github.com/aws/eks-hybrid/test/e2e"
 )
 
 type command struct {
-	flaggy *flaggy.Subcommand
+	flaggy            *flaggy.Subcommand
+	resourcesFilePath string
 }
 
-func NewCleanupCommand() cli.Command {
+func NewCommand() cli.Command {
 	cmd := command{}
 
 	cleanup := flaggy.NewSubcommand("cleanup")
 	cleanup.Description = "Cleaning up E2E test architecture"
 	cleanup.AdditionalHelpPrepend = "This command will cleanup E2E test architecture."
+
+	cleanup.String(&cmd.resourcesFilePath, "f", "filename", "Path to resources file")
 
 	cmd.flaggy = cleanup
 
@@ -29,7 +37,29 @@ func (c *command) Flaggy() *flaggy.Subcommand {
 }
 
 func (s *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
-	fmt.Println("Cleaning up E2E resources...")
-	// clean up logic
+	fmt.Println("cleaning up E2E resources...")
+
+	file, err := os.ReadFile(s.resourcesFilePath)
+	if err != nil {
+		return fmt.Errorf("failed to open configuration file: %v", err)
+	}
+
+	cleanup := &e2e.TestRunner{}
+
+	if err = yaml.Unmarshal(file, &cleanup); err != nil {
+		return fmt.Errorf("failed to unmarshal configuration from YAML: %v", err)
+	}
+
+	// Create AWS session
+	cleanup.Session, err = cleanup.NewAWSSession()
+	if err != nil {
+		return fmt.Errorf("failed to create AWS session: %v", err)
+	}
+	ctx := context.Background()
+
+	err = cleanup.CleanupE2EResources(ctx)
+	if err != nil {
+		return fmt.Errorf("error cleaning up e2e resources: %v", err)
+	}
 	return nil
 }
