@@ -89,12 +89,12 @@ test-integration: ## Run integration tests.
 
 ## Build binary.
 .PHONY: build
-build: LINKER_FLAGS :=-X github.com/aws/eks-hybrid/cmd/nodeadm/version.GitVersion=$(GIT_VERSION) -X github.com/aws/eks-hybrid/internal/aws/eks.manifestUrl=$(HYBRID_MANIFEST_URL) -s -w -buildid='' -extldflags -static
+build: LINKER_FLAGS :=-X github.com/aws/eks-hybrid/cmd/nodeadm/version.GitVersion=$(GIT_VERSION) -X github.com/aws/eks-hybrid/internal/aws.manifestUrl=$(HYBRID_MANIFEST_URL) -s -w -buildid='' -extldflags -static
 build:
 	go build -ldflags "$(LINKER_FLAGS)" -trimpath -o $(LOCALBIN)/nodeadm cmd/nodeadm/main.go
 
 .PHONY: build-cross-platform
-build-cross-platform: LINKER_FLAGS :=-X github.com/aws/eks-hybrid/cmd/nodeadm/version.GitVersion=$(GIT_VERSION) -X github.com/aws/eks-hybrid/internal/aws/eks.manifestUrl=$(HYBRID_MANIFEST_URL) -s -w -buildid='' -extldflags -static
+build-cross-platform: LINKER_FLAGS :=-X github.com/aws/eks-hybrid/cmd/nodeadm/version.GitVersion=$(GIT_VERSION) -X github.com/aws/eks-hybrid/internal/aws.manifestUrl=$(HYBRID_MANIFEST_URL) -s -w -buildid='' -extldflags -static
 build-cross-platform:
 	GOARCH=amd64 go build -ldflags "$(LINKER_FLAGS)" -trimpath -o $(LOCALBIN)/amd64/nodeadm cmd/nodeadm/main.go
 	GOARCH=arm64 go build -ldflags "$(LINKER_FLAGS)" -trimpath -o $(LOCALBIN)/arm64/nodeadm cmd/nodeadm/main.go

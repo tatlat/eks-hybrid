@@ -12,7 +12,7 @@ import (
 	initialize "github.com/aws/eks-hybrid/cmd/nodeadm/init"
 	"github.com/aws/eks-hybrid/cmd/nodeadm/install"
 	"github.com/aws/eks-hybrid/cmd/nodeadm/uninstall"
-	"github.com/aws/eks-hybrid/internal/aws/eks"
+	"github.com/aws/eks-hybrid/internal/aws"
 	"github.com/aws/eks-hybrid/internal/cli"
 	"github.com/aws/eks-hybrid/internal/containerd"
 	"github.com/aws/eks-hybrid/internal/creds"
@@ -110,12 +110,12 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	}
 
 	log.Info("Validating Kubernetes version", zap.Reflect("kubernetes version", c.kubernetesVersion))
-	// Create a Source for all EKS managed artifacts.
-	release, err := eks.FindLatestRelease(ctx, c.kubernetesVersion)
+	// Create a Source for all AWS managed artifacts.
+	awsSource, err := aws.GetLatestSource(ctx, c.kubernetesVersion)
 	if err != nil {
 		return err
 	}
-	log.Info("Using Kubernetes version", zap.Reflect("kubernetes version", release.Version))
+	log.Info("Using Kubernetes version", zap.Reflect("kubernetes version", awsSource.Eks.Version))
 
 	artifacts := installed.Artifacts
 	log.Info("Creating package manager...")
@@ -170,7 +170,7 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	}
 
 	// Installing new version of artifacts
-	if err := install.Install(ctx, release, credsProvider, containerdSource, log); err != nil {
+	if err := install.Install(ctx, awsSource, credsProvider, containerdSource, log); err != nil {
 		return err
 	}
 
