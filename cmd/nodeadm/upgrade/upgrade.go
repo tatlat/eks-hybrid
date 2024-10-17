@@ -2,6 +2,7 @@ package upgrade
 
 import (
 	"context"
+	"fmt"
 	"os"
 
 	"github.com/integrii/flaggy"
@@ -58,6 +59,15 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return cli.ErrMustRunAsRoot
 	}
 
+	log.Info("Loading installed components")
+	installed, err := tracker.GetInstalledArtifacts()
+	if err != nil && os.IsNotExist(err) {
+		log.Info("No nodeadm components installed. Please use nodeadm install and nodeadm init commands to bootstrap a node")
+		return nil
+	} else if err != nil {
+		return err
+	}
+
 	ctx := context.Background()
 	if !slices.Contains(c.skipPhases, skipPodPreflightCheck) {
 		log.Info("Validating if pods have been drained...")
@@ -85,6 +95,19 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	if err := nodeProvider.Enrich(); err != nil {
 		return err
 	}
+	credsProvider, err := creds.GetCredentialProviderFromNodeConfig(nodeProvider.GetNodeConfig())
+	if err != nil {
+		return err
+	}
+
+	// Validating credential provider. Upgrade does not allow changes to credential providers
+	installedCredsProvider, err := creds.GetCredentialProviderFromInstalledArtifacts(installed.Artifacts)
+	if err != nil {
+		return err
+	}
+	if installedCredsProvider != credsProvider {
+		return fmt.Errorf("upgrade does not support changing credential providers. Please uninstall and install with new credential provider")
+	}
 
 	log.Info("Validating Kubernetes version", zap.Reflect("kubernetes version", c.kubernetesVersion))
 	// Create a Source for all EKS managed artifacts.
@@ -93,15 +116,6 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return err
 	}
 	log.Info("Using Kubernetes version", zap.Reflect("kubernetes version", release.Version))
-
-	log.Info("Loading installed components")
-	installed, err := tracker.GetInstalledArtifacts()
-	if err != nil && os.IsNotExist(err) {
-		log.Info("No nodeadm components installed. Please use nodeadm install and nodeadm init commands to bootstrap a node")
-		return nil
-	} else if err != nil {
-		return err
-	}
 
 	artifacts := installed.Artifacts
 	log.Info("Creating package manager...")
@@ -152,11 +166,6 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	}
 
 	if err := tracker.Clear(); err != nil {
-		return err
-	}
-
-	credsProvider, err := creds.GetCredentialProviderFromNodeConfig(nodeProvider.GetNodeConfig())
-	if err != nil {
 		return err
 	}
 

@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/aws/eks-hybrid/internal/api"
+	"github.com/aws/eks-hybrid/internal/tracker"
 )
 
 type CredentialProvider string
@@ -31,4 +32,13 @@ func GetCredentialProviderFromNodeConfig(nodeCfg *api.NodeConfig) (CredentialPro
 		return IamRolesAnywhereCredentialProvider, nil
 	}
 	return "", fmt.Errorf("no credential process provided in nodeConfig")
+}
+
+func GetCredentialProviderFromInstalledArtifacts(artifacts *tracker.InstalledArtifacts) (CredentialProvider, error) {
+	if artifacts.Ssm {
+		return SsmCredentialProvider, nil
+	} else if artifacts.IamRolesAnywhere {
+		return IamRolesAnywhereCredentialProvider, nil
+	}
+	return "", fmt.Errorf("no credential process found in installed artifacts")
 }

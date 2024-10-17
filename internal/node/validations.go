@@ -27,7 +27,7 @@ func IsUnscheduled(ctx context.Context) error {
 	}
 
 	if !node.Spec.Unschedulable {
-		return fmt.Errorf("node is schedulable. Please drain the node or use --skip node-validation")
+		return fmt.Errorf("node is schedulable")
 	}
 	return nil
 }
@@ -45,8 +45,7 @@ func IsDrained(ctx context.Context) error {
 		}
 	}
 	if len(podsOnNode) != 0 {
-		return fmt.Errorf("only static pods and pods controlled by daemon-sets can be running on the node. Please move pods " +
-			"to different node or provide --skip pod-validation")
+		return fmt.Errorf("node not drained")
 	}
 	return nil
 }
