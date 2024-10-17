@@ -10,6 +10,7 @@ spec:
     region: us-west-2
   hybrid:
     nodeName: mock-hybrid-node
+    enableCredentialsFile: true
     iamRolesAnywhere:
       awsConfigPath: /.aws/config
       roleArn: arn:aws:iam::123456789010:role/mockHybridNodeRole
