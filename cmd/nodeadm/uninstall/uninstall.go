@@ -2,6 +2,7 @@ package uninstall
 
 import (
 	"context"
+	"fmt"
 	"os"
 
 	"github.com/integrii/flaggy"
@@ -62,13 +63,14 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	if !slices.Contains(c.skipPhases, skipPodPreflightCheck) {
 		log.Info("Validating if pods have been drained...")
 		if err := node.IsDrained(ctx); err != nil {
-			return err
+			return fmt.Errorf("only static pods and pods controlled by daemon-sets can be running on the node. Please move pods " +
+				"to different node or use --skip pod-validation")
 		}
 	}
 	if !slices.Contains(c.skipPhases, skipNodePreflightCheck) {
 		log.Info("Validating if node has been marked unschedulable...")
 		if err := node.IsUnscheduled(ctx); err != nil {
-			return err
+			return fmt.Errorf("please drain or cordon node to mark it unschedulable or use --skip node-validation. %v", err)
 		}
 	}
 
