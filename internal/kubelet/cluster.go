@@ -3,9 +3,11 @@ package kubelet
 import (
 	"context"
 	"encoding/base64"
+	"fmt"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/eks"
+	"github.com/aws/aws-sdk-go-v2/service/eks/types"
 )
 
 func (k *kubelet) ensureClusterDetails() error {
@@ -16,6 +18,9 @@ func (k *kubelet) ensureClusterDetails() error {
 		})
 		if err != nil {
 			return err
+		}
+		if cluster.Cluster.Status != types.ClusterStatusActive {
+			return fmt.Errorf("eks cluster is not active")
 		}
 		if k.nodeConfig.Spec.Cluster.APIServerEndpoint == "" {
 			k.nodeConfig.Spec.Cluster.APIServerEndpoint = *cluster.Cluster.Endpoint
