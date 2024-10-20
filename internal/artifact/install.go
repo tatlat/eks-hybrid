@@ -16,6 +16,9 @@ const DefaultDirPerms = fs.ModeDir | 0755
 // InstallFile installs src to dst with perms permissions. It ensures any base paths exist
 // before installing.
 func InstallFile(dst string, src io.Reader, perms fs.FileMode) error {
+	if err := os.RemoveAll(dst); err != nil {
+		return err
+	}
 	if err := os.MkdirAll(path.Dir(dst), DefaultDirPerms); err != nil {
 		return err
 	}
