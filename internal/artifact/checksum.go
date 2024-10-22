@@ -35,7 +35,6 @@ func ParseGNUChecksum(gnuChecksum []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	return checksum, nil
 }
 

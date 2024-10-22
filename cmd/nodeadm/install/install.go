@@ -7,7 +7,7 @@ import (
 	"github.com/integrii/flaggy"
 	"go.uber.org/zap"
 
-	"github.com/aws/eks-hybrid/internal/aws/eks"
+	"github.com/aws/eks-hybrid/internal/aws"
 	"github.com/aws/eks-hybrid/internal/cli"
 	"github.com/aws/eks-hybrid/internal/cni"
 	"github.com/aws/eks-hybrid/internal/containerd"
@@ -72,17 +72,17 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 
 	ctx := context.Background()
 	log.Info("Validating Kubernetes version", zap.Reflect("kubernetes version", c.kubernetesVersion))
-	// Create a Source for all EKS managed artifacts.
-	release, err := eks.FindLatestRelease(ctx, c.kubernetesVersion)
+	// Create a Source for all AWS managed artifacts.
+	awsSource, err := aws.GetLatestSource(ctx, c.kubernetesVersion)
 	if err != nil {
 		return err
 	}
-	log.Info("Using Kubernetes version", zap.Reflect("kubernetes version", release.Version))
+	log.Info("Using Kubernetes version", zap.Reflect("kubernetes version", awsSource.Eks.Version))
 
-	return Install(ctx, release, credentialProvider, containerdSource, log)
+	return Install(ctx, awsSource, credentialProvider, containerdSource, log)
 }
 
-func Install(ctx context.Context, eksRelease eks.PatchRelease, credentialProvider creds.CredentialProvider, containerdSource containerd.SourceName, log *zap.Logger) error {
+func Install(ctx context.Context, awsSource aws.Source, credentialProvider creds.CredentialProvider, containerdSource containerd.SourceName, log *zap.Logger) error {
 	// Create tracker with existing changes or new tracker
 	trackerConf, err := tracker.GetCurrentState()
 	if err != nil {
@@ -117,10 +117,8 @@ func Install(ctx context.Context, eksRelease eks.PatchRelease, credentialProvide
 
 	switch credentialProvider {
 	case creds.IamRolesAnywhereCredentialProvider:
-		signingHelper := iamrolesanywhere.NewSigningHelper()
-
 		log.Info("Installing AWS signing helper...")
-		if err := iamrolesanywhere.Install(ctx, trackerConf, signingHelper); err != nil {
+		if err := iamrolesanywhere.Install(ctx, trackerConf, awsSource); err != nil {
 			return err
 		}
 	case creds.SsmCredentialProvider:
@@ -135,27 +133,27 @@ func Install(ctx context.Context, eksRelease eks.PatchRelease, credentialProvide
 	}
 
 	log.Info("Installing kubelet...")
-	if err := kubelet.Install(ctx, trackerConf, eksRelease); err != nil {
+	if err := kubelet.Install(ctx, trackerConf, awsSource); err != nil {
 		return err
 	}
 
 	log.Info("Installing kubectl...")
-	if err := kubectl.Install(ctx, trackerConf, eksRelease); err != nil {
+	if err := kubectl.Install(ctx, trackerConf, awsSource); err != nil {
 		return err
 	}
 
 	log.Info("Installing cni-plugins...")
-	if err := cni.Install(ctx, trackerConf, eksRelease); err != nil {
+	if err := cni.Install(ctx, trackerConf, awsSource); err != nil {
 		return err
 	}
 
 	log.Info("Installing image credential provider...")
-	if err := imagecredentialprovider.Install(ctx, trackerConf, eksRelease); err != nil {
+	if err := imagecredentialprovider.Install(ctx, trackerConf, awsSource); err != nil {
 		return err
 	}
 
 	log.Info("Installing IAM authenticator...")
-	if err := iamauthenticator.Install(ctx, trackerConf, eksRelease); err != nil {
+	if err := iamauthenticator.Install(ctx, trackerConf, awsSource); err != nil {
 		return err
 	}
 
