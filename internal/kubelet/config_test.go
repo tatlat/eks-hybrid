@@ -10,7 +10,7 @@ import (
 )
 
 func TestKubeletCredentialProvidersFeatureFlag(t *testing.T) {
-	var tests = []struct {
+	tests := []struct {
 		kubeletVersion string
 		expectedValue  *bool
 	}{
@@ -32,7 +32,7 @@ func TestKubeletCredentialProvidersFeatureFlag(t *testing.T) {
 }
 
 func TestContainerRuntime(t *testing.T) {
-	var tests = []struct {
+	tests := []struct {
 		kubeletVersion           string
 		expectedContainerRuntime *string
 	}{
@@ -63,7 +63,7 @@ func TestContainerRuntime(t *testing.T) {
 }
 
 func TestKubeAPILimits(t *testing.T) {
-	var tests = []struct {
+	tests := []struct {
 		kubeletVersion       string
 		expectedKubeAPIQS    *int
 		expectedKubeAPIBurst *int
@@ -85,7 +85,7 @@ func TestKubeAPILimits(t *testing.T) {
 }
 
 func TestProviderID(t *testing.T) {
-	var tests = []struct {
+	tests := []struct {
 		kubeletVersion        string
 		expectedCloudProvider string
 	}{
