@@ -743,17 +743,6 @@ build {
     only = ["amazon-ebs.ubuntu22", "amazon-ebs.ubuntu24", "vsphere-iso.ubuntu22", "vsphere-iso.ubuntu24", "qemu.ubuntu22", "qemu.ubuntu24"]
   }
 
-  provisioner "shell" {
-    inline = [
-      "sudo yum update -y || true",
-      "sudo yum install -y curl",
-      "curl '${var.nodeadm_link}' -o nodeadm",
-      "chmod +x nodeadm",
-      "sudo ./nodeadm install ${local.k8s_release} --credential-provider ${local.auth_value} --containerd-source docker",
-    ]
-    only = ["amazon-ebs.rhel8", "amazon-ebs.rhel9", ]
-  }
-
     provisioner "shell" {
     script = "./provisioner.sh"
     environment_vars = [
@@ -764,6 +753,6 @@ build {
       "rhel_version=${var.rhel_version}",
       "k8s_version=${var.k8s_version}"
     ]
-    only = ["qemu.rhel8", "qemu.rhel9", "vsphere-iso.rhel8", "vsphere-iso.rhel9"]
+    only = ["amazon-ebs.rhel8", "amazon-ebs.rhel9","qemu.rhel8", "qemu.rhel9", "vsphere-iso.rhel8", "vsphere-iso.rhel9"]
   }
 }
