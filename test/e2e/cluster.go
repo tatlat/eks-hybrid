@@ -17,7 +17,7 @@ const (
 	deleteClusterTimeout = 5 * time.Minute
 )
 
-func (t *TestRunner) createEKSCluster(clusterName, kubernetesVersion string) error {
+func (t *TestRunner) createEKSCluster(clusterName, kubernetesVersion, clusterSecurityGroupID string) error {
 	// Join the subnet IDs into a single comma-separated string
 	subnetIdsStr := strings.Join(t.Status.ClusterSubnetIDs, ",")
 	hybridNetworkConfig := fmt.Sprintf(`{"remoteNodeNetworks":[{"cidrs":["%s"]}],"remotePodNetworks":[{"cidrs":["%s"]}]}`, t.Spec.HybridNetwork.VpcCidr, t.Spec.HybridNetwork.PodCidr)
@@ -27,7 +27,7 @@ func (t *TestRunner) createEKSCluster(clusterName, kubernetesVersion string) err
 		"--name", clusterName,
 		"--endpoint-url", fmt.Sprintf("https://eks.%s.amazonaws.com", t.Spec.ClusterRegion),
 		"--role-arn", t.Status.RoleArn,
-		"--resources-vpc-config", fmt.Sprintf("subnetIds=%s", subnetIdsStr),
+		"--resources-vpc-config", fmt.Sprintf("subnetIds=%s,securityGroupIds=%s", subnetIdsStr, clusterSecurityGroupID),
 		"--remote-network-config", hybridNetworkConfig,
 		"--access-config", "authenticationMode=API_AND_CONFIG_MAP",
 		"--tags", "Name=hybrid-eks-cluster,App=hybrid-eks-beta")
@@ -95,7 +95,7 @@ func (t *TestRunner) cleanupEKSHybridClusters(ctx context.Context) error {
 	for _, kubernetesVersion := range t.Spec.KubernetesVersions {
 		clusterName := clusterName(t.Spec.ClusterName, kubernetesVersion)
 
-		fmt.Printf("cleaning up EKS hybrid cluster: %s\n", clusterName)
+		fmt.Printf("Cleaning up EKS hybrid cluster: %s\n", clusterName)
 		err := t.deleteEKSCluster(ctx, clusterName)
 		if err != nil {
 			fmt.Printf("error cleaning up EKS hybrid cluster %s: %v\n", clusterName, err)
@@ -108,7 +108,7 @@ func (t *TestRunner) cleanupEKSHybridClusters(ctx context.Context) error {
 // deleteEKSCluster deletes the given EKS cluster
 func (t *TestRunner) deleteEKSCluster(ctx context.Context, clusterName string) error {
 	svc := eks.New(t.Session)
-	fmt.Printf("deleting cluster %s\n", clusterName)
+	fmt.Printf("Deleting cluster %s\n", clusterName)
 	_, err := svc.DeleteCluster(&eks.DeleteClusterInput{
 		Name: aws.String(clusterName),
 	})
@@ -116,7 +116,7 @@ func (t *TestRunner) deleteEKSCluster(ctx context.Context, clusterName string) e
 		return fmt.Errorf("failed to delete EKS hybrid cluster %s: %v", clusterName, err)
 	}
 
-	fmt.Printf("cluster deletion initiated for: %s\n", clusterName)
+	fmt.Printf("Cluster deletion initiated for: %s\n", clusterName)
 
 	// Wait for the cluster to be fully deleted to check for any errors during the delete.
 	err = waitForClusterDeletion(ctx, svc, clusterName)
@@ -157,7 +157,7 @@ func waitForClusterDeletion(ctx context.Context, svc *eks.EKS, clusterName strin
 				errCh <- fmt.Errorf("context canceled or timed out while waiting for cluster %s deletion: %v", clusterName, ctx.Err())
 				return
 			case <-time.After(30 * time.Second): // Retry after 30 secs
-				fmt.Printf("waiting for cluster %s to be deleted.\n", clusterName)
+				fmt.Printf("Waiting for cluster %s to be deleted.\n", clusterName)
 			}
 		}
 	}(ctx)
@@ -165,7 +165,7 @@ func waitForClusterDeletion(ctx context.Context, svc *eks.EKS, clusterName strin
 	// Wait for the cluster to be deleted or for the timeout to expire
 	select {
 	case <-statusCh:
-		fmt.Printf("cluster %s successfully deleted.\n", clusterName)
+		fmt.Printf("Cluster %s successfully deleted.\n", clusterName)
 		return nil
 	case err := <-errCh:
 		return err

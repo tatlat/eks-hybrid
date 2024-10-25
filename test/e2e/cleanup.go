@@ -37,6 +37,6 @@ func (t *TestRunner) CleanupE2EResources(ctx context.Context) error {
 		return fmt.Errorf("failed to clean up IAM roles: %v", err)
 	}
 
-	fmt.Println("cleanup completed successfully!")
+	fmt.Println("Cleanup completed successfully!")
 	return nil
 }

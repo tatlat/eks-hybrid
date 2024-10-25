@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -21,97 +22,214 @@ type vpcSubnetParams struct {
 	privateSubnetCidr string
 }
 
-// CreateVPC creates a VPC and the associated subnets (public and private)
-func (t *TestRunner) createVPC(vpcSubnetParams vpcSubnetParams) (*vpcConfig, error) {
-	svc := ec2.New(t.Session)
-
-	// Create VPC
-	vpcOutput, err := svc.CreateVpc(&ec2.CreateVpcInput{
-		CidrBlock: aws.String(vpcSubnetParams.vpcCidr),
-	})
+// createVPCResources creates a VPC and the associated subnets (public and private), route tables, internet gateway.
+func (t *TestRunner) createVPCResources(client *ec2.EC2, vpcSubnetParams vpcSubnetParams) (*vpcConfig, error) {
+	vpcId, err := createVPC(client, vpcSubnetParams)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create VPC: %v", err)
 	}
 
-	vpcId := *vpcOutput.Vpc.VpcId
-
-	// Tag the VPC
-	_, err = svc.CreateTags(&ec2.CreateTagsInput{
-		Resources: []*string{&vpcId},
-		Tags: []*ec2.Tag{
-			{
-				Key:   aws.String("Name"),
-				Value: aws.String(vpcSubnetParams.vpcName),
-			},
-		},
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to tag VPC: %v", err)
-	}
-
-	fmt.Printf("Successfully created VPC: %s\n", vpcId)
-
-	// Create a public subnet
-	publicSubnet, err := svc.CreateSubnet(&ec2.CreateSubnetInput{
-		VpcId:            aws.String(vpcId),
-		CidrBlock:        aws.String(vpcSubnetParams.publicSubnetCidr),
-		AvailabilityZone: aws.String(t.Spec.ClusterRegion + "a"),
-	})
+	publicSubnetId, err := createSubnet(client, vpcId, vpcSubnetParams.publicSubnetCidr, t.Spec.ClusterRegion+"a", vpcSubnetParams.vpcName+"-public-subnet")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create public subnet: %v", err)
 	}
-
-	publicSubnetId := *publicSubnet.Subnet.SubnetId
 	fmt.Printf("Successfully created public subnet: %s\n", publicSubnetId)
 
-	// Tag the public subnet
-	_, err = svc.CreateTags(&ec2.CreateTagsInput{
-		Resources: []*string{&publicSubnetId},
-		Tags: []*ec2.Tag{
-			{
-				Key:   aws.String("Name"),
-				Value: aws.String(vpcSubnetParams.vpcName + "-public-subnet"),
-			},
-		},
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to tag public subnet: %v", err)
+	if err = enableAutoAssignIpv4Subnet(client, publicSubnetId); err != nil {
+		return nil, fmt.Errorf("failed to enable auto-assign IPv4 for subnet %s: %v", publicSubnetId, err)
 	}
 
-	// Create a private subnet
-	privateSubnet, err := svc.CreateSubnet(&ec2.CreateSubnetInput{
-		VpcId:            aws.String(vpcId),
-		CidrBlock:        aws.String(vpcSubnetParams.privateSubnetCidr),
-		AvailabilityZone: aws.String(t.Spec.ClusterRegion + "b"),
-	})
+	routeTableId, err := createRouteTable(client, vpcId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create route table: %v", err)
+	}
+
+	igwId, err := createInternetGateway(client, vpcId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Internet Gateway: %v", err)
+	}
+
+	// Create a route for 0.0.0.0/0 to the Internet Gateway in the Route Table.
+	// Allows the hybrid nodes to reach the Public API EKS endpoint.
+	if err = addGatewayRoute(client, routeTableId, "0.0.0.0/0", igwId); err != nil {
+		return nil, fmt.Errorf("failed to create route to Internet Gateway: %v", err)
+	}
+
+	if err = associateRouteTableToSubnet(client, routeTableId, publicSubnetId); err != nil {
+		return nil, fmt.Errorf("failed to associate route table with public subnet: %v", err)
+	}
+
+	privateSubnetId, err := createSubnet(client, vpcId, vpcSubnetParams.privateSubnetCidr, t.Spec.ClusterRegion+"b", vpcSubnetParams.vpcName+"-private-subnet")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create private subnet: %v", err)
 	}
-
-	privateSubnetId := *privateSubnet.Subnet.SubnetId
 	fmt.Printf("Successfully created private subnet: %s\n", privateSubnetId)
 
-	// Tag the private subnet
-	_, err = svc.CreateTags(&ec2.CreateTagsInput{
-		Resources: []*string{&privateSubnetId},
-		Tags: []*ec2.Tag{
-			{
-				Key:   aws.String("Name"),
-				Value: aws.String(vpcSubnetParams.vpcName + "-private-subnet"),
-			},
-		},
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to tag private subnet: %v", err)
-	}
-
-	// Return VPC and subnet information
 	vpcConfig := &vpcConfig{
 		vpcID:     vpcId,
 		subnetIDs: []string{publicSubnetId, privateSubnetId},
 	}
 
 	return vpcConfig, nil
+}
+
+func createVPC(client *ec2.EC2, vpcParam vpcSubnetParams) (string, error) {
+	vpcOutput, err := client.CreateVpc(&ec2.CreateVpcInput{
+		CidrBlock: aws.String(vpcParam.vpcCidr),
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to create VPC: %v", err)
+	}
+
+	vpcId := *vpcOutput.Vpc.VpcId
+
+	_, err = client.CreateTags(&ec2.CreateTagsInput{
+		Resources: []*string{&vpcId},
+		Tags: []*ec2.Tag{
+			{
+				Key:   aws.String("Name"),
+				Value: aws.String(vpcParam.vpcName),
+			},
+		},
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to tag VPC: %v", err)
+	}
+
+	fmt.Printf("Successfully created VPC: %s\n", vpcId)
+	return vpcId, nil
+}
+
+func createSubnet(client *ec2.EC2, vpcID, subnetCidr, az, tagName string) (subnetID string, err error) {
+	subnet, err := client.CreateSubnet(&ec2.CreateSubnetInput{
+		VpcId:            aws.String(vpcID),
+		CidrBlock:        aws.String(subnetCidr),
+		AvailabilityZone: aws.String(az),
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to create subnet: %v", err)
+	}
+
+	subnetId := *subnet.Subnet.SubnetId
+
+	_, err = client.CreateTags(&ec2.CreateTagsInput{
+		Resources: []*string{&subnetId},
+		Tags: []*ec2.Tag{
+			{
+				Key:   aws.String("Name"),
+				Value: aws.String(tagName),
+			},
+		},
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to tag private subnet: %v", err)
+	}
+	return subnetId, nil
+}
+
+func createInternetGateway(client *ec2.EC2, vpcId string) (string, error) {
+	igwOutput, err := client.CreateInternetGateway(&ec2.CreateInternetGatewayInput{})
+	if err != nil {
+		return "", fmt.Errorf("failed to create Internet Gateway: %v", err)
+	}
+
+	igwId := *igwOutput.InternetGateway.InternetGatewayId
+	fmt.Printf("Successfully created Internet Gateway: %s\n", igwId)
+
+	_, err = client.AttachInternetGateway(&ec2.AttachInternetGatewayInput{
+		InternetGatewayId: aws.String(igwId),
+		VpcId:             aws.String(vpcId),
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to attach Internet Gateway to VPC: %v", err)
+	}
+	return igwId, nil
+}
+
+func enableAutoAssignIpv4Subnet(client *ec2.EC2, subnetID string) error {
+	_, err := client.ModifySubnetAttribute(&ec2.ModifySubnetAttributeInput{
+		SubnetId: aws.String(subnetID),
+		MapPublicIpOnLaunch: &ec2.AttributeBooleanValue{
+			Value: aws.Bool(true),
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("failed to enable auto-assign IPv4 for subnet %s: %v", subnetID, err)
+	}
+	return nil
+}
+
+func createRouteTable(client *ec2.EC2, vpcId string) (string, error) {
+	routeTableOutput, err := client.CreateRouteTable(&ec2.CreateRouteTableInput{
+		VpcId: aws.String(vpcId),
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to create route table: %v", err)
+	}
+
+	routeTableId := *routeTableOutput.RouteTable.RouteTableId
+	fmt.Printf("Successfully created route table: %s\n", routeTableId)
+	return routeTableId, nil
+}
+
+func addGatewayRoute(client *ec2.EC2, routeTableId, route, igwId string) error {
+	_, err := client.CreateRoute(&ec2.CreateRouteInput{
+		RouteTableId:         aws.String(routeTableId),
+		DestinationCidrBlock: aws.String(route),
+		GatewayId:            aws.String(igwId),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create route to Internet Gateway: %v", err)
+	}
+	return nil
+}
+
+func associateRouteTableToSubnet(client *ec2.EC2, routeTableId, subnetId string) error {
+	_, err := client.AssociateRouteTable(&ec2.AssociateRouteTableInput{
+		RouteTableId: aws.String(routeTableId),
+		SubnetId:     aws.String(subnetId),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to associate route table with subnet: %v", err)
+	}
+	return nil
+}
+
+func getAttachedDefaultSecurityGroup(ctx context.Context, client *ec2.EC2, vpcId string) (string, error) {
+	input := &ec2.DescribeSecurityGroupsInput{
+		Filters: []*ec2.Filter{
+			{
+				Name:   aws.String("vpc-id"),
+				Values: []*string{aws.String(vpcId)},
+			},
+			{
+				Name:   aws.String("group-name"),
+				Values: []*string{aws.String("default")},
+			},
+		},
+	}
+
+	result, err := client.DescribeSecurityGroupsWithContext(ctx, input)
+	if err != nil {
+		return "", fmt.Errorf("failed to describe security groups: %v", err)
+	}
+
+	if len(result.SecurityGroups) == 0 {
+		return "", fmt.Errorf("no default security group found for VPC %s", vpcId)
+	}
+
+	return *result.SecurityGroups[0].GroupId, nil
+}
+
+func addIngressRules(ctx context.Context, client *ec2.EC2, securityGroupID string, permission []*ec2.IpPermission) error {
+	_, err := client.AuthorizeSecurityGroupIngressWithContext(ctx, &ec2.AuthorizeSecurityGroupIngressInput{
+		GroupId:       aws.String(securityGroupID),
+		IpPermissions: permission,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to update security group: %v", err)
+	}
+	return nil
 }
 
 // CreateVPCPeering creates a VPC peering connection between two VPCs
@@ -201,7 +319,7 @@ func (t *TestRunner) updateRouteTablesForPeering() error {
 
 // deleteVpcPeering deletes the VPC peering connections.
 func (t *TestRunner) deleteVpcPeering() error {
-	fmt.Println("deleting VPC peering connection...")
+	fmt.Println("Deleting VPC peering connection...")
 
 	svc := ec2.New(t.Session)
 	input := &ec2.DeleteVpcPeeringConnectionInput{
@@ -213,16 +331,20 @@ func (t *TestRunner) deleteVpcPeering() error {
 		return fmt.Errorf("failed to delete VPC peering connection: %v", err)
 	}
 
-	fmt.Println("successfully deleted VPC peering connection")
+	fmt.Println("Successfully deleted VPC peering connection")
 	return nil
 }
 
 // deleteVpcs deletes the VPC and their associated subnets.
 func (t *TestRunner) deleteVpc(vpc vpcConfig) error {
-	fmt.Printf("Deleting VPC %s...\n", vpc.vpcID)
+	fmt.Printf("Deleting VPC and attached resources %s...\n", vpc.vpcID)
 
 	svc := ec2.New(t.Session)
-	// Delete subnets in the VPC
+
+	if err := t.deleteInternetGateway(svc, vpc.vpcID); err != nil {
+		return fmt.Errorf("failed to delete internet gateway: %v", err)
+	}
+
 	for _, subnetID := range vpc.subnetIDs {
 		err := t.deleteSubnet(subnetID)
 		if err != nil {
@@ -230,7 +352,10 @@ func (t *TestRunner) deleteVpc(vpc vpcConfig) error {
 		}
 	}
 
-	// Delete the VPC
+	if err := t.deleteRouteTables(svc, vpc.vpcID); err != nil {
+		return fmt.Errorf("failed to delete route tables: %v", err)
+	}
+
 	input := &ec2.DeleteVpcInput{
 		VpcId: aws.String(vpc.vpcID),
 	}
@@ -258,5 +383,72 @@ func (t *TestRunner) deleteSubnet(subnetID string) error {
 	}
 
 	fmt.Printf("Successfully deleted subnet %s\n", subnetID)
+	return nil
+}
+
+func (t *TestRunner) deleteInternetGateway(svc *ec2.EC2, vpcID string) error {
+	igwOutput, err := svc.DescribeInternetGateways(&ec2.DescribeInternetGatewaysInput{
+		Filters: []*ec2.Filter{
+			{
+				Name:   aws.String("attachment.vpc-id"),
+				Values: []*string{aws.String(vpcID)},
+			},
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("failed to describe internet gateways for VPC %s: %v", vpcID, err)
+	}
+
+	if len(igwOutput.InternetGateways) > 0 {
+		igwID := *igwOutput.InternetGateways[0].InternetGatewayId
+		fmt.Printf("Detaching and deleting internet gateway %s\n", igwID)
+		_, err := svc.DetachInternetGateway(&ec2.DetachInternetGatewayInput{
+			InternetGatewayId: aws.String(igwID),
+			VpcId:             aws.String(vpcID),
+		})
+		if err != nil {
+			return fmt.Errorf("failed to detach internet gateway %s from VPC %s: %v", igwID, vpcID, err)
+		}
+
+		_, err = svc.DeleteInternetGateway(&ec2.DeleteInternetGatewayInput{
+			InternetGatewayId: aws.String(igwID),
+		})
+		if err != nil {
+			return fmt.Errorf("failed to delete internet gateway %s: %v", igwID, err)
+		}
+		fmt.Printf("Successfully deleted Internet Gateway %s\n", igwID)
+	}
+	return nil
+}
+
+func (t *TestRunner) deleteRouteTables(svc *ec2.EC2, vpcID string) error {
+	input := &ec2.DescribeRouteTablesInput{
+		Filters: []*ec2.Filter{
+			{
+				Name:   aws.String("vpc-id"),
+				Values: []*string{aws.String(vpcID)},
+			},
+		},
+	}
+
+	result, err := svc.DescribeRouteTables(input)
+	if err != nil {
+		return fmt.Errorf("error describing route tables: %v", err)
+	}
+
+	for _, rt := range result.RouteTables {
+		// Skip the main route table as it cannot be deleted while the VPC is still exists. It gets deleted with the VPC.
+		if len(rt.Associations) > 0 && *rt.Associations[0].Main {
+			continue
+		}
+
+		_, err = svc.DeleteRouteTable(&ec2.DeleteRouteTableInput{
+			RouteTableId: rt.RouteTableId,
+		})
+		if err != nil {
+			return fmt.Errorf("error deleting route table: %v", err)
+		}
+	}
+	fmt.Println("Successfully deleted route tables")
 	return nil
 }

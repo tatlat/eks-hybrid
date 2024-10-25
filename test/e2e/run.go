@@ -10,6 +10,7 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/ec2"
 	"gopkg.in/yaml.v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -53,7 +54,7 @@ type NetworkConfig struct {
 const (
 	vpcCNIDaemonSetName = "aws-node"
 	vpcCNIDaemonSetNS   = "kube-system"
-	outputDir           = "/tmp/eks-hybrid"
+	outputDir           = "/tmp"
 	ciliumCni           = "cilium"
 )
 
@@ -97,6 +98,7 @@ func (t *TestRunner) NewAWSSession() (*session.Session, error) {
 }
 
 func (t *TestRunner) CreateResources(ctx context.Context) error {
+	ec2Client := ec2.New(t.Session)
 	// Temporary code, remove this when AWS CLI supports creating hybrid EKS cluster
 	awsPatchLocation := "s3://eks-hybrid-beta/v0.0.0-beta.1/awscli/aws-eks-cli-beta.json"
 	localFilePath := "/tmp/awsclipatch"
@@ -120,12 +122,37 @@ func (t *TestRunner) CreateResources(ctx context.Context) error {
 		privateSubnetCidr: t.Spec.ClusterNetwork.PrivateSubnetCidr,
 	}
 	fmt.Println("Creating EKS cluster VPC...")
-	clusterVpcConfig, err := t.createVPC(clusterVpcParam)
+	clusterVpcConfig, err := t.createVPCResources(ec2Client, clusterVpcParam)
 	if err != nil {
 		return fmt.Errorf("error creating cluster VPC: %v", err)
 	}
 	t.Status.ClusterVpcID = clusterVpcConfig.vpcID
 	t.Status.ClusterSubnetIDs = clusterVpcConfig.subnetIDs
+
+	// Update cluster security group with hybrid node's vpc cidr to allow access to ec2 nodes.
+	clusterPermissions := []*ec2.IpPermission{
+		{
+			IpProtocol: aws.String("tcp"),
+			FromPort:   aws.Int64(443),
+			ToPort:     aws.Int64(443),
+			IpRanges: []*ec2.IpRange{
+				{
+					CidrIp: aws.String(t.Spec.HybridNetwork.VpcCidr),
+				},
+				{
+					CidrIp: aws.String(t.Spec.HybridNetwork.PodCidr),
+				},
+			},
+		},
+	}
+	clusterSecurityGroupID, err := getAttachedDefaultSecurityGroup(ctx, ec2Client, clusterVpcConfig.vpcID)
+	if err != nil {
+		return fmt.Errorf("error getting default security group to vpc %s: %v", clusterVpcConfig.vpcID, err)
+	}
+
+	if err = addIngressRules(ctx, ec2Client, clusterSecurityGroupID, clusterPermissions); err != nil {
+		return fmt.Errorf("error updating cluster security group associated with the vpc %s with the rules: %v", clusterVpcConfig.vpcID, err)
+	}
 
 	// Create hybrid nodes VPC
 	hybridNodesVpcParam := vpcSubnetParams{
@@ -135,12 +162,34 @@ func (t *TestRunner) CreateResources(ctx context.Context) error {
 		privateSubnetCidr: t.Spec.HybridNetwork.PrivateSubnetCidr,
 	}
 	fmt.Println("Creating EC2 hybrid nodes VPC...")
-	hybridNodesVpcConfig, err := t.createVPC(hybridNodesVpcParam)
+	hybridNodesVpcConfig, err := t.createVPCResources(ec2Client, hybridNodesVpcParam)
 	if err != nil {
 		return fmt.Errorf("error creating EC2 hybrid nodes VPC: %v", err)
 	}
 	t.Status.HybridVpcID = hybridNodesVpcConfig.vpcID
 	t.Status.HybridSubnetIDs = hybridNodesVpcConfig.subnetIDs
+
+	// Update hybrid node security group with cluster's vpc cidr to allow access to CP nodes.
+	hybridNodePermissions := []*ec2.IpPermission{
+		{
+			IpProtocol: aws.String("tcp"),
+			FromPort:   aws.Int64(10250),
+			ToPort:     aws.Int64(10250),
+			IpRanges: []*ec2.IpRange{
+				{
+					CidrIp: aws.String(clusterVpcParam.vpcCidr),
+				},
+			},
+		},
+	}
+	hybridSecurityGroupID, err := getAttachedDefaultSecurityGroup(ctx, ec2Client, hybridNodesVpcConfig.vpcID)
+	if err != nil {
+		return fmt.Errorf("error getting default security group to vpc %s: %v", hybridNodesVpcConfig.vpcID, err)
+	}
+
+	if err = addIngressRules(ctx, ec2Client, hybridSecurityGroupID, hybridNodePermissions); err != nil {
+		return fmt.Errorf("error updating cluster security group associated with the vpc %s with the rules: %v", hybridNodesVpcConfig.vpcID, err)
+	}
 
 	// Create VPC Peering Connection between the cluster VPC and EC2 hybrid nodes VPC
 	fmt.Println("Creating VPC peering connection...")
@@ -160,7 +209,7 @@ func (t *TestRunner) CreateResources(ctx context.Context) error {
 	for _, kubernetesVersion := range t.Spec.KubernetesVersions {
 		fmt.Printf("Creating EKS cluster with the kubernetes version %s..\n", kubernetesVersion)
 		clusterName := clusterName(t.Spec.ClusterName, kubernetesVersion)
-		err := t.createEKSCluster(clusterName, kubernetesVersion)
+		err := t.createEKSCluster(clusterName, kubernetesVersion, clusterSecurityGroupID)
 		if err != nil {
 			return fmt.Errorf("error creating %s EKS cluster: %v", kubernetesVersion, err)
 		}
