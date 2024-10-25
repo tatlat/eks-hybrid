@@ -3,11 +3,10 @@ package uninstall
 import (
 	"context"
 	"fmt"
-	"os"
-
 	"github.com/integrii/flaggy"
 	"go.uber.org/zap"
 	"k8s.io/utils/strings/slices"
+	"os"
 
 	"github.com/aws/eks-hybrid/internal/cli"
 	"github.com/aws/eks-hybrid/internal/cni"
@@ -60,6 +59,7 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	}
 
 	ctx := context.Background()
+
 	if !slices.Contains(c.skipPhases, skipPodPreflightCheck) {
 		log.Info("Validating if pods have been drained...")
 		if err := node.IsDrained(ctx); err != nil {
@@ -99,7 +99,7 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return err
 	}
 
-	if err := UninstallBinaries(artifacts, packageManager, log); err != nil {
+	if err := UninstallBinaries(ctx, artifacts, packageManager, log); err != nil {
 		return err
 	}
 
@@ -117,7 +117,7 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		if err := daemonManager.StopDaemon(ssm.SsmDaemonName); err != nil {
 			return err
 		}
-		if err := ssm.Uninstall(packageManager); err != nil {
+		if err := ssm.Uninstall(ctx, packageManager); err != nil {
 			return err
 		}
 	}
@@ -136,7 +136,7 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 			return err
 		}
 
-		if err := containerd.Uninstall(packageManager); err != nil {
+		if err := containerd.Uninstall(ctx, packageManager); err != nil {
 			return err
 		}
 	}
@@ -146,7 +146,7 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	return tracker.Clear()
 }
 
-func UninstallBinaries(artifacts *tracker.InstalledArtifacts, packageManager *packagemanager.DistroPackageManger, log *zap.Logger) error {
+func UninstallBinaries(ctx context.Context, artifacts *tracker.InstalledArtifacts, packageManager *packagemanager.DistroPackageManger, log *zap.Logger) error {
 	if artifacts.Kubectl {
 		log.Info("Uninstalling kubectl...")
 		if err := kubectl.Uninstall(); err != nil {
@@ -179,7 +179,7 @@ func UninstallBinaries(artifacts *tracker.InstalledArtifacts, packageManager *pa
 	}
 	if artifacts.Iptables {
 		log.Info("Uninstalling iptables...")
-		if err := iptables.Uninstall(packageManager); err != nil {
+		if err := iptables.Uninstall(ctx, packageManager); err != nil {
 			return err
 		}
 	}
