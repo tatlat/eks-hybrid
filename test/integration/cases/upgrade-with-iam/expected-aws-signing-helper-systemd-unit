@@ -1,0 +1,23 @@
+[Unit]
+Description=Service that runs aws_signing_helper update to keep the AWS credentials refreshed in /eks-hybrid/.aws/credentials.
+
+[Service]
+User=root
+Environment=AWS_SHARED_CREDENTIALS_FILE=/eks-hybrid/.aws/credentials
+ExecStart=/usr/local/bin/aws_signing_helper update \
+        --certificate /etc/iam/pki/server.pem \
+        --private-key /etc/iam/pki/server.key \
+        --trust-anchor-arn arn:aws:acm-pca:us-west-2:123456789010:certificate-authority/fc32b514-4aca-4a4b-91a5-602294a6f4b7 \
+        --profile-arn arn:aws:iam::123456789010:instance-profile/mockHybridNodeRole \
+        --role-arn arn:aws:iam::123456789010:role/mockHybridNodeRole \
+        --role-session-name mock-hybrid-node \
+        --region us-west-2
+StandardOutput=journal
+StandardError=journal
+Restart=always
+RestartSec=10
+CPUAccounting=true
+MemoryAccounting=true
+
+[Install]
+WantedBy=multi-user.target
