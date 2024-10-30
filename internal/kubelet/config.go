@@ -41,7 +41,8 @@ const (
 	kubeletConfigDir  = "config.json.d"
 	kubeletConfigPerm = 0644
 
-	hybridNodeLabel = "eks.amazonaws.com/compute-type=hybrid"
+	hybridNodeLabel            = "eks.amazonaws.com/compute-type=hybrid"
+	credentialProviderLabelKey = "eks.amazonaws.com/hybrid-credential-provider"
 
 	hybridProviderIdPrefix = "eks-hybrid"
 )
@@ -282,7 +283,10 @@ func (ksc *kubeletConfig) withHybridCloudProvider(cfg *api.NodeConfig, flags map
 }
 
 func (ksc *kubeletConfig) withHybridNodeLabels(cfg *api.NodeConfig, flags map[string]string) {
-	flags["node-labels"] = hybridNodeLabel
+	var labels []string
+	labels = append(labels, hybridNodeLabel)
+	labels = append(labels, fmt.Sprintf("%s=%s", credentialProviderLabelKey, cfg.GetNodeType()))
+	flags["node-labels"] = strings.Join(labels, ",")
 }
 
 // When the DefaultReservedResources flag is enabled, override the kubelet
