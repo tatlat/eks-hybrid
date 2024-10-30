@@ -143,6 +143,30 @@ func TestHybridCloudProvider(t *testing.T) {
 	assert.Equal(t, *kubeletConfig.ProviderID, expectedProviderId)
 }
 
+func TestHybridLabels(t *testing.T) {
+	nodeConfig := api.NodeConfig{
+		Spec: api.NodeConfigSpec{
+			Cluster: api.ClusterDetails{
+				Name:   "my-cluster",
+				Region: "us-west-2",
+			},
+			Hybrid: &api.HybridOptions{
+				NodeName: "my-node",
+				IAMRolesAnywhere: &api.IAMRolesAnywhere{
+					TrustAnchorARN: "arn:aws:iam::222211113333:role/AmazonEKSConnectorAgentRole",
+					ProfileARN:     "dummy-profile-arn",
+					RoleARN:        "dummy-assume-role-arn",
+				},
+			},
+		},
+	}
+	expectedLabels := "eks.amazonaws.com/compute-type=hybrid,eks.amazonaws.com/hybrid-credential-provider=iam-ra"
+	kubeletArgs := make(map[string]string)
+	kubeletConfig := defaultKubeletSubConfig()
+	kubeletConfig.withHybridNodeLabels(&nodeConfig, kubeletArgs)
+	assert.Equal(t, kubeletArgs["node-labels"], expectedLabels)
+}
+
 func TestResolvConf(t *testing.T) {
 	resolvConfPath := "/dummy/path/to/resolv.conf"
 	kubeletConfig := defaultKubeletSubConfig()
