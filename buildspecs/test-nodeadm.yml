@@ -3,4 +3,4 @@ version: 0.2
 phases:
   build:
     commands:
-    - ${CODEBUILD_SRC_DIR}/_bin/e2e.test -test.parallel 10
+    - ${CODEBUILD_SRC_DIR}/_bin/e2e-validate.test -test.parallel 10

@@ -3,9 +3,7 @@ version: 0.2
 phases:
   build:
     commands:
-    - make build-cross-platform e2e-tests-binary
-    - aws s3 cp _bin/ s3://$ARTIFACTS_BUCKET --recursive
-    - aws s3 cp testdata/nodeconfig.yaml s3://$ARTIFACTS_BUCKET
+    - make build-cross-platform e2e-tests-binary e2e-setup
 
 cache:
   paths:
@@ -15,4 +13,7 @@ cache:
 artifacts:
   files:
   - "_bin/**/*"
+  - "_bin/e2e.test"
+  - "_bin/e2e-test-runner"
   - "buildspecs/*"
+  - "testdata/nodeconfig.yaml"
