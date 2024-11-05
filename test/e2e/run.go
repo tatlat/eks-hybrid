@@ -239,7 +239,7 @@ func updateKubeconfig(clusterName, region string) error {
 func patchAwsNode(ctx context.Context, k8s *kubernetes.Clientset) error {
 	patchJSON, err := sigyaml.YAMLToJSON([]byte(awsNodePatchContent))
 	if err != nil {
-		return fmt.Errorf("error marshalling patch data: %v", err)
+		return fmt.Errorf("marshalling patch data: %v", err)
 	}
 
 	_, err = k8s.AppsV1().DaemonSets(vpcCNIDaemonSetNS).Patch(
@@ -250,7 +250,7 @@ func patchAwsNode(ctx context.Context, k8s *kubernetes.Clientset) error {
 		metav1.PatchOptions{},
 	)
 	if err != nil {
-		return fmt.Errorf("error patching %s daemonSet: %v", vpcCNIDaemonSetName, err)
+		return fmt.Errorf("patching %s daemonSet: %v", vpcCNIDaemonSetName, err)
 	}
 
 	fmt.Println("Successfully patched aws-node daemonSet")

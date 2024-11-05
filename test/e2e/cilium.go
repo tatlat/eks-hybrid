@@ -24,15 +24,12 @@ type cilium struct {
 	//
 	// Check the cilium-template file for the node pod cidr mask. The default is 24.
 	PodCIDR string
-
-	ciliumValuesFile string
 }
 
 func newCilium(k8s dynamic.Interface, podCIDR string) cilium {
 	return cilium{
-		K8s:              k8s,
-		PodCIDR:          podCIDR,
-		ciliumValuesFile: "testdata/cilium-values.yaml",
+		K8s:     k8s,
+		PodCIDR: podCIDR,
 	}
 }
 
