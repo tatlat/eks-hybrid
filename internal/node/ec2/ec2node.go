@@ -36,6 +36,7 @@ func (enp *ec2NodeProvider) Logger() *zap.Logger {
 	return enp.logger
 }
 
-func (enp *ec2NodeProvider) Cleanup() {
+func (enp *ec2NodeProvider) Cleanup() error {
 	enp.daemonManager.Close()
+	return nil
 }

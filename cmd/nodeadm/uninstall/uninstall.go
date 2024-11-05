@@ -3,32 +3,25 @@ package uninstall
 import (
 	"context"
 	"fmt"
+	"os"
+
 	"github.com/integrii/flaggy"
 	"go.uber.org/zap"
 	"k8s.io/utils/strings/slices"
-	"os"
 
 	"github.com/aws/eks-hybrid/internal/cli"
-	"github.com/aws/eks-hybrid/internal/cni"
 	"github.com/aws/eks-hybrid/internal/containerd"
 	"github.com/aws/eks-hybrid/internal/daemon"
-	"github.com/aws/eks-hybrid/internal/iamauthenticator"
-	"github.com/aws/eks-hybrid/internal/iamrolesanywhere"
-	"github.com/aws/eks-hybrid/internal/imagecredentialprovider"
-	"github.com/aws/eks-hybrid/internal/iptables"
-	"github.com/aws/eks-hybrid/internal/kubectl"
+	"github.com/aws/eks-hybrid/internal/flows"
 	"github.com/aws/eks-hybrid/internal/kubelet"
 	"github.com/aws/eks-hybrid/internal/node"
 	"github.com/aws/eks-hybrid/internal/packagemanager"
-	"github.com/aws/eks-hybrid/internal/ssm"
 	"github.com/aws/eks-hybrid/internal/tracker"
 )
 
 const (
 	skipPodPreflightCheck  = "pod-validation"
 	skipNodePreflightCheck = "node-validation"
-
-	eksConfigDir = "/etc/eks"
 )
 
 func NewCommand() cli.Command {
@@ -77,17 +70,7 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	defer daemonManager.Close()
 
 	ctx := context.Background()
-
-	artifacts := installed.Artifacts
-	log.Info("Creating package manager...")
-	containerdSource := containerd.GetContainerdSource(artifacts.Containerd)
-	log.Info("Configuring package manager with", zap.Reflect("containerd source", string(containerdSource)))
-	packageManager, err := packagemanager.New(containerdSource, log)
-	if err != nil {
-		return err
-	}
-
-	if artifacts.Kubelet {
+	if installed.Artifacts.Kubelet {
 		kubeletStatus, err := daemonManager.GetDaemonStatus(kubelet.KubeletDaemonName)
 		if err != nil {
 			return err
@@ -107,94 +90,22 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 				}
 			}
 		}
-		log.Info("Uninstalling kubelet...")
-		if err := daemonManager.StopDaemon(kubelet.KubeletDaemonName); err != nil {
-			return err
-		}
-		if err := kubelet.Uninstall(); err != nil {
-			return err
-		}
-	}
-	if artifacts.Ssm {
-		log.Info("Uninstalling and de-registering SSM agent...")
-		if err := daemonManager.StopDaemon(ssm.SsmDaemonName); err != nil {
-			return err
-		}
-		if err := ssm.Uninstall(ctx, packageManager); err != nil {
-			return err
-		}
-	}
-	if artifacts.IamRolesAnywhere {
-		log.Info("Removing aws_signing_helper_update daemon...")
-		if status, err := daemonManager.GetDaemonStatus(iamrolesanywhere.DaemonName); err == nil || status != daemon.DaemonStatusUnknown {
-			if err = daemonManager.StopDaemon(iamrolesanywhere.DaemonName); err != nil {
-				log.Info("Stopping aws_signing_helper_update daemon...")
-				return err
-			}
-		}
-	}
-	if artifacts.Containerd != string(containerd.ContainerdSourceNone) {
-		log.Info("Uninstalling containerd...")
-		if err := daemonManager.StopDaemon(containerd.ContainerdDaemonName); err != nil {
-			return err
-		}
-
-		if err := containerd.Uninstall(ctx, packageManager); err != nil {
-			return err
-		}
 	}
 
-	if err := UninstallBinaries(ctx, artifacts, packageManager, log); err != nil {
+	log.Info("Creating package manager...")
+	containerdSource := containerd.GetContainerdSource(installed.Artifacts.Containerd)
+	log.Info("Configuring package manager with", zap.Reflect("containerd source", string(containerdSource)))
+	packageManager, err := packagemanager.New(containerdSource, log)
+	if err != nil {
 		return err
 	}
 
-	// eksConfigDir is used by both kubelet and credential provider
-	// deleting the parent directory here as no one component owns this dir
-	if err := os.RemoveAll(eksConfigDir); err != nil {
-		return err
+	uninstaller := &flows.Uninstaller{
+		Artifacts:      installed.Artifacts,
+		DaemonManager:  daemonManager,
+		PackageManager: packageManager,
+		Logger:         log,
 	}
 
-	log.Info("Finished uninstallation tasks...")
-
-	return tracker.Clear()
-}
-
-func UninstallBinaries(ctx context.Context, artifacts *tracker.InstalledArtifacts, packageManager *packagemanager.DistroPackageManger, log *zap.Logger) error {
-	if artifacts.Kubectl {
-		log.Info("Uninstalling kubectl...")
-		if err := kubectl.Uninstall(); err != nil {
-			return err
-		}
-	}
-	if artifacts.CniPlugins {
-		log.Info("Uninstalling cni-plugins...")
-		if err := cni.Uninstall(); err != nil {
-			return err
-		}
-	}
-	if artifacts.IamAuthenticator {
-		log.Info("Uninstalling IAM authenticator...")
-		if err := iamauthenticator.Uninstall(); err != nil {
-			return err
-		}
-	}
-	if artifacts.IamRolesAnywhere {
-		log.Info("Uninstalling AWS signing helper...")
-		if err := iamrolesanywhere.Uninstall(); err != nil {
-			return err
-		}
-	}
-	if artifacts.ImageCredentialProvider {
-		log.Info("Uninstalling image credential provider...")
-		if err := imagecredentialprovider.Uninstall(); err != nil {
-			return err
-		}
-	}
-	if artifacts.Iptables {
-		log.Info("Uninstalling iptables...")
-		if err := iptables.Uninstall(ctx, packageManager); err != nil {
-			return err
-		}
-	}
-	return nil
+	return uninstaller.Run(ctx)
 }

@@ -37,6 +37,7 @@ func (hnp *hybridNodeProvider) Logger() *zap.Logger {
 	return hnp.logger
 }
 
-func (hnp *hybridNodeProvider) Cleanup() {
+func (hnp *hybridNodeProvider) Cleanup() error {
 	hnp.daemonManager.Close()
+	return nil
 }
