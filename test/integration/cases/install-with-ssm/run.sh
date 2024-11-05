@@ -28,9 +28,9 @@ do
     assert::path-exists /etc/eks/image-credential-provider/ecr-credential-provider
     assert::path-exists /usr/local/bin/aws-iam-authenticator
 
-    assert::path-exists /opt/aws/ssm-setup-cli
+    assert::path-exists /opt/ssm/ssm-setup-cli
 
-    assert::files-equal /opt/aws/nodeadm-tracker expected-nodeadm-tracker
+    assert::files-equal /opt/nodeadm/tracker expected-nodeadm-tracker
 
     nodeadm uninstall --skip node-validation,pod-validation
 
@@ -42,6 +42,6 @@ do
     assert::path-not-exist /etc/eks/image-credential-provider/ecr-credential-provider
     assert::path-not-exist /usr/local/bin/aws-iam-authenticator
     assert::path-not-exist /usr/bin/containerd
-    assert::path-not-exist /opt/aws/ssm-setup-cli
-    assert::path-not-exist /opt/aws/nodeadm-tracker
+    assert::path-not-exist /opt/ssm/ssm-setup-cli
+    assert::path-not-exist /opt/nodeadm/tracker
 done

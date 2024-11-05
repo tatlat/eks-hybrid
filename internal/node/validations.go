@@ -3,26 +3,23 @@ package node
 import (
 	"context"
 	"fmt"
+
 	"github.com/aws/eks-hybrid/internal/kubelet"
+
 	"github.com/pkg/errors"
+	v1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const defaultStaticPodManifestPath = "/etc/kubernetes/manifest"
 
 func IsUnscheduled(ctx context.Context) error {
-	nodeName, err := kubelet.GetNodeName()
+	node, err := getCurrentNode(ctx)
 	if err != nil {
-		return err
-	}
-
-	clientset, err := kubelet.GetKubeClientFromKubeConfig()
-	if err != nil {
-		return err
-	}
-
-	node, err := clientset.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
-	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
 		return err
 	}
 
@@ -48,4 +45,26 @@ func IsDrained(ctx context.Context) error {
 		return fmt.Errorf("node not drained")
 	}
 	return nil
+}
+
+func IsInitialized(ctx context.Context) error {
+	_, err := getCurrentNode(ctx)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func getCurrentNode(ctx context.Context) (*v1.Node, error) {
+	nodeName, err := kubelet.GetNodeName()
+	if err != nil {
+		return nil, err
+	}
+
+	clientset, err := kubelet.GetKubeClientFromKubeConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	return clientset.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
 }

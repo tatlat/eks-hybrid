@@ -31,7 +31,7 @@ do
 
     assert::path-exists /usr/local/bin/aws_signing_helper
 
-    assert::files-equal /opt/aws/nodeadm-tracker expected-nodeadm-tracker
+    assert::files-equal /opt/nodeadm/tracker expected-nodeadm-tracker
 
     nodeadm uninstall --skip node-validation,pod-validation
 
@@ -42,5 +42,5 @@ do
     assert::path-not-exist /etc/eks/image-credential-provider/ecr-credential-provider
     assert::path-not-exist /usr/local/bin/aws-iam-authenticator
     assert::path-not-exist /usr/local/bin/aws_signing_helper
-    assert::path-not-exist /opt/aws/nodeadm-tracker
+    assert::path-not-exist /opt/nodeadm/tracker
 done
