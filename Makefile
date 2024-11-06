@@ -175,7 +175,6 @@ $(GOLANGCI_LINT): $(LOCALBIN) $(GOLANGCI_LINT_CONFIG)
 
 .PHONY: e2e-tests-binary
 e2e-tests-binary:
-	GOMAXPROCS=10 go test ./test/e2e/validate -c -o "./_bin/e2e-validate.test" -tags "e2e_validate"
 	go test -c ./test/e2e -o ./_bin/e2e.test -tags "e2e"
 
 .PHONY: e2e-setup
