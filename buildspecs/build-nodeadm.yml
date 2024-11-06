@@ -13,7 +13,5 @@ cache:
 artifacts:
   files:
   - "_bin/**/*"
-  - "_bin/e2e.test"
-  - "_bin/e2e-test-runner"
   - "buildspecs/*"
   - "testdata/nodeconfig.yaml"
