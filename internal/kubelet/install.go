@@ -5,6 +5,7 @@ import (
 	"context"
 	_ "embed"
 	"os"
+	"path"
 
 	"github.com/pkg/errors"
 
@@ -62,7 +63,7 @@ func Uninstall() error {
 		BinPath,
 		UnitPath,
 		kubeconfigPath,
-		kubeletConfigRoot,
+		path.Dir(kubeletConfigRoot),
 	}
 
 	for _, path := range pathsToRemove {

@@ -32,7 +32,7 @@ assert::path-exists /opt/cni/bin/
 assert::path-exists /etc/eks/image-credential-provider/ecr-credential-provider
 assert::path-exists /usr/local/bin/aws-iam-authenticator
 assert::path-exists /usr/local/bin/aws_signing_helper
-assert::files-equal /opt/aws/nodeadm-tracker expected-nodeadm-tracker
+assert::files-equal /opt/nodeadm/tracker expected-nodeadm-tracker
 assert::path-exists /etc/systemd/system/kubelet.service
 assert::files-equal /etc/systemd/system/kubelet.service expected-kubelet-systemd-unit
 # Verify installed binaries have the correct permission as we specified in code
@@ -65,7 +65,7 @@ systemctl disable aws_signing_helper_update.service
 systemctl daemon-reload
 systemctl reset-failed
 
-nodeadm upgrade $TARGET_VERSION --skip run,pod-validation,node-validation --config-source file://config.yaml
+nodeadm upgrade $TARGET_VERSION --skip run,pod-validation,node-validation,init-validation --config-source file://config.yaml
 
 assert::path-exists /usr/bin/containerd
 assert::path-exists /usr/sbin/iptables
@@ -76,7 +76,7 @@ assert::path-exists /opt/cni/bin/
 assert::path-exists /etc/eks/image-credential-provider/ecr-credential-provider
 assert::path-exists /usr/local/bin/aws-iam-authenticator
 assert::path-exists /usr/local/bin/aws_signing_helper
-assert::files-equal /opt/aws/nodeadm-tracker expected-nodeadm-tracker
+assert::files-equal /opt/nodeadm/tracker expected-nodeadm-tracker
 assert::path-exists /etc/systemd/system/kubelet.service
 assert::files-equal /etc/systemd/system/kubelet.service expected-kubelet-systemd-unit
 

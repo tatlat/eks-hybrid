@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"os"
+	"path"
 
 	"github.com/pkg/errors"
 
@@ -13,8 +14,10 @@ import (
 	"github.com/aws/eks-hybrid/internal/tracker"
 )
 
-// installerPath is the path the SSM CLI installer is installed to.
-const installerPath = "/opt/aws/ssm-setup-cli"
+const (
+	installerPath = "/opt/ssm/ssm-setup-cli"
+	configRoot    = "/etc/amazon"
+)
 
 // Source serves an SSM installer binary for the target platform.
 type Source interface {
@@ -78,7 +81,11 @@ func Uninstall(ctx context.Context, pkgSource PkgSource) error {
 		return errors.Wrapf(err, "failed to uninstall ssm")
 	}
 
-	if err := os.Remove(registrationFilePath); err != nil {
+	if err := os.RemoveAll(path.Dir(registrationFilePath)); err != nil {
+		return errors.Wrapf(err, "failed to uninstall ssm config files")
+	}
+
+	if err := os.RemoveAll(configRoot); err != nil {
 		return errors.Wrapf(err, "failed to uninstall ssm config files")
 	}
 
@@ -87,7 +94,7 @@ func Uninstall(ctx context.Context, pkgSource PkgSource) error {
 		return errors.Wrapf(err, "removing directory %s", symlinkedAWSConfigPath)
 	}
 
-	return os.RemoveAll(installerPath)
+	return os.RemoveAll(path.Dir(installerPath))
 }
 
 // redownloadInstaller deletes and downloads a new ssm installer
