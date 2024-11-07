@@ -141,11 +141,11 @@ packer build -only=general-build.amazon-ebs.ubuntu22 template.pkr.hcl
 ```
 packer build -only=general-build.amazon-ebs.ubuntu24 template.pkr.hcl
 ```
-#### RHEL 8
+#### RHEL 8 AMI
 ```
 packer build -only=general-build.amazon-ebs.rhel8 template.pkr.hcl
 ```
-#### RHEL 9
+#### RHEL 9 AMI
 ```
 packer build -only=general-build.amazon-ebs.rhel9 template.pkr.hcl
 ```
@@ -154,19 +154,19 @@ packer build -only=general-build.amazon-ebs.rhel9 template.pkr.hcl
 ### vSphere Images
 
 
-#### Ubuntu 22.04 AMI
+#### Ubuntu 22.04 OVA
 ```
 packer build -only=general-build.vsphere-iso.ubuntu22 template.pkr.hcl
 ```
-#### Ubuntu 24.04 AMI
+#### Ubuntu 24.04 OVA
 ```
 packer build -only=general-build.vsphere-iso.ubuntu24 template.pkr.hcl
 ```
-#### RHEL 8
+#### RHEL 8 OVA
 ```
 packer build -only=general-build.vsphere-iso.rhel8 template.pkr.hcl
 ```
-#### RHEL 9
+#### RHEL 9 OVA
 ```
 packer build -only=general-build.vsphere-iso.rhel9 template.pkr.hcl
 ```
@@ -195,19 +195,19 @@ The supported models can be seen here. This has been tested to work with `-cpu "
 This is not required for RHEL 8. 
 
 
-#### Ubuntu 22.04 AMI
+#### Ubuntu 22.04 Qcow2 / Raw
 ```
 packer build -only=general-build.qemu.ubuntu22 template.pkr.hcl
 ```
-#### Ubuntu 24.04 AMI
+#### Ubuntu 24.04 Qcow2 / Raw
 ```
 packer build -only=general-build.qemu.ubuntu24 template.pkr.hcl
 ```
-#### RHEL 8
+#### RHEL 8 Qcow2 / Raw
 ```
 packer build -only=general-build.qemu.rhel8 template.pkr.hcl
 ```
-#### RHEL 9
+#### RHEL 9 Qcow2 / Raw
 ```
 packer build -only=general-build.qemu.rhel9 template.pkr.hcl
 ```

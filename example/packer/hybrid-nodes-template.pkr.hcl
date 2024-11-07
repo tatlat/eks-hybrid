@@ -50,7 +50,7 @@ variable "pkr_ssh_password" {
   description = "Password for Packer to SSH into the VM when provisioning. Have it match the password set in either the ks.cfg or user-data files for each OS."
 
   validation {
-    condition     = length(var.aws_profile) > 0
+    condition     = length(var.pkr_ssh_password) > 0
     error_message = "ERROR - PKR_SSH_PASSWORD environment variable is not set. Make sure to set it in the corresponding ks.cfg or user-data files, too."
   }
 }
