@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/integrii/flaggy"
 	"go.uber.org/zap"
@@ -27,15 +28,19 @@ import (
 const (
 	skipPodPreflightCheck  = "pod-validation"
 	skipNodePreflightCheck = "node-validation"
+	initNodePreflightCheck = "init-validation"
 )
 
 func NewUpgradeCommand() cli.Command {
-	cmd := command{}
+	cmd := command{
+		downloadTimeout: 10 * time.Minute,
+	}
 
 	fc := flaggy.NewSubcommand("upgrade")
 	fc.Description = "Upgrade components installed using the install sub-command"
 	fc.AddPositionalValue(&cmd.kubernetesVersion, "KUBERNETES_VERSION", 1, true, "The major[.minor[.patch]] version of Kubernetes to install")
 	fc.StringSlice(&cmd.skipPhases, "s", "skip", "phases of the upgrade you want to skip")
+	fc.Duration(&cmd.downloadTimeout, "dt", "download-timeout", "Timeout for downloading artifacts. Input follows duration format. Example: 1h23s")
 	cmd.flaggy = fc
 	return &cmd
 }
@@ -44,6 +49,7 @@ type command struct {
 	flaggy            *flaggy.Subcommand
 	skipPhases        []string
 	kubernetesVersion string
+	downloadTimeout   time.Duration
 }
 
 func (c *command) Flaggy() *flaggy.Subcommand {
@@ -67,20 +73,23 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	} else if err != nil {
 		return err
 	}
+	artifacts := installed.Artifacts
 
-	ctx := context.Background()
-	if !slices.Contains(c.skipPhases, skipPodPreflightCheck) {
-		log.Info("Validating if pods have been drained...")
-		if err := node.IsDrained(ctx); err != nil {
-			return err
+	ctx, cancel := context.WithTimeout(context.Background(), c.downloadTimeout)
+	defer cancel()
+	if !slices.Contains(c.skipPhases, initNodePreflightCheck) {
+		log.Info("Validating if node has initialized")
+		if err := node.IsInitialized(ctx); err != nil {
+			return fmt.Errorf("node not initialized. Please use nodeadm init command to bootstrap a node. err: %v", err)
 		}
 	}
-	if !slices.Contains(c.skipPhases, skipNodePreflightCheck) {
-		log.Info("Validating if node has been marked unschedulable...")
-		if err := node.IsUnscheduled(ctx); err != nil {
-			return err
-		}
+
+	log.Info("Creating daemon manager..")
+	daemonManager, err := daemon.NewDaemonManager()
+	if err != nil {
+		return err
 	}
+	defer daemonManager.Close()
 
 	log.Info("Loading configuration..", zap.String("configSource", opts.ConfigSource))
 	nodeProvider, err := node.NewNodeProvider(opts.ConfigSource, log)
@@ -101,7 +110,7 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	}
 
 	// Validating credential provider. Upgrade does not allow changes to credential providers
-	installedCredsProvider, err := creds.GetCredentialProviderFromInstalledArtifacts(installed.Artifacts)
+	installedCredsProvider, err := creds.GetCredentialProviderFromInstalledArtifacts(artifacts)
 	if err != nil {
 		return err
 	}
@@ -117,7 +126,6 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	}
 	log.Info("Using Kubernetes version", zap.Reflect("kubernetes version", awsSource.Eks.Version))
 
-	artifacts := installed.Artifacts
 	log.Info("Creating package manager...")
 	containerdSource := containerd.GetContainerdSource(artifacts.Containerd)
 	log.Info("Configuring package manager with", zap.Reflect("containerd source", string(containerdSource)))
@@ -126,18 +134,30 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return err
 	}
 
-	if err := uninstall.UninstallBinaries(artifacts, packageManager, log); err != nil {
+	if err := uninstall.UninstallBinaries(ctx, artifacts, packageManager, log); err != nil {
 		return err
 	}
-
-	log.Info("Creating daemon manager..")
-	daemonManager, err := daemon.NewDaemonManager()
-	if err != nil {
-		return err
-	}
-	defer daemonManager.Close()
 
 	if artifacts.Kubelet {
+		kubeletStatus, err := daemonManager.GetDaemonStatus(kubelet.KubeletDaemonName)
+		if err != nil {
+			return err
+		}
+		if kubeletStatus == daemon.DaemonStatusRunning {
+			if !slices.Contains(c.skipPhases, skipPodPreflightCheck) {
+				log.Info("Validating if node has been drained...")
+				if err := node.IsDrained(ctx); err != nil {
+					return fmt.Errorf("only static pods and pods controlled by daemon-sets can be running on the node. Please move pods " +
+						"to different node or use --skip pod-validation")
+				}
+			}
+			if !slices.Contains(c.skipPhases, skipNodePreflightCheck) {
+				log.Info("Validating if node has been marked unschedulable...")
+				if err := node.IsUnscheduled(ctx); err != nil {
+					return fmt.Errorf("please drain or cordon node to mark it unschedulable or use --skip node-validation. %v", err)
+				}
+			}
+		}
 		log.Info("Uninstalling kubelet...")
 		if err := daemonManager.StopDaemon(kubelet.KubeletDaemonName); err != nil {
 			return err
@@ -151,7 +171,7 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		if err := daemonManager.StopDaemon(ssm.SsmDaemonName); err != nil {
 			return err
 		}
-		if err := ssm.Uninstall(packageManager); err != nil {
+		if err := ssm.Uninstall(ctx, packageManager); err != nil {
 			return err
 		}
 	}
@@ -160,7 +180,7 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		if err := daemonManager.StopDaemon(containerd.ContainerdDaemonName); err != nil {
 			return err
 		}
-		if err := containerd.Uninstall(packageManager); err != nil {
+		if err := containerd.Uninstall(ctx, packageManager); err != nil {
 			return err
 		}
 	}
@@ -169,8 +189,16 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return err
 	}
 
+	installer := &install.Config{
+		AwsSource:          awsSource,
+		ContainerdSource:   containerdSource,
+		CredentialProvider: credsProvider,
+		Log:                log,
+		DownloadTimeout:    c.downloadTimeout,
+	}
+
 	// Installing new version of artifacts
-	if err := install.Install(ctx, awsSource, credsProvider, containerdSource, log); err != nil {
+	if err := installer.Install(ctx); err != nil {
 		return err
 	}
 

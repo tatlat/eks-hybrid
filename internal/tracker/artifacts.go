@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path"
 
 	"github.com/pkg/errors"
 	"sigs.k8s.io/yaml"
@@ -12,7 +13,7 @@ import (
 	"github.com/aws/eks-hybrid/internal/util"
 )
 
-const trackerFile = "/opt/aws/nodeadm-tracker"
+const trackerFile = "/opt/nodeadm/tracker"
 
 type Tracker struct {
 	Artifacts *InstalledArtifacts
@@ -70,7 +71,7 @@ func (tracker *Tracker) Save() error {
 }
 
 func Clear() error {
-	return os.RemoveAll(trackerFile)
+	return os.RemoveAll(path.Dir(trackerFile))
 }
 
 // GetInstalledArtifacts reads the tracker file and returns the current

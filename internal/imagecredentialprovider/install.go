@@ -3,6 +3,7 @@ package imagecredentialprovider
 import (
 	"context"
 	"os"
+	"path"
 
 	"github.com/pkg/errors"
 
@@ -41,5 +42,5 @@ func Install(ctx context.Context, tracker *tracker.Tracker, src Source) error {
 }
 
 func Uninstall() error {
-	return os.RemoveAll(BinPath)
+	return os.RemoveAll(path.Dir(BinPath))
 }

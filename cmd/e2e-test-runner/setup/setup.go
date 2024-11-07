@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -52,9 +53,10 @@ func (s *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	if err != nil {
 		return fmt.Errorf("failed to create AWS session: %v", err)
 	}
+	ctx := context.Background()
 
 	// Create resources using TestRunner object
-	if err := testRunner.CreateResources(); err != nil {
+	if err := testRunner.CreateResources(ctx); err != nil {
 		return fmt.Errorf("failed to create resources: %v", err)
 	}
 

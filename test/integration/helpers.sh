@@ -139,6 +139,53 @@ function assert::allowed-by-firewalld() {
   fi
 }
 
+function assert::file-permission-matches() {
+  if [ "$#" -ne 2 ]; then
+    echo "Usage: assert::file-permission-matches [file path] [expected file permission in numberic, example: 644, 755]"
+    exit 1
+  fi
+  local FILE_PATH=$1
+  local EXPECTED_PERMISSION=$2
+  local FILE_PERMISSION=$(stat -c %a $FILE_PATH)
+  if ! [[ $FILE_PERMISSION == $EXPECTED_PERMISSION ]]; then
+    echo "File $FILE_PATH's permission $FILE_PERMISSION does not match expected permission $EXPECTED_PERMISSION"
+    exit 1
+  fi
+}
+
+# Check if a non-json file exists and verify its permission, if a 3rd argument is provided, also check file content
+function validate-file() {
+  if [[ "$#" -ne 2 && "$#" -ne 3 ]]; then
+    echo "Usage: assert::validate-file [file path] [expected file permission] [path of file with expected content (optional)]"
+    exit 1
+  fi
+  local FILE_PATH=$1
+  local EXPECTED_PERMISSION=$2
+  assert::path-exists $FILE_PATH
+  assert::file-permission-matches $FILE_PATH $EXPECTED_PERMISSION
+  if [ "$#" -eq 3 ]; then
+    local EXPECTED_CONTENT_FILE_PATH=$3
+    assert::files-equal $FILE_PATH $EXPECTED_CONTENT_FILE_PATH
+  fi
+}
+
+# Check if a json file exists and verify its permission, if a 3rd argument is provided, also check file content
+function validate-json-file() {
+  if [[ "$#" -ne 2 && "$#" -ne 3 ]]; then
+    echo "Usage: assert::validate-json-file [json file path] [expected file permission] [path of file with expected content (optional)]"
+    exit 1
+  fi
+  local FILE_PATH=$1
+  local EXPECTED_PERMISSION=$2
+  local EXPECTED_CONTENT_FILE_PATH=$3
+  assert::path-exists $FILE_PATH
+  assert::file-permission-matches $FILE_PATH $EXPECTED_PERMISSION
+  if [ "$#" -eq 3 ]; then
+    local EXPECTED_CONTENT_FILE_PATH=$3
+    assert::json-files-equal $FILE_PATH $EXPECTED_CONTENT_FILE_PATH
+  fi
+}
+
 function mock::kubelet() {
   if [ "$#" -ne 1 ]; then
     echo "Usage: mock::kubelet VERSION"

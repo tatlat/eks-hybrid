@@ -3,11 +3,10 @@ package uninstall
 import (
 	"context"
 	"fmt"
-	"os"
-
 	"github.com/integrii/flaggy"
 	"go.uber.org/zap"
 	"k8s.io/utils/strings/slices"
+	"os"
 
 	"github.com/aws/eks-hybrid/internal/cli"
 	"github.com/aws/eks-hybrid/internal/cni"
@@ -28,6 +27,8 @@ import (
 const (
 	skipPodPreflightCheck  = "pod-validation"
 	skipNodePreflightCheck = "node-validation"
+
+	eksConfigDir = "/etc/eks"
 )
 
 func NewCommand() cli.Command {
@@ -59,21 +60,6 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return cli.ErrMustRunAsRoot
 	}
 
-	ctx := context.Background()
-	if !slices.Contains(c.skipPhases, skipPodPreflightCheck) {
-		log.Info("Validating if pods have been drained...")
-		if err := node.IsDrained(ctx); err != nil {
-			return fmt.Errorf("only static pods and pods controlled by daemon-sets can be running on the node. Please move pods " +
-				"to different node or use --skip pod-validation")
-		}
-	}
-	if !slices.Contains(c.skipPhases, skipNodePreflightCheck) {
-		log.Info("Validating if node has been marked unschedulable...")
-		if err := node.IsUnscheduled(ctx); err != nil {
-			return fmt.Errorf("please drain or cordon node to mark it unschedulable or use --skip node-validation. %v", err)
-		}
-	}
-
 	log.Info("Loading installed components")
 	installed, err := tracker.GetInstalledArtifacts()
 	if err != nil && os.IsNotExist(err) {
@@ -90,6 +76,8 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	}
 	defer daemonManager.Close()
 
+	ctx := context.Background()
+
 	artifacts := installed.Artifacts
 	log.Info("Creating package manager...")
 	containerdSource := containerd.GetContainerdSource(artifacts.Containerd)
@@ -99,11 +87,26 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return err
 	}
 
-	if err := UninstallBinaries(artifacts, packageManager, log); err != nil {
-		return err
-	}
-
 	if artifacts.Kubelet {
+		kubeletStatus, err := daemonManager.GetDaemonStatus(kubelet.KubeletDaemonName)
+		if err != nil {
+			return err
+		}
+		if kubeletStatus == daemon.DaemonStatusRunning {
+			if !slices.Contains(c.skipPhases, skipPodPreflightCheck) {
+				log.Info("Validating if node has been drained...")
+				if err := node.IsDrained(ctx); err != nil {
+					return fmt.Errorf("only static pods and pods controlled by daemon-sets can be running on the node. Please move pods " +
+						"to different node or use --skip pod-validation")
+				}
+			}
+			if !slices.Contains(c.skipPhases, skipNodePreflightCheck) {
+				log.Info("Validating if node has been marked unschedulable...")
+				if err := node.IsUnscheduled(ctx); err != nil {
+					return fmt.Errorf("please drain or cordon node to mark it unschedulable or use --skip node-validation. %v", err)
+				}
+			}
+		}
 		log.Info("Uninstalling kubelet...")
 		if err := daemonManager.StopDaemon(kubelet.KubeletDaemonName); err != nil {
 			return err
@@ -117,7 +120,7 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		if err := daemonManager.StopDaemon(ssm.SsmDaemonName); err != nil {
 			return err
 		}
-		if err := ssm.Uninstall(packageManager); err != nil {
+		if err := ssm.Uninstall(ctx, packageManager); err != nil {
 			return err
 		}
 	}
@@ -136,9 +139,19 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 			return err
 		}
 
-		if err := containerd.Uninstall(packageManager); err != nil {
+		if err := containerd.Uninstall(ctx, packageManager); err != nil {
 			return err
 		}
+	}
+
+	if err := UninstallBinaries(ctx, artifacts, packageManager, log); err != nil {
+		return err
+	}
+
+	// eksConfigDir is used by both kubelet and credential provider
+	// deleting the parent directory here as no one component owns this dir
+	if err := os.RemoveAll(eksConfigDir); err != nil {
+		return err
 	}
 
 	log.Info("Finished uninstallation tasks...")
@@ -146,7 +159,7 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	return tracker.Clear()
 }
 
-func UninstallBinaries(artifacts *tracker.InstalledArtifacts, packageManager *packagemanager.DistroPackageManger, log *zap.Logger) error {
+func UninstallBinaries(ctx context.Context, artifacts *tracker.InstalledArtifacts, packageManager *packagemanager.DistroPackageManger, log *zap.Logger) error {
 	if artifacts.Kubectl {
 		log.Info("Uninstalling kubectl...")
 		if err := kubectl.Uninstall(); err != nil {
@@ -179,7 +192,7 @@ func UninstallBinaries(artifacts *tracker.InstalledArtifacts, packageManager *pa
 	}
 	if artifacts.Iptables {
 		log.Info("Uninstalling iptables...")
-		if err := iptables.Uninstall(packageManager); err != nil {
+		if err := iptables.Uninstall(ctx, packageManager); err != nil {
 			return err
 		}
 	}

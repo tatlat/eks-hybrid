@@ -1,7 +1,7 @@
 package e2e
 
 import (
-	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -11,6 +11,12 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"gopkg.in/yaml.v2"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/clientcmd"
+	sigyaml "sigs.k8s.io/yaml"
 )
 
 type TestRunner struct {
@@ -25,7 +31,7 @@ type TestResourceSpec struct {
 	ClusterNetwork     NetworkConfig `yaml:"clusterNetwork"`
 	HybridNetwork      NetworkConfig `yaml:"hybridNetwork"`
 	KubernetesVersions []string      `yaml:"kubernetesVersions"`
-	Cni                []string      `yaml:"cni"`
+	Cni                string        `yaml:"cni"`
 }
 
 type TestResourceStatus struct {
@@ -44,7 +50,12 @@ type NetworkConfig struct {
 	PodCidr           string `yaml:"podCidr"`
 }
 
-const outputDir = "/tmp/eks-hybrid"
+const (
+	vpcCNIDaemonSetName = "aws-node"
+	vpcCNIDaemonSetNS   = "kube-system"
+	outputDir           = "/tmp/eks-hybrid"
+	ciliumCni           = "cilium"
+)
 
 var awsNodePatchContent = `
 spec:
@@ -70,16 +81,6 @@ spec:
                 - "hybrid"
 `
 
-var authConfig = `
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: aws-auth
-  namespace: kube-system
-data:
-  mapRoles: |
-`
-
 func (t *TestRunner) NewAWSSession() (*session.Session, error) {
 	// Create a new session using shared credentials or environment variables
 	sess, err := session.NewSession(&aws.Config{
@@ -95,7 +96,7 @@ func (t *TestRunner) NewAWSSession() (*session.Session, error) {
 	return sess, nil
 }
 
-func (t *TestRunner) CreateResources() error {
+func (t *TestRunner) CreateResources(ctx context.Context) error {
 	// Temporary code, remove this when AWS CLI supports creating hybrid EKS cluster
 	awsPatchLocation := "s3://eks-hybrid-beta/v0.0.0-beta.1/awscli/aws-eks-cli-beta.json"
 	localFilePath := "/tmp/awsclipatch"
@@ -157,7 +158,7 @@ func (t *TestRunner) CreateResources() error {
 
 	// Create the EKS Cluster using the IAM role and VPC
 	for _, kubernetesVersion := range t.Spec.KubernetesVersions {
-		fmt.Printf("Creating EKS cluster with the kubernetes version %s..", kubernetesVersion)
+		fmt.Printf("Creating EKS cluster with the kubernetes version %s..\n", kubernetesVersion)
 		clusterName := clusterName(t.Spec.ClusterName, kubernetesVersion)
 		err := t.createEKSCluster(clusterName, kubernetesVersion)
 		if err != nil {
@@ -172,27 +173,45 @@ func (t *TestRunner) CreateResources() error {
 			return fmt.Errorf("error while waiting for cluster creation: %v", err)
 		}
 
-		// Save kubeconfig file for the created cluster under /tmp/eks-hybrid/CULSTERNAME-kubeconfig dir to use it late in e2e test run
-		kubeconfigFilePath := filepath.Join(outputDir, fmt.Sprintf("%s.kubeconfig", clusterName))
-		err = saveKubeconfig(clusterName, t.Spec.ClusterRegion, kubeconfigFilePath)
+		err = updateKubeconfig(clusterName, t.Spec.ClusterRegion)
 		if err != nil {
 			return fmt.Errorf("error saving kubeconfig for %s EKS cluster: %v", kubernetesVersion, err)
 		}
 
-		fmt.Printf("Kubeconfig saved at: %s\n", kubeconfigFilePath)
-
-		// Patch aws-node DaemonSet to update the VPC CNI with anti-affinity for nodes labeled with the default hybrid nodes label eks.amazonaws.com/compute-type: hybrid
-		fmt.Println("Patching aws-node DaemonSet...")
-		err = patchAwsNode(kubeconfigFilePath)
+		kubeconfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
+			clientcmd.NewDefaultClientConfigLoadingRules(),
+			&clientcmd.ConfigOverrides{},
+		)
+		clientConfig, err := kubeconfig.ClientConfig()
 		if err != nil {
-			return fmt.Errorf("error patching aws-node DaemonSet for %s EKS cluster: %v", kubernetesVersion, err)
+			return fmt.Errorf("error loading kubeconfig: %v", err)
 		}
 
-		// Apply aws-auth ConfigMap
-		fmt.Println("Applying aws-auth ConfigMap...")
-		err = applyAwsAuth(kubeconfigFilePath)
+		k8sClient, err := kubernetes.NewForConfig(clientConfig)
 		if err != nil {
-			return fmt.Errorf("error applying aws-auth ConfigMap for %s EKS cluster: %v", kubernetesVersion, err)
+			return fmt.Errorf("error creating Kubernetes client: %v", err)
+		}
+
+		dynamicK8s, err := dynamic.NewForConfig(clientConfig)
+		if err != nil {
+			return fmt.Errorf("error creating dynamic Kubernetes client: %v", err)
+		}
+
+		// Patch aws-node DaemonSet to update the VPC CNI with anti-affinity for nodes labeled with the default hybrid nodes label eks.amazonaws.com/compute-type: hybrid
+		fmt.Println("Patching aws-node daemonSet...")
+		err = patchAwsNode(ctx, k8sClient)
+		if err != nil {
+			return fmt.Errorf("error patching aws-node daemonSet for %s EKS cluster: %v", kubernetesVersion, err)
+		}
+
+		switch t.Spec.Cni {
+		case ciliumCni:
+			cilium := newCilium(dynamicK8s, t.Spec.HybridNetwork.PodCidr)
+			fmt.Printf("Installing cilium on cluster %s...\n", clusterName)
+			if err = cilium.deploy(ctx); err != nil {
+				return fmt.Errorf("error installing cilium for %s EKS cluster: %v", kubernetesVersion, err)
+			}
+			fmt.Println("Cilium installed sucessfully.")
 		}
 	}
 
@@ -210,43 +229,31 @@ func clusterName(clusterName, kubernetesVersion string) string {
 }
 
 // saveKubeconfig saves the kubeconfig for the cluster
-func saveKubeconfig(clusterName, region, kubeconfigPath string) error {
-	cmd := exec.Command("aws", "eks", "update-kubeconfig", "--name", clusterName, "--region", region, "--kubeconfig", kubeconfigPath)
+func updateKubeconfig(clusterName, region string) error {
+	cmd := exec.Command("aws", "eks", "update-kubeconfig", "--name", clusterName, "--region", region)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
 }
 
-// patchAwsNode patches the aws-node DaemonSet
-func patchAwsNode(kubeconfig string) error {
-	// Patch aws-node using stdin
-	cmd := exec.Command("kubectl", "--kubeconfig", kubeconfig, "patch", "ds", "aws-node", "-n", "kube-system", "--type", "merge", "--patch-file=/dev/stdin")
-	cmd.Stdin = bytes.NewReader([]byte(awsNodePatchContent))
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	fmt.Println(cmd)
-	err := cmd.Run()
+func patchAwsNode(ctx context.Context, k8s *kubernetes.Clientset) error {
+	patchJSON, err := sigyaml.YAMLToJSON([]byte(awsNodePatchContent))
 	if err != nil {
-		return fmt.Errorf("failed to patch aws-node DaemonSet: %v", err)
+		return fmt.Errorf("marshalling patch data: %v", err)
 	}
 
-	fmt.Println("Successfully patched aws-node DaemonSet")
-	return nil
-}
-
-// applyAwsAuth applies the aws-auth configmap
-func applyAwsAuth(kubeconfig string) error {
-	cmd := exec.Command("kubectl", "--kubeconfig", kubeconfig, "apply", "-f", "/dev/stdin")
-	cmd.Stdin = bytes.NewReader([]byte(authConfig))
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	err := cmd.Run()
+	_, err = k8s.AppsV1().DaemonSets(vpcCNIDaemonSetNS).Patch(
+		ctx,
+		vpcCNIDaemonSetName,
+		types.StrategicMergePatchType,
+		patchJSON,
+		metav1.PatchOptions{},
+	)
 	if err != nil {
-		return fmt.Errorf("failed to apply aws-auth ConfigMap: %v", err)
+		return fmt.Errorf("patching %s daemonSet: %v", vpcCNIDaemonSetName, err)
 	}
 
-	fmt.Println("Successfully applied aws-auth ConfigMap with empty mapRoles")
+	fmt.Println("Successfully patched aws-node daemonSet")
 	return nil
 }
 

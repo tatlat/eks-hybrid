@@ -11,6 +11,7 @@ import (
 )
 
 const (
+	rootDir = "/opt/cni"
 	// BinPath is the path to the cni plugins binary.
 	BinPath = "/opt/cni/bin"
 
@@ -48,5 +49,5 @@ func Install(ctx context.Context, tracker *tracker.Tracker, src Source) error {
 }
 
 func Uninstall() error {
-	return os.RemoveAll(BinPath)
+	return os.RemoveAll(rootDir)
 }
