@@ -174,6 +174,26 @@ packer build -only=general-build.vsphere-iso.rhel9 template.pkr.hcl
 
 ### QEMU Images
 
+Note on RHEL 9 and QEMU - If building a VM using QEMU, you will need to provide the `-cpu` flag along with a supported CPU model. The 
+
+| Intel x86     |   AMD x86     |
+| ------------- | ------------- |
+| Cascadelake-Server  | EPYC  |
+| Skylake-Server  | Opteron_G5 |
+| Skylake-Client  | Opteron_G4 |
+| Broadwell  | Opteron_G3 |
+| Haswell  | Opteron_G2 |
+| IvyBridge  | Opteron_G1 |
+| SandyBridge  |  |
+| Westmere  |  |
+| Nehalem  |  |
+| Penryn  |  |
+| Conroe  |  |
+
+The supported models can be seen here. This has been tested to work with `-cpu "Broadwell"`.
+
+This is not required for RHEL 8. 
+
 
 #### Ubuntu 22.04 AMI
 ```
