@@ -2,7 +2,6 @@ package install
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/integrii/flaggy"
@@ -10,18 +9,10 @@ import (
 
 	"github.com/aws/eks-hybrid/internal/aws"
 	"github.com/aws/eks-hybrid/internal/cli"
-	"github.com/aws/eks-hybrid/internal/cni"
 	"github.com/aws/eks-hybrid/internal/containerd"
 	"github.com/aws/eks-hybrid/internal/creds"
-	"github.com/aws/eks-hybrid/internal/iamauthenticator"
-	"github.com/aws/eks-hybrid/internal/iamrolesanywhere"
-	"github.com/aws/eks-hybrid/internal/imagecredentialprovider"
-	"github.com/aws/eks-hybrid/internal/iptables"
-	"github.com/aws/eks-hybrid/internal/kubectl"
-	"github.com/aws/eks-hybrid/internal/kubelet"
+	"github.com/aws/eks-hybrid/internal/flows"
 	"github.com/aws/eks-hybrid/internal/packagemanager"
-	"github.com/aws/eks-hybrid/internal/ssm"
-	"github.com/aws/eks-hybrid/internal/tracker"
 )
 
 func NewCommand() cli.Command {
@@ -82,8 +73,20 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return err
 	}
 
+	log.Info("Creating package manager...")
+	packageManager, err := packagemanager.New(containerdSource, log)
+	if err != nil {
+		return err
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), c.downloadTimeout)
 	defer cancel()
+
+	log.Info("Setting package manager config", zap.Reflect("containerd source", string(containerdSource)))
+	log.Info("Configuring package manager. This might take a while...")
+	if err := packageManager.Configure(ctx); err != nil {
+		return err
+	}
 
 	log.Info("Validating Kubernetes version", zap.Reflect("kubernetes version", c.kubernetesVersion))
 	// Create a Source for all AWS managed artifacts.
@@ -93,92 +96,13 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	}
 	log.Info("Using Kubernetes version", zap.Reflect("kubernetes version", awsSource.Eks.Version))
 
-	config := &Config{
+	installer := &flows.Installer{
 		AwsSource:          awsSource,
+		PackageManager:     packageManager,
 		ContainerdSource:   containerdSource,
 		CredentialProvider: credentialProvider,
-		DownloadTimeout:    c.downloadTimeout,
-		Log:                log,
+		Logger:             log,
 	}
 
-	return config.Install(ctx)
-}
-
-func (c *Config) Install(ctx context.Context) error {
-	// Create tracker with existing changes or new tracker
-	trackerConf, err := tracker.GetCurrentState()
-	if err != nil {
-		return err
-	}
-
-	c.Log.Info("Creating package manager...")
-	packageManager, err := packagemanager.New(c.ContainerdSource, c.Log)
-	if err != nil {
-		return err
-	}
-
-	c.Log.Info("Setting package manager config", zap.Reflect("containerd source", string(c.ContainerdSource)))
-	c.Log.Info("Configuring package manager. This might take a while...")
-	if err := packageManager.Configure(ctx); err != nil {
-		return err
-	}
-
-	c.Log.Info("Installing containerd...")
-	if err := containerd.Install(ctx, trackerConf, packageManager, c.ContainerdSource); err != nil {
-		return err
-	}
-
-	if err := containerd.ValidateSystemdUnitFile(); err != nil {
-		return fmt.Errorf("please install systemd unit file for containerd: %v", err)
-	}
-
-	c.Log.Info("Installing iptables...")
-	if err := iptables.Install(ctx, trackerConf, packageManager); err != nil {
-		return err
-	}
-
-	switch c.CredentialProvider {
-	case creds.IamRolesAnywhereCredentialProvider:
-		c.Log.Info("Installing AWS signing helper...")
-		if err := iamrolesanywhere.Install(ctx, trackerConf, c.AwsSource); err != nil {
-			return err
-		}
-	case creds.SsmCredentialProvider:
-		ssmInstaller := ssm.NewSSMInstaller(ssm.DefaultSsmInstallerRegion)
-
-		c.Log.Info("Installing SSM agent installer...")
-		if err := ssm.Install(ctx, trackerConf, ssmInstaller); err != nil {
-			return err
-		}
-	default:
-		return fmt.Errorf("unable to detect hybrid auth method")
-	}
-
-	c.Log.Info("Installing kubelet...")
-	if err := kubelet.Install(ctx, trackerConf, c.AwsSource); err != nil {
-		return err
-	}
-
-	c.Log.Info("Installing kubectl...")
-	if err := kubectl.Install(ctx, trackerConf, c.AwsSource); err != nil {
-		return err
-	}
-
-	c.Log.Info("Installing cni-plugins...")
-	if err := cni.Install(ctx, trackerConf, c.AwsSource); err != nil {
-		return err
-	}
-
-	c.Log.Info("Installing image credential provider...")
-	if err := imagecredentialprovider.Install(ctx, trackerConf, c.AwsSource); err != nil {
-		return err
-	}
-
-	c.Log.Info("Installing IAM authenticator...")
-	if err := iamauthenticator.Install(ctx, trackerConf, c.AwsSource); err != nil {
-		return err
-	}
-
-	c.Log.Info("Finishing up install...")
-	return trackerConf.Save()
+	return installer.Run(ctx)
 }

@@ -32,7 +32,7 @@ type NodeProvider interface {
 	Logger() *zap.Logger
 
 	// Cleanup runs post init cleanup if any are required by node provider.
-	Cleanup()
+	Cleanup() error
 
 	configenricher.ConfigEnricher
 	aws.Config

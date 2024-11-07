@@ -4,8 +4,8 @@ import (
 	"os"
 
 	"github.com/aws/eks-hybrid/internal/cli"
+	"github.com/aws/eks-hybrid/internal/flows"
 	"github.com/aws/eks-hybrid/internal/node"
-	"github.com/aws/eks-hybrid/internal/nodeprovider"
 	"github.com/aws/eks-hybrid/internal/tracker"
 
 	"github.com/integrii/flaggy"
@@ -13,13 +13,7 @@ import (
 	"k8s.io/utils/strings/slices"
 )
 
-const (
-	preprocessPhase = "preprocess"
-	configPhase     = "config"
-	runPhase        = "run"
-
-	installValidation = "install-validation"
-)
+const installValidation = "install-validation"
 
 func NewInitCommand() cli.Command {
 	init := initCmd{}
@@ -64,6 +58,7 @@ func (c *initCmd) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	if err != nil {
 		return err
 	}
+
 	if err := nodeProvider.ValidateConfig(); err != nil {
 		return err
 	}
@@ -71,67 +66,11 @@ func (c *initCmd) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return err
 	}
 
-	return Init(nodeProvider, c.skipPhases)
-}
-
-func Init(node nodeprovider.NodeProvider, skipPhases []string) error {
-	aspects := node.GetAspects()
-	node.Logger().Info("Setting up system aspects...")
-	for _, aspect := range aspects {
-		nameField := zap.String("name", aspect.Name())
-		node.Logger().Info("Setting up system aspect..", nameField)
-		if err := aspect.Setup(); err != nil {
-			return err
-		}
-		node.Logger().Info("Finished setting up system aspect", nameField)
+	initer := &flows.Initer{
+		NodeProvider: nodeProvider,
+		SkipPhases:   c.skipPhases,
+		Logger:       log,
 	}
 
-	if !slices.Contains(skipPhases, preprocessPhase) {
-		node.Logger().Info("Configuring Pre-process daemons...")
-		if err := node.PreProcessDaemon(); err != nil {
-			return err
-		}
-	}
-
-	node.Logger().Info("Configuring Aws...")
-	if err := node.ConfigureAws(); err != nil {
-		return err
-	}
-
-	daemons, err := node.GetDaemons()
-	if err != nil {
-		return err
-	}
-	if !slices.Contains(skipPhases, configPhase) {
-		node.Logger().Info("Configuring daemons...")
-		for _, daemon := range daemons {
-			nameField := zap.String("name", daemon.Name())
-
-			node.Logger().Info("Configuring daemon...", nameField)
-			if err := daemon.Configure(); err != nil {
-				return err
-			}
-			node.Logger().Info("Configured daemon", nameField)
-		}
-	}
-
-	if !slices.Contains(skipPhases, runPhase) {
-		for _, daemon := range daemons {
-			nameField := zap.String("name", daemon.Name())
-
-			node.Logger().Info("Ensuring daemon is running..", nameField)
-			if err := daemon.EnsureRunning(); err != nil {
-				return err
-			}
-			node.Logger().Info("Daemon is running", nameField)
-
-			node.Logger().Info("Running post-launch tasks..", nameField)
-			if err := daemon.PostLaunch(); err != nil {
-				return err
-			}
-			node.Logger().Info("Finished post-launch tasks", nameField)
-		}
-	}
-	node.Cleanup()
-	return nil
+	return initer.Run()
 }

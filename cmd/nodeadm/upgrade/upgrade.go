@@ -10,18 +10,15 @@ import (
 	"go.uber.org/zap"
 	"k8s.io/utils/strings/slices"
 
-	initialize "github.com/aws/eks-hybrid/cmd/nodeadm/init"
-	"github.com/aws/eks-hybrid/cmd/nodeadm/install"
-	"github.com/aws/eks-hybrid/cmd/nodeadm/uninstall"
 	"github.com/aws/eks-hybrid/internal/aws"
 	"github.com/aws/eks-hybrid/internal/cli"
 	"github.com/aws/eks-hybrid/internal/containerd"
 	"github.com/aws/eks-hybrid/internal/creds"
 	"github.com/aws/eks-hybrid/internal/daemon"
+	"github.com/aws/eks-hybrid/internal/flows"
 	"github.com/aws/eks-hybrid/internal/kubelet"
 	"github.com/aws/eks-hybrid/internal/node"
 	"github.com/aws/eks-hybrid/internal/packagemanager"
-	"github.com/aws/eks-hybrid/internal/ssm"
 	"github.com/aws/eks-hybrid/internal/tracker"
 )
 
@@ -73,10 +70,10 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	} else if err != nil {
 		return err
 	}
-	artifacts := installed.Artifacts
 
 	ctx, cancel := context.WithTimeout(context.Background(), c.downloadTimeout)
 	defer cancel()
+
 	if !slices.Contains(c.skipPhases, initNodePreflightCheck) {
 		log.Info("Validating if node has initialized")
 		if err := node.IsInitialized(ctx); err != nil {
@@ -84,20 +81,12 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		}
 	}
 
-	log.Info("Creating daemon manager..")
-	daemonManager, err := daemon.NewDaemonManager()
-	if err != nil {
-		return err
-	}
-	defer daemonManager.Close()
-
 	log.Info("Loading configuration..", zap.String("configSource", opts.ConfigSource))
 	nodeProvider, err := node.NewNodeProvider(opts.ConfigSource, log)
 	if err != nil {
 		return err
 	}
 
-	// Ensure hybrid configuration and enrich
 	if err := nodeProvider.ValidateConfig(); err != nil {
 		return err
 	}
@@ -110,7 +99,7 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	}
 
 	// Validating credential provider. Upgrade does not allow changes to credential providers
-	installedCredsProvider, err := creds.GetCredentialProviderFromInstalledArtifacts(artifacts)
+	installedCredsProvider, err := creds.GetCredentialProviderFromInstalledArtifacts(installed.Artifacts)
 	if err != nil {
 		return err
 	}
@@ -126,19 +115,14 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	}
 	log.Info("Using Kubernetes version", zap.Reflect("kubernetes version", awsSource.Eks.Version))
 
-	log.Info("Creating package manager...")
-	containerdSource := containerd.GetContainerdSource(artifacts.Containerd)
-	log.Info("Configuring package manager with", zap.Reflect("containerd source", string(containerdSource)))
-	packageManager, err := packagemanager.New(containerdSource, log)
+	log.Info("Creating daemon manager..")
+	daemonManager, err := daemon.NewDaemonManager()
 	if err != nil {
 		return err
 	}
+	defer daemonManager.Close()
 
-	if err := uninstall.UninstallBinaries(ctx, artifacts, packageManager, log); err != nil {
-		return err
-	}
-
-	if artifacts.Kubelet {
+	if installed.Artifacts.Kubelet {
 		kubeletStatus, err := daemonManager.GetDaemonStatus(kubelet.KubeletDaemonName)
 		if err != nil {
 			return err
@@ -158,49 +142,42 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 				}
 			}
 		}
-		log.Info("Uninstalling kubelet...")
-		if err := daemonManager.StopDaemon(kubelet.KubeletDaemonName); err != nil {
-			return err
-		}
-		if err := kubelet.Uninstall(); err != nil {
-			return err
-		}
-	}
-	if artifacts.Ssm {
-		log.Info("Uninstalling and de-registering SSM agent...")
-		if err := daemonManager.StopDaemon(ssm.SsmDaemonName); err != nil {
-			return err
-		}
-		if err := ssm.Uninstall(ctx, packageManager); err != nil {
-			return err
-		}
-	}
-	if artifacts.Containerd != string(containerd.ContainerdSourceNone) {
-		log.Info("Uninstalling containerd...")
-		if err := daemonManager.StopDaemon(containerd.ContainerdDaemonName); err != nil {
-			return err
-		}
-		if err := containerd.Uninstall(ctx, packageManager); err != nil {
-			return err
-		}
 	}
 
-	if err := tracker.Clear(); err != nil {
+	log.Info("Creating package manager...")
+	containerdSource := containerd.GetContainerdSource(installed.Artifacts.Containerd)
+	log.Info("Configuring package manager with", zap.Reflect("containerd source", string(containerdSource)))
+	packageManager, err := packagemanager.New(containerdSource, log)
+	if err != nil {
 		return err
 	}
 
-	installer := &install.Config{
+	uninstaller := &flows.Uninstaller{
+		Artifacts:      installed.Artifacts,
+		DaemonManager:  daemonManager,
+		PackageManager: packageManager,
+		Logger:         log,
+	}
+
+	installer := &flows.Installer{
 		AwsSource:          awsSource,
 		ContainerdSource:   containerdSource,
+		PackageManager:     packageManager,
 		CredentialProvider: credsProvider,
-		Log:                log,
-		DownloadTimeout:    c.downloadTimeout,
+		Logger:             log,
 	}
 
-	// Installing new version of artifacts
-	if err := installer.Install(ctx); err != nil {
-		return err
+	initer := &flows.Initer{
+		NodeProvider: nodeProvider,
+		SkipPhases:   c.skipPhases,
+		Logger:       log,
 	}
 
-	return initialize.Init(nodeProvider, c.skipPhases)
+	upgrader := &flows.Upgrader{
+		Uninstaller: uninstaller,
+		Installer:   installer,
+		Initer:      initer,
+	}
+
+	return upgrader.Run(ctx)
 }
