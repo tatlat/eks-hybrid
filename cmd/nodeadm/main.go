@@ -9,7 +9,6 @@ import (
 	"github.com/aws/eks-hybrid/cmd/nodeadm/install"
 	"github.com/aws/eks-hybrid/cmd/nodeadm/uninstall"
 	"github.com/aws/eks-hybrid/cmd/nodeadm/upgrade"
-	"github.com/aws/eks-hybrid/cmd/nodeadm/validate"
 	"github.com/aws/eks-hybrid/cmd/nodeadm/version"
 	"github.com/aws/eks-hybrid/internal/cli"
 )
@@ -29,7 +28,6 @@ func main() {
 		install.NewCommand(),
 		uninstall.NewCommand(),
 		upgrade.NewUpgradeCommand(),
-		validate.NewCommand(),
 	}
 
 	for _, cmd := range cmds {

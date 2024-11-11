@@ -59,6 +59,10 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	if !root {
 		return cli.ErrMustRunAsRoot
 	}
+
+	if c.credentialProvider == "" {
+		flaggy.ShowHelpAndExit("--credential-provider is a required flag. Allowed values are ssm & iam-ra")
+	}
 	credentialProvider, err := creds.GetCredentialProvider(c.credentialProvider)
 	if err != nil {
 		return err

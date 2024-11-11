@@ -36,7 +36,7 @@ func (fcs *fileConfigProvider) Provide() (*internalapi.NodeConfig, error) {
 	if err != nil {
 		return nil, err
 	}
-	config, err := apibridge.DecodeNodeConfig(data)
+	config, err := apibridge.DecodeStrictNodeConfig(data)
 	if err != nil {
 		return nil, err
 	}

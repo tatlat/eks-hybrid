@@ -18,6 +18,7 @@ const installValidation = "install-validation"
 func NewInitCommand() cli.Command {
 	init := initCmd{}
 	init.cmd = flaggy.NewSubcommand("init")
+	init.cmd.String(&init.configSource, "c", "config-source", "Source of node configuration. The format is a URI with supported schemes: [file, imds].")
 	init.cmd.StringSlice(&init.daemons, "d", "daemon", "specify one or more of `containerd` and `kubelet`. This is intended for testing and should not be used in a production environment.")
 	init.cmd.StringSlice(&init.skipPhases, "s", "skip", "phases of the bootstrap you want to skip")
 	init.cmd.Description = "Initialize this instance as a node in an EKS cluster"
@@ -25,9 +26,10 @@ func NewInitCommand() cli.Command {
 }
 
 type initCmd struct {
-	cmd        *flaggy.Subcommand
-	skipPhases []string
-	daemons    []string
+	cmd          *flaggy.Subcommand
+	configSource string
+	skipPhases   []string
+	daemons      []string
 }
 
 func (c *initCmd) Flaggy() *flaggy.Subcommand {
@@ -43,6 +45,11 @@ func (c *initCmd) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return cli.ErrMustRunAsRoot
 	}
 
+	if c.configSource == "" {
+		flaggy.ShowHelpAndExit("--config-source is a required flag. The format is a URI with supported schemes: [file, imds]." +
+			" For example on hybrid nodes --config-source file:///root/nodeConfig.yaml")
+	}
+
 	if !slices.Contains(c.skipPhases, installValidation) {
 		log.Info("Loading installed components")
 		_, err = tracker.GetInstalledArtifacts()
@@ -54,7 +61,7 @@ func (c *initCmd) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		}
 	}
 
-	nodeProvider, err := node.NewNodeProvider(opts.ConfigSource, log)
+	nodeProvider, err := node.NewNodeProvider(c.configSource, log)
 	if err != nil {
 		return err
 	}

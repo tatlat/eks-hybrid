@@ -14,12 +14,14 @@ import (
 func NewCommand() cli.Command {
 	validate := validateCmd{}
 	validate.cmd = flaggy.NewSubcommand("validate")
+	validate.cmd.String(&validate.configSource, "c", "config-source", "Source of node configuration. The format is a URI with supported schemes: [file, imds].")
 	validate.cmd.Description = "Validate the node can join an EKS cluster"
 	return &validate
 }
 
 type validateCmd struct {
-	cmd *flaggy.Subcommand
+	cmd          *flaggy.Subcommand
+	configSource string
 }
 
 func (c *validateCmd) Flaggy() *flaggy.Subcommand {
@@ -29,8 +31,8 @@ func (c *validateCmd) Flaggy() *flaggy.Subcommand {
 func (c *validateCmd) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	logger.Init()
 
-	logger.Info(fmt.Sprintf("Loading node configuration: %s", opts.ConfigSource))
-	provider, err := configprovider.BuildConfigProvider(opts.ConfigSource)
+	logger.Info(fmt.Sprintf("Loading node configuration: %s", c.configSource))
+	provider, err := configprovider.BuildConfigProvider(c.configSource)
 	if err != nil {
 		return err
 	}
