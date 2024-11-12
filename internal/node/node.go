@@ -20,7 +20,9 @@ func NewNodeProvider(configSource string, logger *zap.Logger) (nodeprovider.Node
 		return nil, err
 	}
 	if nodeConfig.IsHybridNode() {
+		logger.Info("Setting up hybrid node provider...")
 		return hybrid.NewHybridNodeProvider(nodeConfig, logger)
 	}
+	logger.Info("Setting up EC2 node provider...")
 	return ec2.NewEc2NodeProvider(nodeConfig, logger)
 }

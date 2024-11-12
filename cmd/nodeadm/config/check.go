@@ -1,22 +1,24 @@
 package config
 
 import (
-	"github.com/aws/eks-hybrid/internal/cli"
-	"github.com/aws/eks-hybrid/internal/configprovider"
 	"github.com/integrii/flaggy"
 	"go.uber.org/zap"
+
+	"github.com/aws/eks-hybrid/internal/cli"
+	"github.com/aws/eks-hybrid/internal/configprovider"
 )
 
 type fileCmd struct {
-	cmd *flaggy.Subcommand
+	cmd          *flaggy.Subcommand
+	configSource string
 }
 
 func NewCheckCommand() cli.Command {
-	cmd := flaggy.NewSubcommand("check")
-	cmd.Description = "Verify configuration"
-	return &fileCmd{
-		cmd: cmd,
-	}
+	file := fileCmd{}
+	file.cmd = flaggy.NewSubcommand("check")
+	file.cmd.Description = "Verify configuration"
+	file.cmd.String(&file.configSource, "c", "config-source", "Source of node configuration. The format is a URI with supported schemes: [file, imds].")
+	return &file
 }
 
 func (c *fileCmd) Flaggy() *flaggy.Subcommand {
@@ -24,8 +26,8 @@ func (c *fileCmd) Flaggy() *flaggy.Subcommand {
 }
 
 func (c *fileCmd) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
-	log.Info("Checking configuration", zap.String("source", opts.ConfigSource))
-	provider, err := configprovider.BuildConfigProvider(opts.ConfigSource)
+	log.Info("Checking configuration", zap.String("source", c.configSource))
+	provider, err := configprovider.BuildConfigProvider(c.configSource)
 	if err != nil {
 		return err
 	}

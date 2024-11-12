@@ -36,6 +36,7 @@ func NewUpgradeCommand() cli.Command {
 	fc := flaggy.NewSubcommand("upgrade")
 	fc.Description = "Upgrade components installed using the install sub-command"
 	fc.AddPositionalValue(&cmd.kubernetesVersion, "KUBERNETES_VERSION", 1, true, "The major[.minor[.patch]] version of Kubernetes to install")
+	fc.String(&cmd.configSource, "c", "config-source", "Source of node configuration. The format is a URI with supported schemes: [file, imds].")
 	fc.StringSlice(&cmd.skipPhases, "s", "skip", "phases of the upgrade you want to skip")
 	fc.Duration(&cmd.downloadTimeout, "dt", "download-timeout", "Timeout for downloading artifacts. Input follows duration format. Example: 1h23s")
 	cmd.flaggy = fc
@@ -44,6 +45,7 @@ func NewUpgradeCommand() cli.Command {
 
 type command struct {
 	flaggy            *flaggy.Subcommand
+	configSource      string
 	skipPhases        []string
 	kubernetesVersion string
 	downloadTimeout   time.Duration
@@ -60,6 +62,11 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	}
 	if !root {
 		return cli.ErrMustRunAsRoot
+	}
+
+	if c.configSource == "" {
+		flaggy.ShowHelpAndExit("--config-source is a required flag. The format is a URI with supported schemes: [file, imds]." +
+			" For example on hybrid nodes --config-source file:///root/nodeConfig.yaml")
 	}
 
 	log.Info("Loading installed components")
@@ -81,8 +88,8 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		}
 	}
 
-	log.Info("Loading configuration..", zap.String("configSource", opts.ConfigSource))
-	nodeProvider, err := node.NewNodeProvider(opts.ConfigSource, log)
+	log.Info("Loading configuration..", zap.String("configSource", c.configSource))
+	nodeProvider, err := node.NewNodeProvider(c.configSource, log)
 	if err != nil {
 		return err
 	}

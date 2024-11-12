@@ -3,10 +3,12 @@ package bridge
 import (
 	"fmt"
 
-	api "github.com/aws/eks-hybrid/api"
+	"github.com/aws/eks-hybrid/api"
 	internalapi "github.com/aws/eks-hybrid/internal/api"
+
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
+	"sigs.k8s.io/yaml"
 )
 
 // DecodeNodeConfig unmarshals the given data into an internal NodeConfig object.
@@ -32,4 +34,15 @@ func DecodeNodeConfig(data []byte) (*internalapi.NodeConfig, error) {
 		return internalConfig, nil
 	}
 	return nil, fmt.Errorf("unable to convert %T to internal NodeConfig", obj)
+}
+
+// DecodeStrictNodeConfig unmarshals the given data into an internal NodeConfig object.
+// It attempts a struct unmarshalling. Will throw an error if unknown fields are present.
+func DecodeStrictNodeConfig(data []byte) (*internalapi.NodeConfig, error) {
+	var obj internalapi.NodeConfig
+	if err := yaml.UnmarshalStrict(data, &obj); err != nil {
+		return nil, err
+	}
+
+	return &obj, nil
 }
