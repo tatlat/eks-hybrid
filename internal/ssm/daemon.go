@@ -18,7 +18,8 @@ var (
 	SsmDaemonName               = "amazon-ssm-agent"
 
 	checksumMismatchErrorRegex = regexp.MustCompile(`.*checksum mismatch with latest ssm-setup-cli*`)
-	activationErrorRegex       = regexp.MustCompile(`.*ActivationExpired*`)
+	activationExpiredRegex     = regexp.MustCompile(`.*ActivationExpired*`)
+	invalidActivationRegex     = regexp.MustCompile(`.*InvalidActivation*`)
 	defaultAWSConfigPath       = "/root/.aws"
 	eksHybridPath              = "/eks-hybrid"
 	symlinkedAWSConfigPath     = filepath.Join(eksHybridPath, ".aws")
@@ -63,8 +64,10 @@ func (s *ssm) Configure() error {
 				return err
 			}
 			return s.registerMachine(s.nodeConfig, registerOverride)
-		} else if match := activationErrorRegex.MatchString(err.Error()); match {
+		} else if match := activationExpiredRegex.MatchString(err.Error()); match {
 			return fmt.Errorf("SSM activation expired. Please use a valid activation")
+		} else if match := invalidActivationRegex.MatchString(err.Error()); match {
+			return fmt.Errorf("invalid SSM activation. Please use a valid activation code, activation id and region")
 		}
 		return err
 	}
