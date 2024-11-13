@@ -62,7 +62,7 @@ func (s *SigningHelperDaemon) EnsureRunning() error {
 	if err != nil {
 		return err
 	}
-	return s.daemonManager.StartDaemon(s.Name())
+	return s.daemonManager.RestartDaemon(s.Name())
 }
 
 // PostLaunch runs any additional step that needs to occur after the service

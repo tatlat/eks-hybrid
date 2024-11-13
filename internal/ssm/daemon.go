@@ -79,7 +79,7 @@ func (s *ssm) EnsureRunning() error {
 	if err != nil {
 		return err
 	}
-	return s.daemonManager.StartDaemon(SsmDaemonName)
+	return s.daemonManager.RestartDaemon(SsmDaemonName)
 }
 
 func (s *ssm) PostLaunch() error {
