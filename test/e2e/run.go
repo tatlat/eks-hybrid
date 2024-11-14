@@ -56,6 +56,7 @@ const (
 	vpcCNIDaemonSetNS   = "kube-system"
 	outputDir           = "/tmp"
 	ciliumCni           = "cilium"
+	calicoCni           = "calico"
 )
 
 var awsNodePatchContent = `
@@ -261,6 +262,13 @@ func (t *TestRunner) CreateResources(ctx context.Context) error {
 				return fmt.Errorf("error installing cilium for %s EKS cluster: %v", kubernetesVersion, err)
 			}
 			fmt.Println("Cilium installed sucessfully.")
+		case calicoCni:
+			calico := newCalico(dynamicK8s, t.Spec.HybridNetwork.PodCidr)
+			fmt.Printf("Installing calico on cluster %s...\n", clusterName)
+			if err = calico.deploy(ctx); err != nil {
+				return fmt.Errorf("error installing calico for %s EKS cluster: %v", kubernetesVersion, err)
+			}
+			fmt.Println("Calico installed sucessfully.")
 		}
 	}
 

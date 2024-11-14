@@ -5,12 +5,14 @@ package e2e
 
 import (
 	"context"
+	_ "embed"
 	"fmt"
 	"net/url"
 	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/ssm"
 	"github.com/aws/eks-hybrid/internal/api"
@@ -21,42 +23,15 @@ import (
 )
 
 const ssmActivationName = "eks-hybrid-ssm-provider"
+const amd64Arch = "x86_64"
+const arm64Arch = "arm64"
 
 // NodeadmOS defines an interface for operating system-specific behavior.
 type NodeadmOS interface {
 	Name() string
-	AMIName() string
-	BuildUserData(nodeadmUrl, nodeadmConfigYaml, kubernetesVersion, provider string) []byte
-}
-
-type Ubuntu2204 struct{}
-
-func (u *Ubuntu2204) Name() string {
-	return "ubuntu2204"
-}
-
-func (u *Ubuntu2204) AMIName() string {
-	return "/aws/service/canonical/ubuntu/server/22.04/stable/current/amd64/hvm/ebs-gp2/ami-id"
-}
-
-func (u *Ubuntu2204) BuildUserData(nodeadmUrl, nodeadmConfigYaml, kubernetesVersion, provider string) []byte {
-	data := `#!/bin/bash
-# download nodeadm binary
-echo "Downloading nodeadm binary"
-curl -L "%s" -o /tmp/nodeadm
-chmod +x /tmp/nodeadm
-
-echo "Downloading nodeadm-config.yaml"
-echo '%s' > nodeadm-config.yaml
-
-echo "Installing kubernetes components"
-/tmp/nodeadm install %s --credential-provider %s
-
-echo "Initializing the node"
-/tmp/nodeadm init -c file:///nodeadm-config.yaml
-`
-	userdata := fmt.Sprintf(data, nodeadmUrl, nodeadmConfigYaml, kubernetesVersion, provider)
-	return []byte(userdata)
+	AMIName(ctx context.Context, awsSession *session.Session) (string, error)
+	BuildUserData(nodeadmUrl, nodeadmConfigYaml, kubernetesVersion, provider string) ([]byte, error)
+	InstanceType() string
 }
 
 type NodeadmCredentialsProvider interface {

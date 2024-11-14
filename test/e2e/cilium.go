@@ -10,11 +10,12 @@ import (
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 )
 
-//go:embed testdata/cilium-template.yaml
+//go:embed testdata/cilium/cilium-template.yaml
 var ciliumTemplate []byte
 
 type cilium struct {
@@ -39,8 +40,9 @@ func (c cilium) deploy(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	values := make(map[string]string)
-	values["PodCIDR"] = c.PodCIDR
+	values := map[string]string{
+		"PodCIDR": c.PodCIDR,
+	}
 	installation := &bytes.Buffer{}
 	err = tmpl.Execute(installation, values)
 	if err != nil {
@@ -53,7 +55,12 @@ func (c cilium) deploy(ctx context.Context) error {
 	}
 
 	fmt.Println("Applying cilium installation")
-	for _, obj := range objs {
+
+	return upsertManifests(ctx, c.K8s, objs)
+}
+
+func upsertManifests(ctx context.Context, k8s dynamic.Interface, manifests []unstructured.Unstructured) error {
+	for _, obj := range manifests {
 		o := obj
 		groupVersion := o.GroupVersionKind()
 		resource := schema.GroupVersionResource{
@@ -61,23 +68,22 @@ func (c cilium) deploy(ctx context.Context) error {
 			Version:  groupVersion.Version,
 			Resource: strings.ToLower(groupVersion.Kind + "s"),
 		}
-		k8s := c.K8s.Resource(resource).Namespace(obj.GetNamespace())
+		k8s := k8s.Resource(resource).Namespace(obj.GetNamespace())
 		if _, err := k8s.Get(ctx, obj.GetName(), metav1.GetOptions{}); apierrors.IsNotFound(err) {
-			fmt.Printf("Creating cilium object %s (%s)", o.GetName(), groupVersion)
+			fmt.Printf("Creating custom object %s (%s)", o.GetName(), groupVersion)
 			_, err := k8s.Create(ctx, &obj, metav1.CreateOptions{})
 			if err != nil {
-				return fmt.Errorf("creating cilium object %s (%s): %w", o.GetName(), groupVersion, err)
+				return fmt.Errorf("creating custom object %s (%s): %w", o.GetName(), groupVersion, err)
 			}
 		} else if err != nil {
-			return fmt.Errorf("reading cilium object %s (%s): %w", o.GetName(), groupVersion, err)
+			return fmt.Errorf("reading custom object %s (%s): %w", o.GetName(), groupVersion, err)
 		} else {
-			fmt.Printf("Updating cilium object %s (%s)", o.GetName(), groupVersion)
+			fmt.Printf("Updating custom object %s (%s)", o.GetName(), groupVersion)
 			_, err := k8s.Update(ctx, &obj, metav1.UpdateOptions{})
 			if err != nil {
-				return fmt.Errorf("updating cilium object %s (%s): %w", o.GetName(), groupVersion, err)
+				return fmt.Errorf("updating custom object %s (%s): %w", o.GetName(), groupVersion, err)
 			}
 		}
 	}
-
 	return nil
 }

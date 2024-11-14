@@ -19,7 +19,7 @@ import (
 const (
 	nodePodWaitTimeout      = 3 * time.Minute
 	nodePodDelayInterval    = 5 * time.Second
-	hybridNodeWaitTimeout   = 5 * time.Minute
+	hybridNodeWaitTimeout   = 10 * time.Minute
 	hybridNodeDelayInterval = 5 * time.Second
 	podNamespace            = "default"
 )
