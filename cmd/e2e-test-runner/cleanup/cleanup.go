@@ -37,7 +37,7 @@ func (c *command) Flaggy() *flaggy.Subcommand {
 }
 
 func (s *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
-	fmt.Println("cleaning up E2E resources...")
+	fmt.Println("Cleaning up E2E resources...")
 
 	file, err := os.ReadFile(s.resourcesFilePath)
 	if err != nil {
