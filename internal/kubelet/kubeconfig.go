@@ -19,7 +19,7 @@ const (
 	kubeconfigRoot          = "/var/lib/kubelet"
 	kubeconfigFile          = "kubeconfig"
 	kubeconfigBootstrapFile = "bootstrap-kubeconfig"
-	kubeconfigPerm          = 0644
+	kubeconfigPerm          = 0o644
 )
 
 var (
