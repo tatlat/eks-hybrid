@@ -1,7 +1,15 @@
 version: 0.2
 
+env:
+  secrets-manager:
+    RHEL_USERNAME: "redhat-credentials:username"
+    RHEL_PASSWORD: "redhat-credentials:password"
+
 phases:
+  pre_build:
+    commands:
+    - make ginkgo
+
   build:
     commands:
-    # make the test-nodeadm stage dummy for now
-    - true
+    - ./hack/run-e2e.sh hybrid-e2e-$CODEBUILD_BUILD_ID $AWS_REGION $KUBERNETES_VERSION $CNI s3://$ARTIFACTS_BUCKET/latest/linux/amd64/nodeadm s3://$ARTIFACTS_BUCKET/latest/linux/arm64/nodeadm
