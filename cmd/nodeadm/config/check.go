@@ -6,6 +6,7 @@ import (
 
 	"github.com/aws/eks-hybrid/internal/cli"
 	"github.com/aws/eks-hybrid/internal/configprovider"
+	"github.com/aws/eks-hybrid/internal/node"
 )
 
 type fileCmd struct {
@@ -35,6 +36,16 @@ func (c *fileCmd) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	if err != nil {
 		return err
 	}
+
+	nodeProvider, err := node.NewNodeProvider(c.configSource, log)
+	if err != nil {
+		return err
+	}
+
+	if err := nodeProvider.ValidateConfig(); err != nil {
+		return err
+	}
+
 	log.Info("Configuration is valid")
 	return nil
 }
