@@ -76,5 +76,5 @@ func (t *TestRunner) deleteIamRole() error {
 }
 
 func getRoleName(name string) string {
-	return fmt.Sprintf("%s-eks-hybrid-role", name)
+	return fmt.Sprintf("%s-hybrid-node", name)
 }
