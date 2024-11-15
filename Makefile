@@ -1,11 +1,14 @@
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
 ENVTEST_K8S_VERSION = 1.27.1
 
+GOLANG_VERSION?="1.21"
+GO ?= $(shell source ./scripts/common.sh && get_go_path $(GOLANG_VERSION))/go
+
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
-ifeq (,$(shell go env GOBIN))
-GOBIN=$(shell go env GOPATH)/bin
+ifeq (,$(shell $(GO) env GOBIN))
+GOBIN=$(shell $(GO) env GOPATH)/bin
 else
-GOBIN=$(shell go env GOBIN)
+GOBIN=$(shell $(GO) env GOBIN)
 endif
 
 # Setting SHELL to bash allows bash commands to be executed by recipes.
@@ -64,21 +67,21 @@ generate-doc: crd-ref-docs
 
 .PHONY: fmt
 fmt: ## Run go fmt against code.
-	go fmt ./...
+	$(GO) fmt ./...
 
 .PHONY: vet
 vet: ## Run go vet against code.
-	go vet ./...
+	$(GO) vet ./...
 
 .PHONY: test
 test: ## Run validate tests.
-	go test ./... 
+	$(GO) test ./... 
 
 COVERAGEFILE = $(LOCALBIN)/coverage.out
 .PHONY: coverage
 coverage: test
-	go test -coverprofile=$(COVERAGEFILE) ./...
-	go tool cover -html=$(COVERAGEFILE)
+	$(GO) test -coverprofile=$(COVERAGEFILE) ./...
+	$(GO) tool cover -html=$(COVERAGEFILE)
 
 .PHONY: test-integration
 test-integration: ## Run integration tests.
@@ -91,17 +94,17 @@ test-integration: ## Run integration tests.
 .PHONY: build
 build: LINKER_FLAGS :=-X github.com/aws/eks-hybrid/cmd/nodeadm/version.GitVersion=$(GIT_VERSION) -X github.com/aws/eks-hybrid/internal/aws.manifestUrl=$(HYBRID_MANIFEST_URL) -s -w -buildid='' -extldflags -static
 build:
-	go build -ldflags "$(LINKER_FLAGS)" -trimpath -o $(LOCALBIN)/nodeadm cmd/nodeadm/main.go
+	$(GO) build -ldflags "$(LINKER_FLAGS)" -trimpath -o $(LOCALBIN)/nodeadm cmd/nodeadm/main.go
 
 .PHONY: build-cross-platform
 build-cross-platform: LINKER_FLAGS :=-X github.com/aws/eks-hybrid/cmd/nodeadm/version.GitVersion=$(GIT_VERSION) -X github.com/aws/eks-hybrid/internal/aws.manifestUrl=$(HYBRID_MANIFEST_URL) -s -w -buildid='' -extldflags -static
 build-cross-platform:
-	GOOS=linux GOARCH=amd64 go build -ldflags "$(LINKER_FLAGS)" -trimpath -o $(LOCALBIN)/amd64/nodeadm cmd/nodeadm/main.go
-	GOOS=linux GOARCH=arm64 go build -ldflags "$(LINKER_FLAGS)" -trimpath -o $(LOCALBIN)/arm64/nodeadm cmd/nodeadm/main.go
+	GOOS=linux GOARCH=amd64 $(GO) build -ldflags "$(LINKER_FLAGS)" -trimpath -o $(LOCALBIN)/amd64/nodeadm cmd/nodeadm/main.go
+	GOOS=linux GOARCH=arm64 $(GO) build -ldflags "$(LINKER_FLAGS)" -trimpath -o $(LOCALBIN)/arm64/nodeadm cmd/nodeadm/main.go
 
 .PHONY: run
 run: build ## Run binary
-	go run cmd/nodeadm/main.go $(args)
+	$(GO) run cmd/nodeadm/main.go $(args)
 
 ##@ Build Dependencies
 
@@ -137,34 +140,34 @@ $(KUSTOMIZE): $(LOCALBIN)
 		rm -rf $(LOCALBIN)/kustomize; \
 	fi
 	test -s $(LOCALBIN)/kustomize || \
-	GOBIN=$(LOCALBIN) GO111MODULE=on go install sigs.k8s.io/kustomize/kustomize/v5@$(KUSTOMIZE_VERSION)
+	GOBIN=$(LOCALBIN) GO111MODULE=on $(GO) install sigs.k8s.io/kustomize/kustomize/v5@$(KUSTOMIZE_VERSION)
 
 .PHONY: controller-gen
 controller-gen: $(CONTROLLER_GEN) ## Download controller-gen locally if necessary. If wrong version is installed, it will be overwritten.
 $(CONTROLLER_GEN): $(LOCALBIN)
 	test -s $(LOCALBIN)/controller-gen && $(LOCALBIN)/controller-gen --version | grep -q $(CONTROLLER_TOOLS_VERSION) || \
-	GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-tools/cmd/controller-gen@$(CONTROLLER_TOOLS_VERSION)
+	GOBIN=$(LOCALBIN) $(GO) install sigs.k8s.io/controller-tools/cmd/controller-gen@$(CONTROLLER_TOOLS_VERSION)
 
 .PHONY: conversion-gen
 conversion-gen: $(CONVERSION_GEN) ## Download conversion-gen locally if necessary.
 $(CONVERSION_GEN): $(LOCALBIN)
 	test -s $(LOCALBIN)/conversion-gen || \
-	GOBIN=$(LOCALBIN) go install k8s.io/code-generator/cmd/conversion-gen@$(CODE_GENERATOR_VERSION)
+	GOBIN=$(LOCALBIN) $(GO) install k8s.io/code-generator/cmd/conversion-gen@$(CODE_GENERATOR_VERSION)
 
 .PHONY: crd-ref-docs
 crd-ref-docs: $(CRD_REF_DOCS) ## Download crd-ref-docs locally if necessary.
 $(CRD_REF_DOCS): $(LOCALBIN)
 	test -s $(LOCALBIN)/crd-ref-docs || \
-	GOBIN=$(LOCALBIN) go install github.com/elastic/crd-ref-docs@$(CRD_REF_DOCS_VERSION)
+	GOBIN=$(LOCALBIN) $(GO) install github.com/elastic/crd-ref-docs@$(CRD_REF_DOCS_VERSION)
 
 .PHONY: ginkgo
 ginkgo: $(GINKGO)
 $(GINKGO): $(LOCALBIN)
-	GOBIN=$(LOCALBIN) go install github.com/onsi/ginkgo/v2/ginkgo@$(GINKGO_VERSION)
+	GOBIN=$(LOCALBIN) $(GO) install github.com/onsi/ginkgo/v2/ginkgo@$(GINKGO_VERSION)
 
 .PHONY: update-deps
 update-deps:
-	go get $(shell go list -f '{{if not (or .Main .Indirect)}}{{.Path}}{{end}}' -mod=mod -m all) && go mod tidy
+	$(GO) get $(shell $(GO) list -f '{{if not (or .Main .Indirect)}}{{.Path}}{{end}}' -mod=mod -m all) && $(GO) mod tidy
 
 .PHONY: lint
 lint: $(GOLANGCI_LINT) ## Run golangci-lint
@@ -173,7 +176,7 @@ lint: $(GOLANGCI_LINT) ## Run golangci-lint
 .PHONY: mocks
 mocks: MOCKGEN := ${GOBIN}/mockgen --build_flags=--mod=mod
 mocks: ## Generate mocks
-	go install github.com/golang/mock/mockgen@v1.6.0
+	$(GO) install github.com/golang/mock/mockgen@v1.6.0
 	${MOCKGEN} -destination=internal/validation/util/mocks/client.go -package=mocks -source "internal/validation/util/netclient.go" NetClient
 
 $(GOLANGCI_LINT): $(LOCALBIN) $(GOLANGCI_LINT_CONFIG)
@@ -182,8 +185,8 @@ $(GOLANGCI_LINT): $(LOCALBIN) $(GOLANGCI_LINT_CONFIG)
 
 .PHONY: e2e-tests-binary
 e2e-tests-binary:
-	go test -c ./test/e2e -o ./_bin/e2e.test -tags "e2e"
+	$(GO) test -c ./test/e2e -o ./_bin/e2e.test -tags "e2e"
 
 .PHONY: e2e-setup
 e2e-setup:
-	go build -o _bin/e2e-test-runner ./cmd/e2e-test-runner/main.go 
+	$(GO) build -o _bin/e2e-test-runner ./cmd/e2e-test-runner/main.go 
