@@ -71,12 +71,16 @@ func (u Ubuntu2004) AMIName(ctx context.Context, awsSession *session.Session) (s
 	return *amiId, err
 }
 
-func (u Ubuntu2004) BuildUserData(nodeadmUrl, nodeadmConfigYaml, kubernetesVersion, provider string) ([]byte, error) {
+func (u Ubuntu2004) BuildUserData(nodeadmUrls NodeadmURLs, nodeadmConfigYaml, kubernetesVersion, provider string) ([]byte, error) {
 	data := ubuntuCloudInitData{
 		NodeadmConfig:     nodeadmConfigYaml,
-		NodeadmUrl:        nodeadmUrl,
+		NodeadmUrl:        nodeadmUrls.AMD,
 		KubernetesVersion: kubernetesVersion,
 		Provider:          provider,
+	}
+
+	if u.Architecture == arm64Arch {
+		data.NodeadmUrl = nodeadmUrls.ARM
 	}
 
 	return executeTemplate(ubuntu2004CloudInit, data)
@@ -114,12 +118,16 @@ func (u Ubuntu2204) AMIName(ctx context.Context, awsSession *session.Session) (s
 	return *amiId, err
 }
 
-func (u Ubuntu2204) BuildUserData(nodeadmUrl, nodeadmConfigYaml, kubernetesVersion, provider string) ([]byte, error) {
+func (u Ubuntu2204) BuildUserData(nodeadmUrls NodeadmURLs, nodeadmConfigYaml, kubernetesVersion, provider string) ([]byte, error) {
 	data := ubuntuCloudInitData{
 		NodeadmConfig:     nodeadmConfigYaml,
-		NodeadmUrl:        nodeadmUrl,
+		NodeadmUrl:        nodeadmUrls.AMD,
 		KubernetesVersion: kubernetesVersion,
 		Provider:          provider,
+	}
+
+	if u.Architecture == arm64Arch {
+		data.NodeadmUrl = nodeadmUrls.ARM
 	}
 
 	return executeTemplate(ubuntu2204CloudInit, data)
@@ -157,12 +165,16 @@ func (u Ubuntu2404) AMIName(ctx context.Context, awsSession *session.Session) (s
 	return *amiId, err
 }
 
-func (u Ubuntu2404) BuildUserData(nodeadmUrl, nodeadmConfigYaml, kubernetesVersion, provider string) ([]byte, error) {
+func (u Ubuntu2404) BuildUserData(nodeadmUrls NodeadmURLs, nodeadmConfigYaml, kubernetesVersion, provider string) ([]byte, error) {
 	data := ubuntuCloudInitData{
 		NodeadmConfig:     nodeadmConfigYaml,
-		NodeadmUrl:        nodeadmUrl,
+		NodeadmUrl:        nodeadmUrls.AMD,
 		KubernetesVersion: kubernetesVersion,
 		Provider:          provider,
+	}
+
+	if u.Architecture == arm64Arch {
+		data.NodeadmUrl = nodeadmUrls.ARM
 	}
 
 	return executeTemplate(ubuntu2404CloudInit, data)

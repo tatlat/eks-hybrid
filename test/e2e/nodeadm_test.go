@@ -43,7 +43,8 @@ type TestConfig struct {
 	ClusterName   string `yaml:"clusterName"`
 	ClusterRegion string `yaml:"clusterRegion"`
 	HybridVpcID   string `yaml:"hybridVpcID"`
-	NodeadmUrl    string `yaml:"nodeadmUrl"`
+	NodeadmUrlAMD string `yaml:"nodeadmUrlAMD"`
+	NodeadmUrlARM string `yaml:"nodeadmUrlARM"`
 }
 
 func init() {
@@ -200,13 +201,21 @@ var _ = Describe("Hybrid Nodes", Ordered, func() {
 							nodeadmConfig, err := provider.NodeadmConfig(test.cluster)
 							Expect(err).NotTo(HaveOccurred(), "expected to build nodeconfig")
 
-							nodeadmUrl, err := getNodeadmURL(test.s3Client, config.NodeadmUrl)
-							Expect(err).NotTo(HaveOccurred(), "expected to retrieve nodeadm URL from S3 successfully")
-
+							nodeAdmUrls := NodeadmURLs{}
+							if config.NodeadmUrlAMD != "" {
+								nodeadmUrl, err := getNodeadmURL(test.s3Client, config.NodeadmUrlAMD)
+								Expect(err).NotTo(HaveOccurred(), "expected to retrieve nodeadm amd URL from S3 successfully")
+								nodeAdmUrls.AMD = nodeadmUrl
+							}
+							if config.NodeadmUrlARM != "" {
+								nodeadmUrl, err := getNodeadmURL(test.s3Client, config.NodeadmUrlARM)
+								Expect(err).NotTo(HaveOccurred(), "expected to retrieve nodeadm arm URL from S3 successfully")
+								nodeAdmUrls.ARM = nodeadmUrl
+							}
 							nodeadmConfigYaml, err := yaml.Marshal(&nodeadmConfig)
 							Expect(err).NotTo(HaveOccurred(), "expected to successfully marshal nodeadm config to YAML")
 
-							userdata, err := os.BuildUserData(nodeadmUrl, string(nodeadmConfigYaml), test.cluster.kubernetesVersion, string(provider.Name()))
+							userdata, err := os.BuildUserData(nodeAdmUrls, string(nodeadmConfigYaml), test.cluster.kubernetesVersion, string(provider.Name()))
 							Expect(err).NotTo(HaveOccurred(), "expected to successfully build user data")
 
 							amiId, err := os.AMIName(ctx, test.awsSession)
