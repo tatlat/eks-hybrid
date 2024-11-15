@@ -56,12 +56,16 @@ func (a AmazonLinux2023) AMIName(ctx context.Context, awsSession *session.Sessio
 	return *amiId, err
 }
 
-func (a AmazonLinux2023) BuildUserData(nodeadmUrl, nodeadmConfigYaml, kubernetesVersion, provider string) ([]byte, error) {
+func (a AmazonLinux2023) BuildUserData(nodeadmUrls NodeadmURLs, nodeadmConfigYaml, kubernetesVersion, provider string) ([]byte, error) {
 	data := amazonLinuxCloudInitData{
 		NodeadmConfig:     nodeadmConfigYaml,
-		NodeadmUrl:        nodeadmUrl,
+		NodeadmUrl:        nodeadmUrls.AMD,
 		KubernetesVersion: kubernetesVersion,
 		Provider:          provider,
+	}
+
+	if a.Architecture == arm64Arch {
+		data.NodeadmUrl = nodeadmUrls.ARM
 	}
 
 	return executeTemplate(al23CloudInit, data)

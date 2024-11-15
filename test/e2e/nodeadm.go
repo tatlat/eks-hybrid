@@ -30,7 +30,7 @@ const arm64Arch = "arm64"
 type NodeadmOS interface {
 	Name() string
 	AMIName(ctx context.Context, awsSession *session.Session) (string, error)
-	BuildUserData(nodeadmUrl, nodeadmConfigYaml, kubernetesVersion, provider string) ([]byte, error)
+	BuildUserData(nodeadmUrls NodeadmURLs, nodeadmConfigYaml, kubernetesVersion, provider string) ([]byte, error)
 	InstanceType() string
 }
 
@@ -42,6 +42,11 @@ type NodeadmCredentialsProvider interface {
 type SsmProvider struct {
 	ssmClient *ssm.SSM
 	role      string
+}
+
+type NodeadmURLs struct {
+	AMD string
+	ARM string
 }
 
 func (s *SsmProvider) Name() creds.CredentialProvider {

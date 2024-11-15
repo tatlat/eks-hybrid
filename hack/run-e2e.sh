@@ -61,7 +61,8 @@ cat <<EOF > $CONFIG_DIR/e2e-param.yaml
 clusterName: "$CLUSTER_NAME-${KUBERNETES_VERSION/./-}"
 clusterRegion: "$REGION"
 hybridVpcID: "$VPC_ID"
-nodeadmUrl: "$NODEADM_AMD_URL"
+nodeadmUrlAMD: "$NODEADM_AMD_URL"
+nodeadmUrlARM: "$NODEADM_ARM_URL"
 EOF
 
 $BIN_DIR/ginkgo -v -tags=e2e --label-filter='ssm' $BIN_DIR/e2e.test -- -filepath=$CONFIG_DIR/e2e-param.yaml
