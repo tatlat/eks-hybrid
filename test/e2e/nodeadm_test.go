@@ -157,7 +157,7 @@ var _ = Describe("Hybrid Nodes", Ordered, func() {
 				cfn:                 test.cfnClient,
 				iam:                 test.iamClient,
 			}
-			test.stackOut, err = test.stackIn.deployResourcesStack(ctx)
+			test.stackOut, err = test.stackIn.deployResourcesStack(ctx, logger)
 			Expect(err).NotTo(HaveOccurred(), "e2e resrouce stack should have been deployed")
 
 			for _, provider := range credentialProviders {
@@ -246,7 +246,7 @@ var _ = Describe("Hybrid Nodes", Ordered, func() {
 
 		AfterAll(func(ctx context.Context) {
 			logger.Info("Deleting e2e resources stack", "stackName", test.stackIn.stackName)
-			err := test.stackIn.deleteResourceStack(ctx)
+			err := test.stackIn.deleteResourceStack(ctx, logger)
 			Expect(err).NotTo(HaveOccurred(), "failed to delete stack")
 		})
 	})
