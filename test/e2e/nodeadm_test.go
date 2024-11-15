@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/cloudformation"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/aws/aws-sdk-go/service/eks"
@@ -35,11 +36,7 @@ const (
 var (
 	filePath string
 	config   *TestConfig = &TestConfig{}
-	osList               = []NodeadmOS{
-		&Ubuntu2204{},
-	}
-	credentialProviders = []NodeadmCredentialsProvider{&SsmProvider{}}
-	logger              logr.Logger
+	logger   logr.Logger
 )
 
 type TestConfig struct {
@@ -104,26 +101,46 @@ func getCredentialProviderNames(providers []NodeadmCredentialsProvider) string {
 }
 
 type peeredVPCTest struct {
-	eksClient *eks.EKS
-	ec2Client *ec2.EC2
-	ssmClient *ssm.SSM
-	cfnClient *cloudformation.CloudFormation
-	k8sClient *kubernetes.Clientset
-	s3Client  *s3.S3
-	iamClient *iam.IAM
-	cluster   *hybridCluster
-	stackIn   *e2eCfnStack
-	stackOut  *e2eCfnStackOutput
+	awsSession *session.Session
+	eksClient  *eks.EKS
+	ec2Client  *ec2.EC2
+	ssmClient  *ssm.SSM
+	cfnClient  *cloudformation.CloudFormation
+	k8sClient  *kubernetes.Clientset
+	s3Client   *s3.S3
+	iamClient  *iam.IAM
+	cluster    *hybridCluster
+	stackIn    *e2eCfnStack
+	stackOut   *e2eCfnStackOutput
 }
 
 var _ = Describe("Hybrid Nodes", Ordered, func() {
+	osList := []NodeadmOS{
+		NewUbuntu2004AMD(),
+		NewUbuntu2004ARM(),
+		NewUbuntu2204AMD(),
+		NewUbuntu2204ARM(),
+		NewUbuntu2404AMD(),
+		NewUbuntu2404ARM(),
+		NewAmazonLinux2023AMD(),
+		NewAmazonLinux2023ARM(),
+		NewRedHat8AMD(os.Getenv("RHEL_USERNAME"), os.Getenv("RHEL_PASSWORD")),
+		NewRedHat8ARM(os.Getenv("RHEL_USERNAME"), os.Getenv("RHEL_PASSWORD")),
+		NewRedHat9AMD(os.Getenv("RHEL_USERNAME"), os.Getenv("RHEL_PASSWORD")),
+		NewRedHat9ARM(os.Getenv("RHEL_USERNAME"), os.Getenv("RHEL_PASSWORD")),
+	}
+
+	credentialProviders := []NodeadmCredentialsProvider{&SsmProvider{}}
+
 	When("using peered VPC", func() {
+		skipCleanup := os.Getenv("SKIP_CLEANUP") == "true"
 		test := &peeredVPCTest{}
 
 		BeforeAll(func(ctx context.Context) {
 			awsSession, err := newE2EAWSSession(config.ClusterRegion)
 			Expect(err).NotTo(HaveOccurred())
 
+			test.awsSession = awsSession
 			test.eksClient = eks.New(awsSession)
 			test.ec2Client = ec2.New(awsSession)
 			test.ssmClient = ssm.New(awsSession)
@@ -189,12 +206,16 @@ var _ = Describe("Hybrid Nodes", Ordered, func() {
 							nodeadmConfigYaml, err := yaml.Marshal(&nodeadmConfig)
 							Expect(err).NotTo(HaveOccurred(), "expected to successfully marshal nodeadm config to YAML")
 
-							userdata := os.BuildUserData(nodeadmUrl, string(nodeadmConfigYaml), test.cluster.kubernetesVersion, string(provider.Name()))
+							userdata, err := os.BuildUserData(nodeadmUrl, string(nodeadmConfigYaml), test.cluster.kubernetesVersion, string(provider.Name()))
+							Expect(err).NotTo(HaveOccurred(), "expected to successfully build user data")
+
+							amiId, err := os.AMIName(ctx, test.awsSession)
+							Expect(err).NotTo(HaveOccurred(), "expected to successfully retrieve ami id")
 
 							ec2Input := ec2InstanceConfig{
 								instanceName:    nodeName,
-								amiID:           os.AMIName(),
-								instanceType:    ec2InstanceType,
+								amiID:           amiId,
+								instanceType:    os.InstanceType(),
 								volumeSize:      ec2VolumeSize,
 								subnetID:        test.cluster.subnetID,
 								securityGroupID: test.cluster.securityGroupID,
@@ -207,6 +228,10 @@ var _ = Describe("Hybrid Nodes", Ordered, func() {
 							Expect(err).NotTo(HaveOccurred(), "ec2 instance should have been created successfully")
 
 							DeferCleanup(func(ctx context.Context) {
+								if skipCleanup {
+									logger.Info("Skipping ec2 instance deletion", "instanceID", ec2.instanceID)
+									return
+								}
 								logger.Info("Deleting ec2 instance", "instanceID", ec2.instanceID)
 								Expect(deleteEC2Instance(ctx, test.ec2Client, ec2.instanceID)).NotTo(HaveOccurred(), "ec2 instance should have been deleted successfully")
 							})
@@ -228,6 +253,10 @@ var _ = Describe("Hybrid Nodes", Ordered, func() {
 							Expect(deletePod(ctx, test.k8sClient, podName, podNamespace)).NotTo(HaveOccurred())
 							logger.Info("Pod deleted successfully", "pod", podName)
 
+							if skipCleanup {
+								logger.Info("Skipping nodeadm uninstall from the hybrid node...")
+								return
+							}
 							logger.Info("Uninstalling nodeadm from the hybrid node...")
 							// runNodeadmUninstall takes instanceID as a parameter. Here we are passing nodeName.
 							// In case of ssm credential provider, nodeName i.e. "mi-0dddf39dfb164d78a" would be the instanceID.
@@ -245,6 +274,10 @@ var _ = Describe("Hybrid Nodes", Ordered, func() {
 		})
 
 		AfterAll(func(ctx context.Context) {
+			if skipCleanup {
+				logger.Info("Skipping cleanup of e2e resources stack")
+				return
+			}
 			logger.Info("Deleting e2e resources stack", "stackName", test.stackIn.stackName)
 			err := test.stackIn.deleteResourceStack(ctx, logger)
 			Expect(err).NotTo(HaveOccurred(), "failed to delete stack")

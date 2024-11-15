@@ -31,14 +31,10 @@ type ec2Instance struct {
 }
 
 func (e *ec2InstanceConfig) create(ctx context.Context, ec2Client *ec2.EC2, ssmClient *ssm.SSM) (ec2Instance, error) {
-	amiID, err := getAmiIDFromSSM(ctx, ssmClient, e.amiID)
-	if err != nil {
-		return ec2Instance{}, fmt.Errorf("ami id not found for the given os: %w", err)
-	}
 	userDataEncoded := base64.StdEncoding.EncodeToString(e.userData)
 
 	runResult, err := ec2Client.RunInstances(&ec2.RunInstancesInput{
-		ImageId:      amiID,
+		ImageId:      aws.String(e.amiID),
 		InstanceType: aws.String(e.instanceType),
 		MinCount:     aws.Int64(1),
 		MaxCount:     aws.Int64(1),

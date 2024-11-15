@@ -30,6 +30,7 @@ func (t *TestRunner) createEKSCluster(clusterName, kubernetesVersion, clusterSec
 		"--resources-vpc-config", fmt.Sprintf("subnetIds=%s,securityGroupIds=%s", subnetIdsStr, clusterSecurityGroupID),
 		"--remote-network-config", hybridNetworkConfig,
 		"--access-config", "authenticationMode=API_AND_CONFIG_MAP",
+		"--region", t.Spec.ClusterRegion,
 		"--tags", "Name=hybrid-eks-cluster,App=hybrid-eks-beta")
 
 	// Run the command and get the output
