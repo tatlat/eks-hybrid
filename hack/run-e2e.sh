@@ -35,8 +35,7 @@ cat <<EOF > $CONFIG_DIR/e2e-setup-spec.yaml
 spec:
   clusterName: $CLUSTER_NAME
   clusterRegion: $REGION
-  kubernetesVersions:
-    - $KUBERNETES_VERSION
+  kubernetesVersion: $KUBERNETES_VERSION
   cni: $CNI
   clusterNetwork:
     vpcCidr: 10.0.0.0/16
@@ -58,7 +57,7 @@ mv /tmp/setup-resources-output.yaml $RESOURCES_YAML
 VPC_ID="$(yq -r '.status.hybridVpcID' $RESOURCES_YAML)"
 
 cat <<EOF > $CONFIG_DIR/e2e-param.yaml
-clusterName: "$CLUSTER_NAME-${KUBERNETES_VERSION/./-}"
+clusterName: "$CLUSTER_NAME"
 clusterRegion: "$REGION"
 hybridVpcID: "$VPC_ID"
 nodeadmUrlAMD: "$NODEADM_AMD_URL"

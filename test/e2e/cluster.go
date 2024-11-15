@@ -3,12 +3,11 @@ package e2e
 import (
 	"context"
 	"fmt"
-	"os/exec"
-	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
+	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/eks"
 )
 
@@ -17,30 +16,156 @@ const (
 	deleteClusterTimeout = 5 * time.Minute
 )
 
-func (t *TestRunner) createEKSCluster(clusterName, kubernetesVersion, clusterSecurityGroupID string) error {
-	// Join the subnet IDs into a single comma-separated string
-	subnetIdsStr := strings.Join(t.Status.ClusterSubnetIDs, ",")
-	hybridNetworkConfig := fmt.Sprintf(`{"remoteNodeNetworks":[{"cidrs":["%s"]}],"remotePodNetworks":[{"cidrs":["%s"]}]}`, t.Spec.HybridNetwork.VpcCidr, t.Spec.HybridNetwork.PodCidr)
+type CreateClusterInput struct {
+	_ struct{} `type:"structure"`
 
-	// AWS CLI command to create the cluster
-	cmd := exec.Command("aws", "eksbeta", "create-cluster",
-		"--name", clusterName,
-		"--endpoint-url", fmt.Sprintf("https://eks.%s.amazonaws.com", t.Spec.ClusterRegion),
-		"--role-arn", t.Status.RoleArn,
-		"--resources-vpc-config", fmt.Sprintf("subnetIds=%s,securityGroupIds=%s", subnetIdsStr, clusterSecurityGroupID),
-		"--remote-network-config", hybridNetworkConfig,
-		"--access-config", "authenticationMode=API_AND_CONFIG_MAP",
-		"--region", t.Spec.ClusterRegion,
-		"--tags", "Name=hybrid-eks-cluster,App=hybrid-eks-beta")
+	// The access configuration for the cluster.
+	AccessConfig *eks.CreateAccessConfigRequest `locationName:"accessConfig" type:"structure"`
 
-	// Run the command and get the output
-	output, err := cmd.CombinedOutput()
+	// If you set this value to False when creating a cluster, the default networking
+	// add-ons will not be installed.
+	//
+	// The default networking addons include vpc-cni, coredns, and kube-proxy.
+	//
+	// Use this option when you plan to install third-party alternative add-ons
+	// or self-manage the default networking add-ons.
+	BootstrapSelfManagedAddons *bool `locationName:"bootstrapSelfManagedAddons" type:"boolean"`
+
+	// A unique, case-sensitive identifier that you provide to ensure the idempotency
+	// of the request.
+	ClientRequestToken *string `locationName:"clientRequestToken" type:"string" idempotencyToken:"true"`
+
+	// The encryption configuration for the cluster.
+	EncryptionConfig []*eks.EncryptionConfig `locationName:"encryptionConfig" type:"list"`
+
+	// The Kubernetes network configuration for the cluster.
+	KubernetesNetworkConfig *eks.KubernetesNetworkConfigRequest `locationName:"kubernetesNetworkConfig" type:"structure"`
+
+	// Enable or disable exporting the Kubernetes control plane logs for your cluster
+	// to CloudWatch Logs. By default, cluster control plane logs aren't exported
+	// to CloudWatch Logs. For more information, see Amazon EKS Cluster control
+	// plane logs (https://docs.aws.amazon.com/eks/latest/userguide/control-plane-logs.html)
+	// in the Amazon EKS User Guide .
+	//
+	// CloudWatch Logs ingestion, archive storage, and data scanning rates apply
+	// to exported control plane logs. For more information, see CloudWatch Pricing
+	// (http://aws.amazon.com/cloudwatch/pricing/).
+	Logging *eks.Logging `locationName:"logging" type:"structure"`
+
+	// The unique name to give to your cluster.
+	//
+	// Name is a required field
+	Name *string `locationName:"name" min:"1" type:"string" required:"true"`
+
+	// An object representing the configuration of your local Amazon EKS cluster
+	// on an Amazon Web Services Outpost. Before creating a local cluster on an
+	// Outpost, review Local clusters for Amazon EKS on Amazon Web Services Outposts
+	// (https://docs.aws.amazon.com/eks/latest/userguide/eks-outposts-local-cluster-overview.html)
+	// in the Amazon EKS User Guide. This object isn't available for creating Amazon
+	// EKS clusters on the Amazon Web Services cloud.
+	OutpostConfig *eks.OutpostConfigRequest `locationName:"outpostConfig" type:"structure"`
+
+	// The VPC configuration that's used by the cluster control plane. Amazon EKS
+	// VPC resources have specific requirements to work properly with Kubernetes.
+	// For more information, see Cluster VPC Considerations (https://docs.aws.amazon.com/eks/latest/userguide/network_reqs.html)
+	// and Cluster Security Group Considerations (https://docs.aws.amazon.com/eks/latest/userguide/sec-group-reqs.html)
+	// in the Amazon EKS User Guide. You must specify at least two subnets. You
+	// can specify up to five security groups. However, we recommend that you use
+	// a dedicated security group for your cluster control plane.
+	//
+	// ResourcesVpcConfig is a required field
+	ResourcesVpcConfig *eks.VpcConfigRequest `locationName:"resourcesVpcConfig" type:"structure" required:"true"`
+
+	// The Amazon Resource Name (ARN) of the IAM role that provides permissions
+	// for the Kubernetes control plane to make calls to Amazon Web Services API
+	// operations on your behalf. For more information, see Amazon EKS Service IAM
+	// Role (https://docs.aws.amazon.com/eks/latest/userguide/service_IAM_role.html)
+	// in the Amazon EKS User Guide .
+	//
+	// RoleArn is a required field
+	RoleArn *string `locationName:"roleArn" type:"string" required:"true"`
+
+	// Metadata that assists with categorization and organization. Each tag consists
+	// of a key and an optional value. You define both. Tags don't propagate to
+	// any other cluster or Amazon Web Services resources.
+	Tags map[string]*string `locationName:"tags" min:"1" type:"map"`
+
+	// New clusters, by default, have extended support enabled. You can disable
+	// extended support when creating a cluster by setting this value to STANDARD.
+	UpgradePolicy *eks.UpgradePolicyRequest `locationName:"upgradePolicy" type:"structure"`
+
+	// The desired Kubernetes version for your cluster. If you don't specify a value
+	// here, the default version available in Amazon EKS is used.
+	//
+	// The default version might not be the latest version available.
+	Version             *string              `locationName:"version" type:"string"`
+	RemoteNetworkConfig *RemoteNetworkConfig `locationName:"remoteNetworkConfig" type:"structure"`
+}
+
+type RemoteNetworkConfig struct {
+	_ struct{} `type:"structure"`
+
+	RemoteNodeNetworks []*RemoteNodeNetwork `locationName:"remoteNodeNetworks" type:"list"`
+	RemotePodNetworks  []*RemotePodNetwork  `locationName:"remotePodNetworks" type:"list"`
+}
+
+type RemoteNodeNetwork struct {
+	_ struct{} `type:"structure"`
+
+	CIDRs []*string `locationName:"cidrs" type:"list"`
+}
+
+type RemotePodNetwork struct {
+	_ struct{} `type:"structure"`
+
+	CIDRs []*string `locationName:"cidrs" type:"list"`
+}
+
+func CreateCluster(ctx context.Context, client *eks.EKS, input *CreateClusterInput, opts ...request.Option) (*eks.CreateClusterOutput, error) {
+	req, _ := client.CreateClusterRequest(&eks.CreateClusterInput{})
+	req.Params = input
+	out := &eks.CreateClusterOutput{}
+	req.Data = out
+	req.SetContext(ctx)
+	req.ApplyOptions(opts...)
+	return out, req.Send()
+}
+
+func (t *TestRunner) createEKSCluster(ctx context.Context, clusterName, kubernetesVersion, clusterSecurityGroupID string) error {
+	svc := eks.New(t.Session)
+	eksCluster := &CreateClusterInput{
+		Name:    aws.String(clusterName),
+		Version: aws.String(kubernetesVersion),
+		ResourcesVpcConfig: &eks.VpcConfigRequest{
+			SubnetIds:        aws.StringSlice(t.Status.ClusterSubnetIDs),
+			SecurityGroupIds: aws.StringSlice([]string{clusterSecurityGroupID}),
+		},
+		RoleArn: aws.String(t.Status.RoleArn),
+		Tags: map[string]*string{
+			"Name": aws.String(fmt.Sprintf("%s-%s", clusterName, kubernetesVersion)),
+		},
+		AccessConfig: &eks.CreateAccessConfigRequest{
+			AuthenticationMode: aws.String("API_AND_CONFIG_MAP"),
+		},
+		RemoteNetworkConfig: &RemoteNetworkConfig{
+			RemoteNodeNetworks: []*RemoteNodeNetwork{
+				{
+					CIDRs: aws.StringSlice([]string{t.Spec.HybridNetwork.VpcCidr}),
+				},
+			},
+			RemotePodNetworks: []*RemotePodNetwork{
+				{
+					CIDRs: aws.StringSlice([]string{t.Spec.HybridNetwork.PodCidr}),
+				},
+			},
+		},
+	}
+	clusterOutput, err := CreateCluster(ctx, svc, eksCluster)
 	if err != nil {
-		fmt.Println(err)
-		return fmt.Errorf("failed to create EKS cluster: %v\nOutput: %s", err, string(output))
+		return fmt.Errorf("creating EKS hybrid cluster: %w", err)
 	}
 
-	fmt.Printf("Successfully started creating EKS cluster: %s\nOutput: %s", clusterName, string(output))
+	fmt.Printf("Successfully started EKS hybrid cluster: %s\nOutput: %s", clusterName, clusterOutput)
 	return nil
 }
 
@@ -91,25 +216,9 @@ func (t *TestRunner) waitForClusterCreation(clusterName string) error {
 	}
 }
 
-// cleanupEKSHybridClusters cleans up all the clusters for all the kubernetes version.
-func (t *TestRunner) cleanupEKSHybridClusters(ctx context.Context) error {
-	for _, kubernetesVersion := range t.Spec.KubernetesVersions {
-		clusterName := clusterName(t.Spec.ClusterName, kubernetesVersion)
-
-		fmt.Printf("Cleaning up EKS hybrid cluster: %s\n", clusterName)
-		err := t.deleteEKSCluster(ctx, clusterName)
-		if err != nil {
-			fmt.Printf("error cleaning up EKS hybrid cluster %s: %v\n", clusterName, err)
-			return err
-		}
-	}
-	return nil
-}
-
 // deleteEKSCluster deletes the given EKS cluster
 func (t *TestRunner) deleteEKSCluster(ctx context.Context, clusterName string) error {
 	svc := eks.New(t.Session)
-	fmt.Printf("Deleting cluster %s\n", clusterName)
 	_, err := svc.DeleteCluster(&eks.DeleteClusterInput{
 		Name: aws.String(clusterName),
 	})
