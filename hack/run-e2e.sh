@@ -64,4 +64,4 @@ hybridVpcID: "$VPC_ID"
 nodeadmUrl: "$NODEADM_AMD_URL"
 EOF
 
-$BIN_DIR/ginkgo -v -tags=e2e --label-filter='ssm' ./test/e2e -- -filepath=$CONFIG_DIR/e2e-param.yaml
+$BIN_DIR/ginkgo -v -tags=e2e --label-filter='ssm' $BIN_DIR/e2e.test -- -filepath=$CONFIG_DIR/e2e-param.yaml
