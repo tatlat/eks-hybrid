@@ -14,4 +14,4 @@ artifacts:
   files:
   - "_bin/**/*"
   - "buildspecs/*"
-  - "testdata/nodeconfig.yaml"
+  - "hack/run-e2e.sh"
