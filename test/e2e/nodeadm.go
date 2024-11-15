@@ -149,7 +149,7 @@ func runNodeadmUninstall(ctx context.Context, client *ssm.SSM, instanceID string
 		instanceID: instanceID,
 		commands:   commands,
 	}
-	outputs, err := ssmConfig.runCommandsOnInstance(ctx)
+	outputs, err := ssmConfig.runCommandsOnInstance(ctx, logger)
 	if err != nil {
 		return fmt.Errorf("running SSM command: %w", err)
 	}

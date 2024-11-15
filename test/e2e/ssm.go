@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/service/ssm"
+	"github.com/go-logr/logr"
 )
 
 func createSSMActivation(client *ssm.SSM, iamRole string, ssmActivationName string) (*ssm.CreateActivationOutput, error) {
@@ -35,7 +36,7 @@ type ssmConfig struct {
 	commands   []string
 }
 
-func (s *ssmConfig) runCommandsOnInstance(ctx context.Context) ([]ssm.GetCommandInvocationOutput, error) {
+func (s *ssmConfig) runCommandsOnInstance(ctx context.Context, logger logr.Logger) ([]ssm.GetCommandInvocationOutput, error) {
 	outputs := []ssm.GetCommandInvocationOutput{}
 	for _, command := range s.commands {
 		logger.Info("Running command: ", "command", command)

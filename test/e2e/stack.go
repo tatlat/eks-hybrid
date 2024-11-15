@@ -14,6 +14,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/cloudformation"
 	"github.com/aws/aws-sdk-go/service/iam"
+	"github.com/go-logr/logr"
 )
 
 //go:embed cfn-templates/hybrid-cfn.yaml
@@ -34,7 +35,7 @@ type e2eCfnStackOutput struct {
 	ssmNodeRoleARN     string
 }
 
-func (e *e2eCfnStack) deployResourcesStack(ctx context.Context) (*e2eCfnStackOutput, error) {
+func (e *e2eCfnStack) deployResourcesStack(ctx context.Context, logger logr.Logger) (*e2eCfnStackOutput, error) {
 	resp, err := e.cfn.DescribeStacksWithContext(ctx, &cloudformation.DescribeStacksInput{
 		StackName: aws.String(e.stackName),
 	})
@@ -96,7 +97,7 @@ func (e *e2eCfnStack) deployResourcesStack(ctx context.Context) (*e2eCfnStackOut
 		} else if ok && aerr.Message() == "No updates are to be performed." {
 			logger.Info("No updates are to be performed for hybrid nodes stack", "stackName", e.stackName)
 			// Skip waiting for update completion since no update occurred
-			return e.readStackOutput(ctx)
+			return e.readStackOutput(ctx, logger)
 		}
 
 		logger.Info("Waiting for hybrid nodes stack to be updated", "stackName", e.stackName)
@@ -108,10 +109,10 @@ func (e *e2eCfnStack) deployResourcesStack(ctx context.Context) (*e2eCfnStackOut
 		}
 	}
 
-	return e.readStackOutput(ctx)
+	return e.readStackOutput(ctx, logger)
 }
 
-func (e *e2eCfnStack) readStackOutput(ctx context.Context) (*e2eCfnStackOutput, error) {
+func (e *e2eCfnStack) readStackOutput(ctx context.Context, logger logr.Logger) (*e2eCfnStackOutput, error) {
 	resp, err := e.cfn.DescribeStacksWithContext(ctx, &cloudformation.DescribeStacksInput{
 		StackName: aws.String(e.stackName),
 	})
@@ -136,7 +137,7 @@ func (e *e2eCfnStack) readStackOutput(ctx context.Context) (*e2eCfnStackOutput, 
 	return result, nil
 }
 
-func (e *e2eCfnStack) deleteResourceStack(ctx context.Context) error {
+func (e *e2eCfnStack) deleteResourceStack(ctx context.Context, logger logr.Logger) error {
 	_, err := e.cfn.DeleteStackWithContext(ctx, &cloudformation.DeleteStackInput{
 		StackName: aws.String(e.stackName),
 	})
