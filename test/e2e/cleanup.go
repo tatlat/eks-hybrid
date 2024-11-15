@@ -6,8 +6,10 @@ import (
 )
 
 func (t *TestRunner) CleanupE2EResources(ctx context.Context) error {
-	if err := t.cleanupEKSHybridClusters(ctx); err != nil {
-		return fmt.Errorf("failed to delete EKS hybrid cluster: %v", err)
+	fmt.Printf("Cleaning up EKS hybrid cluster: %s\n", t.Spec.ClusterName)
+	err := t.deleteEKSCluster(ctx, t.Spec.ClusterName)
+	if err != nil {
+		return fmt.Errorf("deleting EKS hybrid cluster: %v", err)
 	}
 
 	// Clean up VPC peering connections

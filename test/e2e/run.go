@@ -27,12 +27,12 @@ type TestRunner struct {
 }
 
 type TestResourceSpec struct {
-	ClusterName        string        `yaml:"clusterName"`
-	ClusterRegion      string        `yaml:"clusterRegion"`
-	ClusterNetwork     NetworkConfig `yaml:"clusterNetwork"`
-	HybridNetwork      NetworkConfig `yaml:"hybridNetwork"`
-	KubernetesVersions []string      `yaml:"kubernetesVersions"`
-	Cni                string        `yaml:"cni"`
+	ClusterName       string        `yaml:"clusterName"`
+	ClusterRegion     string        `yaml:"clusterRegion"`
+	ClusterNetwork    NetworkConfig `yaml:"clusterNetwork"`
+	HybridNetwork     NetworkConfig `yaml:"hybridNetwork"`
+	KubernetesVersion string        `yaml:"kubernetesVersion"`
+	Cni               string        `yaml:"cni"`
 }
 
 type TestResourceStatus struct {
@@ -100,17 +100,9 @@ func (t *TestRunner) NewAWSSession() (*session.Session, error) {
 
 func (t *TestRunner) CreateResources(ctx context.Context) error {
 	ec2Client := ec2.New(t.Session)
-	// Temporary code, remove this when AWS CLI supports creating hybrid EKS cluster
-	awsPatchLocation := "s3://eks-hybrid-beta/v0.0.0-beta.1/awscli/aws-eks-cli-beta.json"
-	localFilePath := "/tmp/awsclipatch"
-	err := patchEksServiceModel(awsPatchLocation, localFilePath)
-	if err != nil {
-		return fmt.Errorf("failed to download aws cli patch that contains hybrid nodes API: %v", err)
-	}
 
-	// Create EKS cluster role
 	fmt.Println("Creating EKS cluster IAM Role...")
-	err = t.createEKSClusterRole()
+	err := t.createEKSClusterRole()
 	if err != nil {
 		return fmt.Errorf("error creating IAM role: %v", err)
 	}
@@ -207,82 +199,81 @@ func (t *TestRunner) CreateResources(ctx context.Context) error {
 	}
 
 	// Create the EKS Cluster using the IAM role and VPC
-	for _, kubernetesVersion := range t.Spec.KubernetesVersions {
-		fmt.Printf("Creating EKS cluster with the kubernetes version %s..\n", kubernetesVersion)
-		clusterName := clusterName(t.Spec.ClusterName, kubernetesVersion)
-		err := t.createEKSCluster(clusterName, kubernetesVersion, clusterSecurityGroupID)
-		if err != nil {
-			return fmt.Errorf("error creating %s EKS cluster: %v", kubernetesVersion, err)
-		}
-
-		fmt.Printf("Cluster creation of kubernetes version %s process started successfully..", kubernetesVersion)
-
-		// Wait for the cluster to be ready
-		err = t.waitForClusterCreation(clusterName)
-		if err != nil {
-			return fmt.Errorf("error while waiting for cluster creation: %v", err)
-		}
-
-		err = updateKubeconfig(clusterName, t.Spec.ClusterRegion)
-		if err != nil {
-			return fmt.Errorf("error saving kubeconfig for %s EKS cluster: %v", kubernetesVersion, err)
-		}
-
-		kubeconfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
-			clientcmd.NewDefaultClientConfigLoadingRules(),
-			&clientcmd.ConfigOverrides{},
-		)
-		clientConfig, err := kubeconfig.ClientConfig()
-		if err != nil {
-			return fmt.Errorf("error loading kubeconfig: %v", err)
-		}
-
-		k8sClient, err := kubernetes.NewForConfig(clientConfig)
-		if err != nil {
-			return fmt.Errorf("error creating Kubernetes client: %v", err)
-		}
-
-		dynamicK8s, err := dynamic.NewForConfig(clientConfig)
-		if err != nil {
-			return fmt.Errorf("error creating dynamic Kubernetes client: %v", err)
-		}
-
-		// Patch aws-node DaemonSet to update the VPC CNI with anti-affinity for nodes labeled with the default hybrid nodes label eks.amazonaws.com/compute-type: hybrid
-		fmt.Println("Patching aws-node daemonSet...")
-		err = patchAwsNode(ctx, k8sClient)
-		if err != nil {
-			return fmt.Errorf("error patching aws-node daemonSet for %s EKS cluster: %v", kubernetesVersion, err)
-		}
-
-		switch t.Spec.Cni {
-		case ciliumCni:
-			cilium := newCilium(dynamicK8s, t.Spec.HybridNetwork.PodCidr)
-			fmt.Printf("Installing cilium on cluster %s...\n", clusterName)
-			if err = cilium.deploy(ctx); err != nil {
-				return fmt.Errorf("error installing cilium for %s EKS cluster: %v", kubernetesVersion, err)
-			}
-			fmt.Println("Cilium installed sucessfully.")
-		case calicoCni:
-			calico := newCalico(dynamicK8s, t.Spec.HybridNetwork.PodCidr)
-			fmt.Printf("Installing calico on cluster %s...\n", clusterName)
-			if err = calico.deploy(ctx); err != nil {
-				return fmt.Errorf("error installing calico for %s EKS cluster: %v", kubernetesVersion, err)
-			}
-			fmt.Println("Calico installed sucessfully.")
-		}
+	fmt.Printf("Creating EKS hybrid cluster %s with the kubernetes version %s..\n", t.Spec.ClusterName, t.Spec.KubernetesVersion)
+	err = t.createEKSCluster(ctx, t.Spec.ClusterName, t.Spec.KubernetesVersion, clusterSecurityGroupID)
+	if err != nil {
+		return fmt.Errorf("creating %s EKS cluster: %v", t.Spec.KubernetesVersion, err)
 	}
+
+	// Wait for the cluster to be ready
+	err = t.waitForClusterCreation(t.Spec.ClusterName)
+	if err != nil {
+		return fmt.Errorf("while waiting for cluster creation: %v", err)
+	}
+
+	err = updateKubeconfig(t.Spec.ClusterName, t.Spec.ClusterRegion)
+	if err != nil {
+		return fmt.Errorf("saving kubeconfig for %s EKS cluster: %v", t.Spec.KubernetesVersion, err)
+	}
+
+	kubeconfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
+		clientcmd.NewDefaultClientConfigLoadingRules(),
+		&clientcmd.ConfigOverrides{},
+	)
+	clientConfig, err := kubeconfig.ClientConfig()
+	if err != nil {
+		return fmt.Errorf("loading kubeconfig: %v", err)
+	}
+
+	k8sClient, err := kubernetes.NewForConfig(clientConfig)
+	if err != nil {
+		return fmt.Errorf("creating Kubernetes client: %v", err)
+	}
+
+	dynamicK8s, err := dynamic.NewForConfig(clientConfig)
+	if err != nil {
+		return fmt.Errorf("creating dynamic Kubernetes client: %v", err)
+	}
+
+	// Patch aws-node DaemonSet to update the VPC CNI with anti-affinity for nodes labeled with the default hybrid nodes label eks.amazonaws.com/compute-type: hybrid
+	fmt.Println("Patching aws-node daemonset...")
+	err = patchAwsNode(ctx, k8sClient)
+	if err != nil {
+		return fmt.Errorf("patching aws-node daemonset for %s EKS cluster: %v", t.Spec.KubernetesVersion, err)
+	}
+
+	// Patch aws-node DaemonSet to update the VPC CNI with anti-affinity for nodes labeled with the default hybrid nodes label eks.amazonaws.com/compute-type: hybrid
+	fmt.Println("Patching aws-node daemonSet...")
+	err = patchAwsNode(ctx, k8sClient)
+	if err != nil {
+		return fmt.Errorf("patching aws-node daemonset for %s EKS cluster: %v", t.Spec.KubernetesVersion, err)
+	}
+
+	switch t.Spec.Cni {
+	case ciliumCni:
+		cilium := newCilium(dynamicK8s, t.Spec.HybridNetwork.PodCidr)
+		fmt.Printf("Installing cilium on cluster %s...\n", t.Spec.ClusterName)
+		if err = cilium.deploy(ctx); err != nil {
+			return fmt.Errorf("installing cilium for %s EKS cluster: %v", t.Spec.KubernetesVersion, err)
+		}
+		fmt.Println("Cilium installed sucessfully.")
+	case calicoCni:
+		calico := newCalico(dynamicK8s, t.Spec.HybridNetwork.PodCidr)
+		fmt.Printf("Installing calico on cluster %s...\n", t.Spec.ClusterName)
+		if err = calico.deploy(ctx); err != nil {
+			return fmt.Errorf("installing calico for %s EKS cluster: %v", t.Spec.KubernetesVersion, err)
+		}
+		fmt.Println("Calico installed sucessfully.")
+	}
+	fmt.Println("Cilium installed sucessfully.")
 
 	// After resources are created, write the config to a file
 	configFilePath := filepath.Join(outputDir, "setup-resources-output.yaml")
 	if err := t.saveSetupConfigAsYAML(configFilePath); err != nil {
-		return fmt.Errorf("failed to write config to file: %v", err)
+		return fmt.Errorf("writing config to file: %v", err)
 	}
 
 	return nil
-}
-
-func clusterName(clusterName, kubernetesVersion string) string {
-	return fmt.Sprintf("%s-%s", clusterName, replaceDotsWithDashes(kubernetesVersion))
 }
 
 // saveKubeconfig saves the kubeconfig for the cluster
