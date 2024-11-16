@@ -185,8 +185,8 @@ $(GOLANGCI_LINT): $(LOCALBIN) $(GOLANGCI_LINT_CONFIG)
 
 .PHONY: e2e-tests-binary
 e2e-tests-binary:
-	$(GO) test -c ./test/e2e -o ./_bin/e2e.test -tags "e2e"
+	CGO_ENABLED=0 $(GO) test -ldflags "-s -w -buildid='' -extldflags -static" -c ./test/e2e -o ./_bin/e2e.test -tags "e2e"
 
 .PHONY: e2e-setup
 e2e-setup:
-	$(GO) build -o _bin/e2e-test-runner ./cmd/e2e-test-runner/main.go 
+	CGO_ENABLED=0 $(GO) build -ldflags "-s -w -buildid='' -extldflags -static" -o _bin/e2e-test-runner ./cmd/e2e-test-runner/main.go
