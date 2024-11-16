@@ -1,15 +1,8 @@
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
 ENVTEST_K8S_VERSION = 1.27.1
 
-GOLANG_VERSION?="1.21"
+GOLANG_VERSION?="1.23"
 GO ?= $(shell source ./scripts/common.sh && get_go_path $(GOLANG_VERSION))/go
-
-# Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
-ifeq (,$(shell $(GO) env GOBIN))
-GOBIN=$(shell $(GO) env GOPATH)/bin
-else
-GOBIN=$(shell $(GO) env GOBIN)
-endif
 
 # Setting SHELL to bash allows bash commands to be executed by recipes.
 # Options are set to exit when a recipe line exits non-zero or a piped command fails.
@@ -87,24 +80,34 @@ coverage: test
 test-integration: ## Run integration tests.
 	test/integration/run.sh
 
+.PHONY: lint
+lint: $(GOLANGCI_LINT) ## Run golangci-lint.
+	$(GOLANGCI_LINT) run --new-from-rev main
 
 ##@ Build
 
-## Build binary.
 .PHONY: build
 build: LINKER_FLAGS :=-X github.com/aws/eks-hybrid/cmd/nodeadm/version.GitVersion=$(GIT_VERSION) -X github.com/aws/eks-hybrid/internal/aws.manifestUrl=$(HYBRID_MANIFEST_URL) -s -w -buildid='' -extldflags -static
-build:
+build: ## Build nodeadm binary.
 	$(GO) build -ldflags "$(LINKER_FLAGS)" -trimpath -o $(LOCALBIN)/nodeadm cmd/nodeadm/main.go
 
 .PHONY: build-cross-platform
 build-cross-platform: LINKER_FLAGS :=-X github.com/aws/eks-hybrid/cmd/nodeadm/version.GitVersion=$(GIT_VERSION) -X github.com/aws/eks-hybrid/internal/aws.manifestUrl=$(HYBRID_MANIFEST_URL) -s -w -buildid='' -extldflags -static
-build-cross-platform:
+build-cross-platform: ## Build binary for Linux amd64 and arm64.
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GO) build -ldflags "$(LINKER_FLAGS)" -trimpath -o $(LOCALBIN)/amd64/nodeadm cmd/nodeadm/main.go
 	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 $(GO) build -ldflags "$(LINKER_FLAGS)" -trimpath -o $(LOCALBIN)/arm64/nodeadm cmd/nodeadm/main.go
 
 .PHONY: run
-run: build ## Run binary
+run: build ## Run nodeadm binary.
 	$(GO) run cmd/nodeadm/main.go $(args)
+
+.PHONY: e2e-tests-binary
+e2e-tests-binary: ## Build binary with e2e tests.
+	CGO_ENABLED=0 $(GO) test -ldflags "-s -w -buildid='' -extldflags -static" -c ./test/e2e -o ./_bin/e2e.test -tags "e2e"
+
+.PHONY: e2e-setup
+e2e-setup: ## Build e2e test setup binary.
+	CGO_ENABLED=0 $(GO) build -ldflags "-s -w -buildid='' -extldflags -static" -o _bin/e2e-test-runner ./cmd/e2e-test-runner/main.go
 
 ##@ Build Dependencies
 
@@ -161,7 +164,7 @@ $(CRD_REF_DOCS): $(LOCALBIN)
 	GOBIN=$(LOCALBIN) $(GO) install github.com/elastic/crd-ref-docs@$(CRD_REF_DOCS_VERSION)
 
 .PHONY: ginkgo
-ginkgo: $(GINKGO)
+ginkgo: $(GINKGO) ## Download ginkgo.
 $(GINKGO): $(LOCALBIN)
 	GOBIN=$(LOCALBIN) $(GO) install github.com/onsi/ginkgo/v2/ginkgo@$(GINKGO_VERSION)
 
@@ -169,24 +172,6 @@ $(GINKGO): $(LOCALBIN)
 update-deps:
 	$(GO) get $(shell $(GO) list -f '{{if not (or .Main .Indirect)}}{{.Path}}{{end}}' -mod=mod -m all) && $(GO) mod tidy
 
-.PHONY: lint
-lint: $(GOLANGCI_LINT) ## Run golangci-lint
-	$(GOLANGCI_LINT) run --new-from-rev main
-
-.PHONY: mocks
-mocks: MOCKGEN := ${GOBIN}/mockgen --build_flags=--mod=mod
-mocks: ## Generate mocks
-	$(GO) install github.com/golang/mock/mockgen@v1.6.0
-	${MOCKGEN} -destination=internal/validation/util/mocks/client.go -package=mocks -source "internal/validation/util/netclient.go" NetClient
-
 $(GOLANGCI_LINT): $(LOCALBIN) $(GOLANGCI_LINT_CONFIG)
 	$(eval GOLANGCI_LINT_VERSION?=$(shell cat .github/workflows/golangci-lint.yml | yq e '.jobs.golangci.steps[] | select(.name == "golangci-lint") .with.version' -))
 	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(LOCALBIN) $(GOLANGCI_LINT_VERSION)
-
-.PHONY: e2e-tests-binary
-e2e-tests-binary:
-	CGO_ENABLED=0 $(GO) test -ldflags "-s -w -buildid='' -extldflags -static" -c ./test/e2e -o ./_bin/e2e.test -tags "e2e"
-
-.PHONY: e2e-setup
-e2e-setup:
-	CGO_ENABLED=0 $(GO) build -ldflags "-s -w -buildid='' -extldflags -static" -o _bin/e2e-test-runner ./cmd/e2e-test-runner/main.go
