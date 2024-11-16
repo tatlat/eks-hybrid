@@ -99,8 +99,8 @@ build:
 .PHONY: build-cross-platform
 build-cross-platform: LINKER_FLAGS :=-X github.com/aws/eks-hybrid/cmd/nodeadm/version.GitVersion=$(GIT_VERSION) -X github.com/aws/eks-hybrid/internal/aws.manifestUrl=$(HYBRID_MANIFEST_URL) -s -w -buildid='' -extldflags -static
 build-cross-platform:
-	GOOS=linux GOARCH=amd64 $(GO) build -ldflags "$(LINKER_FLAGS)" -trimpath -o $(LOCALBIN)/amd64/nodeadm cmd/nodeadm/main.go
-	GOOS=linux GOARCH=arm64 $(GO) build -ldflags "$(LINKER_FLAGS)" -trimpath -o $(LOCALBIN)/arm64/nodeadm cmd/nodeadm/main.go
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GO) build -ldflags "$(LINKER_FLAGS)" -trimpath -o $(LOCALBIN)/amd64/nodeadm cmd/nodeadm/main.go
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 $(GO) build -ldflags "$(LINKER_FLAGS)" -trimpath -o $(LOCALBIN)/arm64/nodeadm cmd/nodeadm/main.go
 
 .PHONY: run
 run: build ## Run binary
