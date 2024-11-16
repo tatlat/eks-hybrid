@@ -11,6 +11,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/eks v1.46.1
 	github.com/aws/aws-sdk-go-v2/service/rolesanywhere v1.16.5
 	github.com/aws/aws-sdk-go-v2/service/ssm v1.51.1
+	github.com/aws/aws-sdk-go-v2/service/sts v1.28.4
 	github.com/aws/smithy-go v1.22.0
 	github.com/containerd/containerd v1.7.13
 	github.com/coreos/go-systemd/v22 v22.5.0
@@ -43,12 +44,12 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.12.2 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sso v1.20.2 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.23.2 // indirect
-	github.com/aws/aws-sdk-go-v2/service/sts v1.28.4 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/blang/semver/v4 v4.0.0 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/emicklei/go-restful/v3 v3.11.0 // indirect
+	github.com/evanphx/json-patch v4.12.0+incompatible // indirect
 	github.com/go-logr/logr v1.4.1
 	github.com/go-openapi/jsonpointer v0.19.6 // indirect
 	github.com/go-openapi/jsonreference v0.20.2 // indirect
