@@ -141,7 +141,6 @@ func deleteEC2Instance(ctx context.Context, client *ec2.Client, instanceID strin
 	if _, err := client.TerminateInstances(ctx, terminateInstanceInput); err != nil {
 		return err
 	}
-	fmt.Println("EC2 instance terminated successfully.")
 	return nil
 }
 
@@ -188,4 +187,15 @@ func (c runInstanceRetrier) MaxAttempts() int {
 
 func (c runInstanceRetrier) RetryDelay(attempt int, err error) (time.Duration, error) {
 	return c.backoff, nil
+}
+
+func rebootEC2Instance(ctx context.Context, client *ec2.Client, instanceID string) error {
+	rebootInstanceInput := &ec2.RebootInstancesInput{
+		InstanceIds: []string{instanceID},
+	}
+
+	if _, err := client.RebootInstances(ctx, rebootInstanceInput); err != nil {
+		return err
+	}
+	return nil
 }

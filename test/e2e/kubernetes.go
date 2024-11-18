@@ -10,6 +10,7 @@ import (
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -59,7 +60,7 @@ func nodeByInternalIP(nodes *corev1.NodeList, nodeIP string) *corev1.Node {
 }
 
 func waitForHybridNodeToBeReady(ctx context.Context, k8s *kubernetes.Clientset, nodeName string, logger logr.Logger) error {
-	err := wait.PollUntilContextTimeout(ctx, nodePodDelayInterval, nodePodWaitTimeout, true, func(ctx context.Context) (done bool, err error) {
+	err := wait.PollUntilContextTimeout(ctx, nodePodDelayInterval, hybridNodeWaitTimeout, true, func(ctx context.Context) (done bool, err error) {
 		node, err := k8s.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
 		if apierrors.IsNotFound(err) {
 			logger.Info("Node does not exist yet", "node", nodeName)
@@ -81,6 +82,29 @@ func waitForHybridNodeToBeReady(ctx context.Context, k8s *kubernetes.Clientset, 
 	})
 	if err != nil {
 		return fmt.Errorf("waiting for node %s to be ready: %w", nodeName, err)
+	}
+
+	return nil
+}
+
+func waitForHybridNodeToBeNotReady(ctx context.Context, k8s *kubernetes.Clientset, nodeName string, logger logr.Logger) error {
+	err := wait.PollUntilContextTimeout(ctx, nodePodDelayInterval, hybridNodeWaitTimeout, true, func(ctx context.Context) (done bool, err error) {
+		node, err := k8s.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
+		if err != nil {
+			return false, err
+		}
+
+		if !nodeReady(node) {
+			logger.Info("Node is not ready", "node", nodeName)
+			return true, nil // node is ready, stop polling
+		} else {
+			logger.Info("Node is still ready", "node", nodeName)
+		}
+
+		return false, nil // continue polling
+	})
+	if err != nil {
+		return fmt.Errorf("waiting for node %s to be not ready: %w", nodeName, err)
 	}
 
 	return nil
@@ -152,12 +176,26 @@ func waitForPodToBeRunning(ctx context.Context, k8s *kubernetes.Clientset, name,
 	})
 }
 
+func waitForPodToBeDeleted(ctx context.Context, k8s *kubernetes.Clientset, name, namespace string) error {
+	return wait.PollUntilContextTimeout(ctx, nodePodDelayInterval, nodePodWaitTimeout, true, func(ctx context.Context) (done bool, err error) {
+		_, err = k8s.CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
+
+		if errors.IsNotFound(err) {
+			return true, nil
+		} else if err != nil {
+			return false, err
+		}
+
+		return false, nil
+	})
+}
+
 func deletePod(ctx context.Context, k8s *kubernetes.Clientset, name, namespace string) error {
 	err := k8s.CoreV1().Pods(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 	if err != nil {
 		return fmt.Errorf("deleting pod: %w", err)
 	}
-	return nil
+	return waitForPodToBeDeleted(ctx, k8s, name, namespace)
 }
 
 func deleteNode(ctx context.Context, k8s *kubernetes.Clientset, name string) error {

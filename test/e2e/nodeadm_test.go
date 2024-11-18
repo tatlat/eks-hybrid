@@ -337,49 +337,50 @@ var _ = Describe("Hybrid Nodes", func() {
 								instanceProfileARN: test.stackOut.InstanceProfileARN,
 							}
 
-							test.logger.Info("Creating a hybrid ec2 instance...")
+							test.logger.Info("Creating a hybrid EC2 Instance...")
 							ec2, err := ec2Input.create(ctx, test.ec2ClientV2, test.ssmClient)
-							Expect(err).NotTo(HaveOccurred(), "ec2 instance should have been created successfully")
+							Expect(err).NotTo(HaveOccurred(), "EC2 Instance should have been created successfully")
+							test.logger.Info(fmt.Sprintf("EC2 Instance Connect: https://%s.console.aws.amazon.com/ec2-instance-connect/ssh?connType=serial&instanceId=%s&region=%s&serialPort=0", suite.TestConfig.ClusterRegion, ec2.instanceID, suite.TestConfig.ClusterRegion))
 
 							DeferCleanup(func(ctx context.Context) {
 								if skipCleanup {
-									test.logger.Info("Skipping ec2 instance deletion", "instanceID", ec2.instanceID)
+									test.logger.Info("Skipping EC2 Instance deletion", "instanceID", ec2.instanceID)
 									return
 								}
-								test.logger.Info("Deleting ec2 instance", "instanceID", ec2.instanceID)
-								Expect(deleteEC2Instance(ctx, test.ec2ClientV2, ec2.instanceID)).NotTo(HaveOccurred(), "ec2 instance should have been deleted successfully")
+								test.logger.Info("Deleting EC2 Instance", "instanceID", ec2.instanceID)
+								Expect(deleteEC2Instance(ctx, test.ec2ClientV2, ec2.instanceID)).NotTo(HaveOccurred(), "EC2 Instance should have been deleted successfully")
+								test.logger.Info("Successfully deleted EC2 Instance", "instanceID", ec2.instanceID)
 							})
-							// get the hybrid node registered using nodeadm by the internal IP of an EC2 instance
-							node, err := waitForNode(ctx, test.k8sClient, ec2.ipAddress, test.logger)
-							Expect(err).NotTo(HaveOccurred())
-							Expect(node).NotTo(BeNil())
-							nodeName := node.Name
 
-							test.logger.Info("Waiting for hybrid node to be ready...")
-							Expect(waitForHybridNodeToBeReady(ctx, test.k8sClient, nodeName, test.logger)).NotTo(HaveOccurred())
+							joinNodeTest := joinNodeTest{
+								k8s:           test.k8sClient,
+								nodeIPAddress: ec2.ipAddress,
+								logger:        test.logger,
+							}
+							Expect(joinNodeTest.Run(ctx)).To(Succeed(), "node should have joined the cluster sucessfully")
 
-							test.logger.Info("Creating a test pod on the hybrid node...")
-							podName := getNginxPodName(nodeName)
-							Expect(createNginxPodInNode(ctx, test.k8sClient, nodeName)).NotTo(HaveOccurred())
-							test.logger.Info(fmt.Sprintf("Pod %s created and running on node %s", podName, nodeName))
+							test.logger.Info("Resetting hybrid node...")
 
-							test.logger.Info("Deleting test pod", "pod", podName)
-							Expect(deletePod(ctx, test.k8sClient, podName, podNamespace)).NotTo(HaveOccurred())
-							test.logger.Info("Pod deleted successfully", "pod", podName)
+							uninstallNodeTest := uninstallNodeTest{
+								k8s:           test.k8sClient,
+								nodeIPAddress: ec2.ipAddress,
+								logger:        test.logger,
+								ssm:           test.ssmClient,
+							}
+							Expect(uninstallNodeTest.Run(ctx)).To(Succeed(), "node should have been reset sucessfully")
+
+							test.logger.Info("Rebooting EC2 Instance.")
+							Expect(rebootEC2Instance(ctx, test.ec2ClientV2, ec2.instanceID)).NotTo(HaveOccurred(), "EC2 Instance should have rebooted successfully")
+							test.logger.Info("EC2 Instance rebooted successfully.")
+
+							Expect(joinNodeTest.Run(ctx)).To(Succeed(), "node should have re-joined, there must be a problem with uninstall")
 
 							if skipCleanup {
 								test.logger.Info("Skipping nodeadm uninstall from the hybrid node...")
 								return
 							}
-							test.logger.Info("Uninstalling nodeadm from the hybrid node...")
-							// runNodeadmUninstall takes instanceID as a parameter. Here we are passing nodeName.
-							// In case of ssm credential provider, nodeName i.e. "mi-0dddf39dfb164d78a" would be the instanceID.
-							// In case of iam ra credential provider, nodeName i.e. "i-0dddf39dfb164d78a" would be the instanceID.
-							Expect(runNodeadmUninstall(ctx, test.ssmClient, nodeName, test.logger)).NotTo(HaveOccurred())
 
-							test.logger.Info("Deleting hybrid node from the cluster", "hybrid node", nodeName)
-							Expect(deleteNode(ctx, test.k8sClient, nodeName)).NotTo(HaveOccurred())
-							test.logger.Info("Node deleted successfully", "node", nodeName)
+							Expect(uninstallNodeTest.Run(ctx)).To(Succeed(), "node should have been reset sucessfully")
 						},
 						Entry(fmt.Sprintf("With OS %s and with Credential Provider %s", os.Name(), string(provider.Name())), context.Background(), os, provider, Label(os.Name(), string(provider.Name()), "simpleflow")),
 					)
@@ -388,3 +389,80 @@ var _ = Describe("Hybrid Nodes", func() {
 		})
 	})
 })
+
+type joinNodeTest struct {
+	k8s           *kubernetes.Clientset
+	nodeIPAddress string
+	logger        logr.Logger
+}
+
+func (t joinNodeTest) Run(ctx context.Context) error {
+	// get the hybrid node registered using nodeadm by the internal IP of an EC2 Instance
+	node, err := waitForNode(ctx, t.k8s, t.nodeIPAddress, t.logger)
+	if err != nil {
+		return err
+	}
+	if node == nil {
+		return fmt.Errorf("returned node is nil")
+	}
+
+	nodeName := node.Name
+
+	t.logger.Info("Waiting for hybrid node to be ready...")
+	if err = waitForHybridNodeToBeReady(ctx, t.k8s, nodeName, t.logger); err != nil {
+		return err
+	}
+
+	t.logger.Info("Creating a test pod on the hybrid node...")
+	podName := getNginxPodName(nodeName)
+	if err = createNginxPodInNode(ctx, t.k8s, nodeName); err != nil {
+		return err
+	}
+	t.logger.Info(fmt.Sprintf("Pod %s created and running on node %s", podName, nodeName))
+
+	t.logger.Info("Deleting test pod", "pod", podName)
+	if err = deletePod(ctx, t.k8s, podName, podNamespace); err != nil {
+		return err
+	}
+	t.logger.Info("Pod deleted successfully", "pod", podName)
+
+	return nil
+}
+
+type uninstallNodeTest struct {
+	k8s           *kubernetes.Clientset
+	ssm           *ssm.SSM
+	nodeIPAddress string
+	logger        logr.Logger
+}
+
+func (u uninstallNodeTest) Run(ctx context.Context) error {
+	// get the hybrid node registered using nodeadm by the internal IP of an EC2 Instance
+	node, err := waitForNode(ctx, u.k8s, u.nodeIPAddress, u.logger)
+	if err != nil {
+		return err
+	}
+	if node == nil {
+		return fmt.Errorf("returned node is nil")
+	}
+	nodeName := node.Name
+
+	// runNodeadmUninstall takes instanceID as a parameter. Here we are passing nodeName.
+	// In case of ssm credential provider, nodeName i.e. "mi-0dddf39dfb164d78a" would be the instanceID.
+	// In case of iam ra credential provider, nodeName i.e. "i-0dddf39dfb164d78a" would be the instanceID.
+	if err = runNodeadmUninstall(ctx, u.ssm, nodeName, u.logger); err != nil {
+		return err
+	}
+	u.logger.Info("Waiting for hybrid node to be not ready...")
+	if err = waitForHybridNodeToBeNotReady(ctx, u.k8s, nodeName, u.logger); err != nil {
+		return err
+	}
+
+	u.logger.Info("Deleting hybrid node from the cluster", "hybrid node", nodeName)
+	if err = deleteNode(ctx, u.k8s, nodeName); err != nil {
+		return err
+	}
+	u.logger.Info("Node deleted successfully", "node", nodeName)
+
+	return nil
+}
