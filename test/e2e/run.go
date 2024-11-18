@@ -206,6 +206,7 @@ func (t *TestRunner) CreateResources(ctx context.Context) error {
 	}
 
 	// Wait for the cluster to be ready
+	fmt.Println("Waiting for cluster to be ready...")
 	err = t.waitForClusterCreation(t.Spec.ClusterName)
 	if err != nil {
 		return fmt.Errorf("while waiting for cluster creation: %v", err)
@@ -216,14 +217,10 @@ func (t *TestRunner) CreateResources(ctx context.Context) error {
 		return fmt.Errorf("saving kubeconfig for %s EKS cluster: %v", t.Spec.KubernetesVersion, err)
 	}
 
-	kubeconfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
-		clientcmd.NewDefaultClientConfigLoadingRules(),
-		&clientcmd.ConfigOverrides{},
-	)
-	clientConfig, err := kubeconfig.ClientConfig()
-	if err != nil {
-		return fmt.Errorf("loading kubeconfig: %v", err)
-	}
+	clientConfig, err := clientcmd.BuildConfigFromFlags("", kubeconfigPath(t.Spec.ClusterName))
+    if err != nil {
+        return fmt.Errorf("loading kubeconfig: %v", err)
+    }
 
 	k8sClient, err := kubernetes.NewForConfig(clientConfig)
 	if err != nil {
@@ -237,13 +234,6 @@ func (t *TestRunner) CreateResources(ctx context.Context) error {
 
 	// Patch aws-node DaemonSet to update the VPC CNI with anti-affinity for nodes labeled with the default hybrid nodes label eks.amazonaws.com/compute-type: hybrid
 	fmt.Println("Patching aws-node daemonset...")
-	err = patchAwsNode(ctx, k8sClient)
-	if err != nil {
-		return fmt.Errorf("patching aws-node daemonset for %s EKS cluster: %v", t.Spec.KubernetesVersion, err)
-	}
-
-	// Patch aws-node DaemonSet to update the VPC CNI with anti-affinity for nodes labeled with the default hybrid nodes label eks.amazonaws.com/compute-type: hybrid
-	fmt.Println("Patching aws-node daemonSet...")
 	err = patchAwsNode(ctx, k8sClient)
 	if err != nil {
 		return fmt.Errorf("patching aws-node daemonset for %s EKS cluster: %v", t.Spec.KubernetesVersion, err)
@@ -278,10 +268,14 @@ func (t *TestRunner) CreateResources(ctx context.Context) error {
 
 // saveKubeconfig saves the kubeconfig for the cluster
 func updateKubeconfig(clusterName, region string) error {
-	cmd := exec.Command("aws", "eks", "update-kubeconfig", "--name", clusterName, "--region", region)
+	cmd := exec.Command("aws", "eks", "update-kubeconfig", "--name", clusterName, "--region", region, "--kubeconfig", kubeconfigPath(clusterName))
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
+}
+
+func kubeconfigPath(clusterName string) string {
+	return fmt.Sprintf("/tmp/%s.kubeconfig", clusterName)
 }
 
 func patchAwsNode(ctx context.Context, k8s *kubernetes.Clientset) error {
