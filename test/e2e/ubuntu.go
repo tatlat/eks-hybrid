@@ -28,6 +28,7 @@ type ubuntuCloudInitData struct {
 	NodeadmUrl        string
 	KubernetesVersion string
 	Provider          string
+	RootPasswordHash  string
 }
 
 func templateFuncMap() map[string]interface{} {
@@ -71,16 +72,17 @@ func (u Ubuntu2004) AMIName(ctx context.Context, awsSession *session.Session) (s
 	return *amiId, err
 }
 
-func (u Ubuntu2004) BuildUserData(nodeadmUrls NodeadmURLs, nodeadmConfigYaml, kubernetesVersion, provider string) ([]byte, error) {
+func (u Ubuntu2004) BuildUserData(UserDataInput UserDataInput) ([]byte, error) {
 	data := ubuntuCloudInitData{
-		NodeadmConfig:     nodeadmConfigYaml,
-		NodeadmUrl:        nodeadmUrls.AMD,
-		KubernetesVersion: kubernetesVersion,
-		Provider:          provider,
+		KubernetesVersion: UserDataInput.KubernetesVersion,
+		NodeadmConfig:     UserDataInput.NodeadmConfigYaml,
+		NodeadmUrl:        UserDataInput.NodeadmUrls.AMD,
+		Provider:          UserDataInput.Provider,
+		RootPasswordHash:  UserDataInput.RootPasswordHash,
 	}
 
 	if u.Architecture == arm64Arch {
-		data.NodeadmUrl = nodeadmUrls.ARM
+		data.NodeadmUrl = UserDataInput.NodeadmUrls.ARM
 	}
 
 	return executeTemplate(ubuntu2004CloudInit, data)
@@ -118,16 +120,17 @@ func (u Ubuntu2204) AMIName(ctx context.Context, awsSession *session.Session) (s
 	return *amiId, err
 }
 
-func (u Ubuntu2204) BuildUserData(nodeadmUrls NodeadmURLs, nodeadmConfigYaml, kubernetesVersion, provider string) ([]byte, error) {
+func (u Ubuntu2204) BuildUserData(UserDataInput UserDataInput) ([]byte, error) {
 	data := ubuntuCloudInitData{
-		NodeadmConfig:     nodeadmConfigYaml,
-		NodeadmUrl:        nodeadmUrls.AMD,
-		KubernetesVersion: kubernetesVersion,
-		Provider:          provider,
+		KubernetesVersion: UserDataInput.KubernetesVersion,
+		NodeadmConfig:     UserDataInput.NodeadmConfigYaml,
+		NodeadmUrl:        UserDataInput.NodeadmUrls.AMD,
+		Provider:          UserDataInput.Provider,
+		RootPasswordHash:  UserDataInput.RootPasswordHash,
 	}
 
 	if u.Architecture == arm64Arch {
-		data.NodeadmUrl = nodeadmUrls.ARM
+		data.NodeadmUrl = UserDataInput.NodeadmUrls.ARM
 	}
 
 	return executeTemplate(ubuntu2204CloudInit, data)
@@ -165,16 +168,17 @@ func (u Ubuntu2404) AMIName(ctx context.Context, awsSession *session.Session) (s
 	return *amiId, err
 }
 
-func (u Ubuntu2404) BuildUserData(nodeadmUrls NodeadmURLs, nodeadmConfigYaml, kubernetesVersion, provider string) ([]byte, error) {
+func (u Ubuntu2404) BuildUserData(UserDataInput UserDataInput) ([]byte, error) {
 	data := ubuntuCloudInitData{
-		NodeadmConfig:     nodeadmConfigYaml,
-		NodeadmUrl:        nodeadmUrls.AMD,
-		KubernetesVersion: kubernetesVersion,
-		Provider:          provider,
+		KubernetesVersion: UserDataInput.KubernetesVersion,
+		NodeadmConfig:     UserDataInput.NodeadmConfigYaml,
+		NodeadmUrl:        UserDataInput.NodeadmUrls.AMD,
+		Provider:          UserDataInput.Provider,
+		RootPasswordHash:  UserDataInput.RootPasswordHash,
 	}
 
 	if u.Architecture == arm64Arch {
-		data.NodeadmUrl = nodeadmUrls.ARM
+		data.NodeadmUrl = UserDataInput.NodeadmUrls.ARM
 	}
 
 	return executeTemplate(ubuntu2404CloudInit, data)

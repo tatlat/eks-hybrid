@@ -42,11 +42,12 @@ var (
 )
 
 type TestConfig struct {
-	ClusterName   string `yaml:"clusterName"`
-	ClusterRegion string `yaml:"clusterRegion"`
-	HybridVpcID   string `yaml:"hybridVpcID"`
-	NodeadmUrlAMD string `yaml:"nodeadmUrlAMD"`
-	NodeadmUrlARM string `yaml:"nodeadmUrlARM"`
+	ClusterName     string `yaml:"clusterName"`
+	ClusterRegion   string `yaml:"clusterRegion"`
+	HybridVpcID     string `yaml:"hybridVpcID"`
+	NodeadmUrlAMD   string `yaml:"nodeadmUrlAMD"`
+	NodeadmUrlARM   string `yaml:"nodeadmUrlARM"`
+	SetRootPassword bool   `yaml:"setRootPassword"`
 }
 
 type suiteConfiguration struct {
@@ -305,7 +306,21 @@ var _ = Describe("Hybrid Nodes", func() {
 							nodeadmConfigYaml, err := yaml.Marshal(&nodeadmConfig)
 							Expect(err).NotTo(HaveOccurred(), "expected to successfully marshal nodeadm config to YAML")
 
-							userdata, err := os.BuildUserData(test.nodeadmURLs, string(nodeadmConfigYaml), test.cluster.kubernetesVersion, string(provider.Name()))
+							var rootPasswordHash string
+							if suite.TestConfig.SetRootPassword {
+								var rootPassword string
+								rootPassword, rootPasswordHash, err = generateOSPassword()
+								Expect(err).NotTo(HaveOccurred(), "expected to successfully generate root password")
+								test.logger.Info(fmt.Sprintf("Instance Root Password: %s", rootPassword))
+							}
+
+							userdata, err := os.BuildUserData(UserDataInput{
+								KubernetesVersion: test.cluster.kubernetesVersion,
+								NodeadmUrls:       test.nodeadmURLs,
+								NodeadmConfigYaml: string(nodeadmConfigYaml),
+								Provider:          string(provider.Name()),
+								RootPasswordHash:  rootPasswordHash,
+							})
 							Expect(err).NotTo(HaveOccurred(), "expected to successfully build user data")
 
 							amiId, err := os.AMIName(ctx, test.awsSession)

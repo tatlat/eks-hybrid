@@ -28,6 +28,7 @@ type rhelCloudInitData struct {
 	Provider          string
 	RhelUsername      string
 	RhelPassword      string
+	RootPasswordHash  string
 }
 
 type RedHat8 struct {
@@ -72,18 +73,19 @@ func (r RedHat8) AMIName(ctx context.Context, awsSession *session.Session) (stri
 	return findLatestImage(ec2.New(awsSession), "RHEL-8*", r.Architecture)
 }
 
-func (r RedHat8) BuildUserData(nodeadmUrls NodeadmURLs, nodeadmConfigYaml, kubernetesVersion, provider string) ([]byte, error) {
+func (r RedHat8) BuildUserData(UserDataInput UserDataInput) ([]byte, error) {
 	data := rhelCloudInitData{
-		NodeadmConfig:     nodeadmConfigYaml,
-		NodeadmUrl:        nodeadmUrls.AMD,
-		KubernetesVersion: kubernetesVersion,
-		Provider:          provider,
+		KubernetesVersion: UserDataInput.KubernetesVersion,
+		NodeadmConfig:     UserDataInput.NodeadmConfigYaml,
+		NodeadmUrl:        UserDataInput.NodeadmUrls.AMD,
+		Provider:          UserDataInput.Provider,
 		RhelUsername:      r.RhelUsername,
 		RhelPassword:      r.RhelPassword,
+		RootPasswordHash:  UserDataInput.RootPasswordHash,
 	}
 
 	if r.Architecture == arm64Arch {
-		data.NodeadmUrl = nodeadmUrls.ARM
+		data.NodeadmUrl = UserDataInput.NodeadmUrls.ARM
 	}
 
 	return executeTemplate(rhel8CloudInit, data)
@@ -130,18 +132,19 @@ func (r RedHat9) AMIName(ctx context.Context, awsSession *session.Session) (stri
 	return findLatestImage(ec2.New(awsSession), "RHEL-9*", r.Architecture)
 }
 
-func (r RedHat9) BuildUserData(nodeadmUrls NodeadmURLs, nodeadmConfigYaml, kubernetesVersion, provider string) ([]byte, error) {
+func (r RedHat9) BuildUserData(UserDataInput UserDataInput) ([]byte, error) {
 	data := rhelCloudInitData{
-		NodeadmConfig:     nodeadmConfigYaml,
-		NodeadmUrl:        nodeadmUrls.AMD,
-		KubernetesVersion: kubernetesVersion,
-		Provider:          provider,
+		KubernetesVersion: UserDataInput.KubernetesVersion,
+		NodeadmConfig:     UserDataInput.NodeadmConfigYaml,
+		NodeadmUrl:        UserDataInput.NodeadmUrls.AMD,
+		Provider:          UserDataInput.Provider,
 		RhelUsername:      r.RhelUsername,
 		RhelPassword:      r.RhelPassword,
+		RootPasswordHash:  UserDataInput.RootPasswordHash,
 	}
 
 	if r.Architecture == arm64Arch {
-		data.NodeadmUrl = nodeadmUrls.ARM
+		data.NodeadmUrl = UserDataInput.NodeadmUrls.ARM
 	}
 
 	return executeTemplate(rhel9CloudInit, data)
