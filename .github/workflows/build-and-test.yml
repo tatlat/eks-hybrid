@@ -22,8 +22,8 @@ jobs:
           go-version: "1.21"
           check-latest: true
           cache: true
-      - name: build application
-        run: make build
+      - name: build nodeadm and e2e test binaries
+        run: make build-cross-platform e2e-tests-binary e2e-test
   test:
     name: unit-test
     runs-on: ubuntu-latest
