@@ -104,6 +104,10 @@ func (e *ec2InstanceConfig) create(ctx context.Context, ec2Client *ec2.Client, s
 				},
 			},
 		},
+		MetadataOptions: &types.InstanceMetadataOptionsRequest{
+			HttpTokens:   types.HttpTokensStateRequired,
+			HttpEndpoint: types.InstanceMetadataEndpointStateEnabled,
+		},
 	})
 	if err != nil {
 		return ec2Instance{}, fmt.Errorf("could not create hybrid EC2 instance: %w", err)
