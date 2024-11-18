@@ -35,7 +35,7 @@ type e2eCfnStackOutput struct {
 	SSMNodeRoleARN     string `json:"ssmNodeRoleARN"`
 }
 
-func (e *e2eCfnStack) deployResourcesStack(ctx context.Context, logger logr.Logger) (*e2eCfnStackOutput, error) {
+func (e *e2eCfnStack) deploy(ctx context.Context, logger logr.Logger) (*e2eCfnStackOutput, error) {
 	resp, err := e.cfn.DescribeStacksWithContext(ctx, &cloudformation.DescribeStacksInput{
 		StackName: aws.String(e.stackName),
 	})
@@ -206,7 +206,7 @@ func (e *e2eCfnStack) readStackOutput(ctx context.Context, logger logr.Logger) (
 	return result, nil
 }
 
-func (e *e2eCfnStack) deleteResourceStack(ctx context.Context, logger logr.Logger, output *e2eCfnStackOutput) error {
+func (e *e2eCfnStack) delete(ctx context.Context, logger logr.Logger, output *e2eCfnStackOutput) error {
 	instanceProfileName := e.instanceProfileName(output.SSMNodeRoleName)
 	logger.Info("Deleting instance profile", "instanceProfileName", instanceProfileName)
 	instanceProfile, err := e.iam.GetInstanceProfileWithContext(ctx, &iam.GetInstanceProfileInput{
