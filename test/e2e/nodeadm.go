@@ -85,9 +85,6 @@ func parseS3URL(s3URL string) (bucket, key string, err error) {
 	}
 
 	parts := strings.SplitN(parsedURL.Host, ".", 2)
-	if len(parts) < 2 {
-		return "", "", fmt.Errorf("invalid S3 URL format")
-	}
 	bucket = parts[0]
 	key = strings.TrimPrefix(parsedURL.Path, "/")
 	return bucket, key, nil
