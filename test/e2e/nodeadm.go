@@ -7,6 +7,7 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
+	"math/rand"
 	"net/url"
 	"strings"
 	"time"
@@ -18,6 +19,8 @@ import (
 	"github.com/aws/eks-hybrid/internal/api"
 	"github.com/aws/eks-hybrid/internal/creds"
 	"github.com/go-logr/logr"
+	"github.com/tredoe/osutil/user/crypt"
+	"github.com/tredoe/osutil/user/crypt/sha512_crypt"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -26,11 +29,20 @@ const ssmActivationName = "eks-hybrid-ssm-provider"
 const amd64Arch = "x86_64"
 const arm64Arch = "arm64"
 
+type UserDataInput struct {
+	CredsProviderName string
+	KubernetesVersion string
+	NodeadmUrls       NodeadmURLs
+	NodeadmConfigYaml string
+	Provider          string
+	RootPasswordHash  string
+}
+
 // NodeadmOS defines an interface for operating system-specific behavior.
 type NodeadmOS interface {
 	Name() string
 	AMIName(ctx context.Context, awsSession *session.Session) (string, error)
-	BuildUserData(nodeadmUrls NodeadmURLs, nodeadmConfigYaml, kubernetesVersion, provider string) ([]byte, error)
+	BuildUserData(UserDataInput UserDataInput) ([]byte, error)
 	InstanceType() string
 }
 
@@ -138,4 +150,22 @@ func runNodeadmUninstall(ctx context.Context, client *ssm.SSM, instanceID string
 		}
 	}
 	return nil
+}
+
+func generateOSPassword() (string, string, error) {
+	// Generate a random string for use in the salt
+	const letters = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	const length = 8
+	password := make([]byte, length)
+	for i := range password {
+		password[i] = letters[rand.Intn(len(letters))]
+	}
+	c := crypt.New(crypt.SHA512)
+	s := sha512_crypt.GetSalt()
+	salt := s.GenerateWRounds(s.SaltLenMax, 4096)
+	hash, err := c.Generate(password, salt)
+	if err != nil {
+		return "", "", fmt.Errorf("error gemerating root password: %s\n", err)
+	}
+	return string(password), string(hash), nil
 }

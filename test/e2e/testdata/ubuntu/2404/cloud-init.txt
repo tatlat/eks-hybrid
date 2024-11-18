@@ -1,4 +1,10 @@
 #cloud-config
+{{- if .RootPasswordHash }}
+users:
+  - name: root
+    lock_passwd: false
+    hashed_passwd: {{ .RootPasswordHash }}
+{{- end }}
 package_update: true
 write_files:
   - content: |

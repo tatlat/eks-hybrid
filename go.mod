@@ -22,6 +22,7 @@ require (
 	github.com/pbnjay/memory v0.0.0-20210728143218-7b4eea64cf58
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.9.0
+	github.com/tredoe/osutil v1.5.0
 	go.uber.org/zap v1.26.0
 	golang.org/x/mod v0.18.0
 	k8s.io/apimachinery v0.29.5
