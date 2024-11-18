@@ -22,8 +22,8 @@ func NewCommand() cli.Command {
 	cmd := command{}
 
 	setupCmd := flaggy.NewSubcommand("setup")
-	setupCmd.Description = "Setup E2E test architecture"
-	setupCmd.AdditionalHelpPrepend = "This command will run the setup architecture for running E2E tests"
+	setupCmd.Description = "Create the E2E test infrastructure"
+	setupCmd.AdditionalHelpPrepend = "This command will run the setup infrastructure for running E2E tests"
 
 	setupCmd.String(&cmd.configFilePath, "s", "setup-config-path", "Path to setup config file")
 

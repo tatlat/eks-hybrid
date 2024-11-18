@@ -74,27 +74,50 @@ func (t *TestRunner) createVPCResources(client *ec2.EC2, vpcSubnetParams vpcSubn
 }
 
 func createVPC(client *ec2.EC2, vpcParam vpcSubnetParams) (string, error) {
+	vpcs, err := client.DescribeVpcs(&ec2.DescribeVpcsInput{
+		Filters: []*ec2.Filter{
+			{
+				Name:   aws.String("cidr"),
+				Values: []*string{aws.String(vpcParam.vpcCidr)},
+			},
+			{
+				Name:   aws.String("tag:Name"),
+				Values: []*string{aws.String(vpcParam.vpcName)},
+			},
+		},
+	})
+	if err != nil {
+		return "", fmt.Errorf("describing VPCs: %w", err)
+	}
+
+	if len(vpcs.Vpcs) > 1 {
+		return "", fmt.Errorf("found multiple VPCs with name %s and CIDR %s", vpcParam.vpcName, vpcParam.vpcCidr)
+	}
+
+	if len(vpcs.Vpcs) == 1 {
+		return *vpcs.Vpcs[0].VpcId, nil
+	}
+
 	vpcOutput, err := client.CreateVpc(&ec2.CreateVpcInput{
 		CidrBlock: aws.String(vpcParam.vpcCidr),
+
+		TagSpecifications: []*ec2.TagSpecification{
+			{
+				ResourceType: aws.String("vpc"),
+				Tags: []*ec2.Tag{
+					{
+						Key:   aws.String("Name"),
+						Value: aws.String(vpcParam.vpcName),
+					},
+				},
+			},
+		},
 	})
 	if err != nil {
 		return "", fmt.Errorf("failed to create VPC: %v", err)
 	}
 
 	vpcId := *vpcOutput.Vpc.VpcId
-
-	_, err = client.CreateTags(&ec2.CreateTagsInput{
-		Resources: []*string{&vpcId},
-		Tags: []*ec2.Tag{
-			{
-				Key:   aws.String("Name"),
-				Value: aws.String(vpcParam.vpcName),
-			},
-		},
-	})
-	if err != nil {
-		return "", fmt.Errorf("failed to tag VPC: %v", err)
-	}
 
 	fmt.Printf("Successfully created VPC: %s\n", vpcId)
 	return vpcId, nil

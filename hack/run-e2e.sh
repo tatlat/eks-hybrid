@@ -49,9 +49,9 @@ spec:
 EOF
 
 RESOURCES_YAML=$CONFIG_DIR/$CLUSTER_NAME-resources.yaml
-$BIN_DIR/e2e-test-runner setup -s $CONFIG_DIR/e2e-setup-spec.yaml
+$BIN_DIR/e2e-test setup -s $CONFIG_DIR/e2e-setup-spec.yaml
 
-trap "$BIN_DIR/e2e-test-runner cleanup -f $RESOURCES_YAML" EXIT
+trap "$BIN_DIR/e2e-test cleanup -f $RESOURCES_YAML" EXIT
 mv /tmp/setup-resources-output.yaml $RESOURCES_YAML
 
 VPC_ID="$(yq -r '.status.hybridVpcID' $RESOURCES_YAML)"
@@ -64,4 +64,9 @@ nodeadmUrlAMD: "$NODEADM_AMD_URL"
 nodeadmUrlARM: "$NODEADM_ARM_URL"
 EOF
 
-$BIN_DIR/ginkgo -v -tags=e2e --label-filter='ssm' $BIN_DIR/e2e.test -- -filepath=$CONFIG_DIR/e2e-param.yaml
+# We expliclty specify procs instead of letting ginkgo decide (with -p) because in if not
+# ginkgo will use all available CPUs, which could be a small number depending
+# on how the CI runner has been configured. However, even if only one CPU is avaialble,
+# there is still value in running the tests in multiple processes, since most of the work is
+# "waiting" for infra to be created and nodes to join the cluster.
+$BIN_DIR/ginkgo --procs 64 -v -tags=e2e --label-filter='ssm' $BIN_DIR/e2e.test -- -filepath=$CONFIG_DIR/e2e-param.yaml

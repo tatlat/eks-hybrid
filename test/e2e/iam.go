@@ -27,12 +27,19 @@ func (t *TestRunner) createEKSClusterRole() error {
 	roleName := getRoleName(t.Spec.ClusterName)
 
 	// Create IAM role
-	role, err := svc.CreateRole(&iam.CreateRoleInput{
+	_, err := svc.CreateRole(&iam.CreateRoleInput{
 		RoleName:                 aws.String(roleName),
 		AssumeRolePolicyDocument: aws.String(assumeRolePolicyDocument),
 	})
+	if err != nil && !isErrCode(err, iam.ErrCodeEntityAlreadyExistsException) {
+		return fmt.Errorf("failed to create role: %w", err)
+	}
+
+	role, err := svc.GetRole(&iam.GetRoleInput{
+		RoleName: aws.String(roleName),
+	})
 	if err != nil {
-		return fmt.Errorf("failed to create role: %v", err)
+		return fmt.Errorf("getting role: %w", err)
 	}
 
 	// Attach AmazonEKSClusterPolicy
@@ -41,7 +48,7 @@ func (t *TestRunner) createEKSClusterRole() error {
 		PolicyArn: aws.String(eksClusterPolicyArn),
 	})
 	if err != nil {
-		return fmt.Errorf("failed to attach policy: %v", err)
+		return fmt.Errorf("failed to attach policy: %w", err)
 	}
 	t.Status.RoleArn = *role.Role.Arn
 	fmt.Printf("Successfully created IAM role: %s\n", *role.Role.Arn)

@@ -1,12 +1,10 @@
-//go:build e2e
-// +build e2e
-
 package e2e
 
 import (
 	"fmt"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
 )
 
@@ -19,4 +17,15 @@ func newE2EAWSSession(region string) (*session.Session, error) {
 		return nil, fmt.Errorf("creating AWS session: %w", err)
 	}
 	return sess, nil
+}
+
+func isErrCode(err error, code string) bool {
+	if err == nil {
+		return false
+	}
+	if awsErr, ok := err.(awserr.Error); ok {
+		return awsErr.Code() == code
+	}
+
+	return false
 }

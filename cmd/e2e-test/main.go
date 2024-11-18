@@ -4,14 +4,14 @@ import (
 	"github.com/integrii/flaggy"
 	"go.uber.org/zap"
 
-	cleanup "github.com/aws/eks-hybrid/cmd/e2e-test-runner/cleanup"
-	setup "github.com/aws/eks-hybrid/cmd/e2e-test-runner/setup"
+	cleanup "github.com/aws/eks-hybrid/cmd/e2e-test/cleanup"
+	setup "github.com/aws/eks-hybrid/cmd/e2e-test/setup"
 	"github.com/aws/eks-hybrid/internal/cli"
 )
 
 func main() {
-	flaggy.SetName("e2e-test-runner")
-	flaggy.SetDescription("An E2E test runner for setting up test architecture for E2E tests")
+	flaggy.SetName("e2e-test")
+	flaggy.SetDescription("Manage the lifecycle of EKS clusters for E2E tests")
 
 	cmds := []cli.Command{
 		setup.NewCommand(),

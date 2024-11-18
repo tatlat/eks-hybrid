@@ -70,7 +70,7 @@ func upsertManifests(ctx context.Context, k8s dynamic.Interface, manifests []uns
 		}
 		k8s := k8s.Resource(resource).Namespace(obj.GetNamespace())
 		if _, err := k8s.Get(ctx, obj.GetName(), metav1.GetOptions{}); apierrors.IsNotFound(err) {
-			fmt.Printf("Creating custom object %s (%s)", o.GetName(), groupVersion)
+			fmt.Printf("Creating custom object %s (%s)\n", o.GetName(), groupVersion)
 			_, err := k8s.Create(ctx, &obj, metav1.CreateOptions{})
 			if err != nil {
 				return fmt.Errorf("creating custom object %s (%s): %w", o.GetName(), groupVersion, err)
@@ -78,7 +78,7 @@ func upsertManifests(ctx context.Context, k8s dynamic.Interface, manifests []uns
 		} else if err != nil {
 			return fmt.Errorf("reading custom object %s (%s): %w", o.GetName(), groupVersion, err)
 		} else {
-			fmt.Printf("Updating custom object %s (%s)", o.GetName(), groupVersion)
+			fmt.Printf("Updating custom object %s (%s)\n", o.GetName(), groupVersion)
 			_, err := k8s.Update(ctx, &obj, metav1.UpdateOptions{})
 			if err != nil {
 				return fmt.Errorf("updating custom object %s (%s): %w", o.GetName(), groupVersion, err)

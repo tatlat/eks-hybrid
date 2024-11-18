@@ -73,13 +73,6 @@ Resources:
             Action: 'sts:AssumeRole'
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
-  # Create Instance Profile for EC2 Role
-  EC2InstanceProfile:
-    Type: AWS::IAM::InstanceProfile
-    Properties:
-      InstanceProfileName: !Sub "HybridNodesEC2InstanceProfile-${AWS::StackName}"
-      Roles:
-        - !Ref EC2Role
   
   ClusterAccessEntry:
     Type: AWS::EKS::AccessEntry
@@ -92,10 +85,6 @@ Outputs:
   EC2Role:
     Description: The name of the IAM Role for EC2.
     Value: !Ref EC2Role
-
-  EC2InstanceProfile:
-    Description: The name of the IAM Role for EC2.
-    Value: !Ref EC2InstanceProfile
 
   SSMNodeRoleName:
     Description: The name of the IAM Role for SSM.
