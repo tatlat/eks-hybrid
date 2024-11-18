@@ -60,7 +60,7 @@ write_files:
 runcmd:
   - systemctl restart apparmor.service
   - echo "Downloading nodeadm binary"
-  - curl -L "{{ .NodeadmUrl }}" -o /tmp/nodeadm
+  - curl -s --retry 5 -L "{{ .NodeadmUrl }}" -o /tmp/nodeadm
   - chmod +x /tmp/nodeadm
   - echo "Installing kubernetes components"
   - /tmp/nodeadm install {{ .KubernetesVersion }} --credential-provider {{ .Provider }}

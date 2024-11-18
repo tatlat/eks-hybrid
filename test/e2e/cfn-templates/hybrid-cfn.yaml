@@ -35,15 +35,22 @@ Resources:
           PolicyDocument: 
             Version: '2012-10-17'
             Statement: 
-              - Sid: AllowDeregisterAndDescribeOwnInstance
+              - Sid: AllowDeregisterOwnInstance
                 Effect: Allow
                 Action: 
                   - ssm:DeregisterManagedInstance
-                  - ssm:DescribeInstanceInformation
-                Resource: arn:aws:ec2:*:*:instance/${sts:RoleSessionName}
+                Resource: 'arn:aws:ssm:*:*:managed-instance/*'
                 Condition:
                   ArnLike:
-                    'aws:SourceArn': arn:aws:ec2:*:*:instance/${sts:RoleSessionName}
+                    'ssm:SourceInstanceARN': 'arn:aws:ssm:*:*:managed-instance/*'
+              - Sid: AllowDescribeInstances
+                Effect: Allow
+                Action: 
+                  - ssm:DescribeInstanceInformation
+                Resource: '*'
+                Condition:
+                  ArnLike:
+                    'ssm:SourceInstanceARN': 'arn:aws:ssm:*:*:managed-instance/*'
         - PolicyName: EKSDescribeCluster
           PolicyDocument: 
             Version: '2012-10-17'

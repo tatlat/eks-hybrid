@@ -15,7 +15,7 @@ write_files:
     path: nodeadm-config.yaml
 runcmd:
   - echo "Downloading nodeadm binary"
-  - curl -L "{{ .NodeadmUrl }}" -o /tmp/nodeadm
+  - curl -s --retry 5 -L "{{ .NodeadmUrl }}" -o /tmp/nodeadm
   - chmod +x /tmp/nodeadm
   - echo "Installing kubernetes components"
   - /tmp/nodeadm install {{ .KubernetesVersion }} --containerd-source docker --credential-provider {{ .Provider }}

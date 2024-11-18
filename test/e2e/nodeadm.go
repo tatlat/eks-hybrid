@@ -121,7 +121,7 @@ func getNodeadmURL(client *s3.S3, nodeadmUrl string) (string, error) {
 		return "", fmt.Errorf("parsing S3 URL: %v", err)
 	}
 
-	preSignedURL, err := generatePreSignedURL(client, s3Bucket, s3BucketKey, 15*time.Minute)
+	preSignedURL, err := generatePreSignedURL(client, s3Bucket, s3BucketKey, 30*time.Minute)
 	if err != nil {
 		return "", fmt.Errorf("getting presigned URL for nodeadm: %v", err)
 	}
@@ -131,22 +131,24 @@ func getNodeadmURL(client *s3.S3, nodeadmUrl string) (string, error) {
 func runNodeadmUninstall(ctx context.Context, client *ssm.SSM, instanceID string, logger logr.Logger) error {
 	commands := []string{
 		// TODO: @pjshah run uninstall without node-validation and pod-validation flags after adding cordon and drain node functionality
-		"sudo ./nodeadm uninstall -skip node-validation,pod-validation",
+		"set -eux",
+		"sudo /tmp/nodeadm uninstall -skip node-validation,pod-validation",
+		"sudo cloud-init clean --logs",
+		"sudo rm -rf /var/lib/cloud/instances",
 	}
 	ssmConfig := &ssmConfig{
 		client:     client,
 		instanceID: instanceID,
 		commands:   commands,
 	}
-	outputs, err := ssmConfig.runCommandsOnInstance(ctx, logger)
+	outputs, err := ssmConfig.runCommandsOnInstanceWaitForInProgress(ctx, logger)
 	if err != nil {
 		return fmt.Errorf("running SSM command: %w", err)
 	}
 	logger.Info("Nodeadm Uninstall", "output", outputs)
 	for _, output := range outputs {
-		if *output.Status != "Success" {
-			logger.Info("Ignore the above ssm command failure for now if the credential provider is SSM.")
-			return nil
+		if *output.Status != "InProgress" {
+			return fmt.Errorf("node uninstall SSM command did not properly reach InProgress")
 		}
 	}
 	return nil
