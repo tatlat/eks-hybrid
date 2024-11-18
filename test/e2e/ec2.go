@@ -16,6 +16,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/ssm"
+	"github.com/aws/smithy-go"
 )
 
 // instanceConfig holds the configuration for the EC2 instance.
@@ -108,6 +109,8 @@ func (e *ec2InstanceConfig) create(ctx context.Context, ec2Client *ec2.Client, s
 			HttpTokens:   types.HttpTokensStateRequired,
 			HttpEndpoint: types.InstanceMetadataEndpointStateEnabled,
 		},
+	}, func(o *ec2.Options) {
+		o.Retryer = newDefaultRunEC2Retrier()
 	})
 	if err != nil {
 		return ec2Instance{}, fmt.Errorf("could not create hybrid EC2 instance: %w", err)
@@ -140,4 +143,49 @@ func deleteEC2Instance(ctx context.Context, client *ec2.Client, instanceID strin
 	}
 	fmt.Println("EC2 instance terminated successfully.")
 	return nil
+}
+
+func newDefaultRunEC2Retrier() runInstanceRetrier {
+	return runInstanceRetrier{
+		Standard:   retry.NewStandard(),
+		maxRetries: 60,
+		backoff:    2 * time.Second,
+	}
+}
+
+type runInstanceRetrier struct {
+	*retry.Standard
+	maxRetries int
+	backoff    time.Duration
+}
+
+func (c runInstanceRetrier) IsErrorRetryable(err error) bool {
+	if c.Standard.IsErrorRetryable(err) {
+		return true
+	}
+
+	var awsErr smithy.APIError
+	if ok := errors.As(err, &awsErr); ok {
+		// We retry invalid instance profile errors because sometimes there is a delay between creating
+		// the instance profile and that profile being available in EC2. We trust that if this error comes
+		// back, it's just an eventual consistency issue and not that our setup code is not creating the
+		// instance profile correctly.
+		// The error message can be:
+		// - Invalid IAM Instance Profile name
+		// - Invalid IAM Instance Profile ARN
+		// Depending if the input uses the name or the ARN in the params.
+		if awsErr.ErrorCode() == "InvalidParameterValue" && strings.Contains(awsErr.ErrorMessage(), "Invalid IAM Instance Profile") {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (c runInstanceRetrier) MaxAttempts() int {
+	return c.maxRetries
+}
+
+func (c runInstanceRetrier) RetryDelay(attempt int, err error) (time.Duration, error) {
+	return c.backoff, nil
 }
