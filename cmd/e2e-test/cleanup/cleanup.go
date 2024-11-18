@@ -22,8 +22,8 @@ func NewCommand() cli.Command {
 	cmd := command{}
 
 	cleanup := flaggy.NewSubcommand("cleanup")
-	cleanup.Description = "Cleaning up E2E test architecture"
-	cleanup.AdditionalHelpPrepend = "This command will cleanup E2E test architecture."
+	cleanup.Description = "Delete the E2E test infrastructure"
+	cleanup.AdditionalHelpPrepend = "This command will cleanup E2E test infrastructure."
 
 	cleanup.String(&cmd.resourcesFilePath, "f", "filename", "Path to resources file")
 

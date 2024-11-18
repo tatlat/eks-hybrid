@@ -49,9 +49,9 @@ spec:
 EOF
 
 RESOURCES_YAML=$CONFIG_DIR/$CLUSTER_NAME-resources.yaml
-$BIN_DIR/e2e-test-runner setup -s $CONFIG_DIR/e2e-setup-spec.yaml
+$BIN_DIR/e2e-test setup -s $CONFIG_DIR/e2e-setup-spec.yaml
 
-trap "$BIN_DIR/e2e-test-runner cleanup -f $RESOURCES_YAML" EXIT
+trap "$BIN_DIR/e2e-test cleanup -f $RESOURCES_YAML" EXIT
 mv /tmp/setup-resources-output.yaml $RESOURCES_YAML
 
 VPC_ID="$(yq -r '.status.hybridVpcID' $RESOURCES_YAML)"
