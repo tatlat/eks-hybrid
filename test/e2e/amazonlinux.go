@@ -14,11 +14,7 @@ import (
 //go:embed testdata/amazonlinux/2023/cloud-init.txt
 var al23CloudInit []byte
 
-//go:embed testdata/eks-log-collector.sh
-var logCollector []byte
-
 type amazonLinuxCloudInitData struct {
-	LogCollectorScript string
 	NodeadmConfig      string
 	NodeadmUrl         string
 	KubernetesVersion  string
@@ -63,7 +59,6 @@ func (a AmazonLinux2023) AMIName(ctx context.Context, awsSession *session.Sessio
 
 func (a AmazonLinux2023) BuildUserData(UserDataInput UserDataInput) ([]byte, error) {
 	data := amazonLinuxCloudInitData{
-		LogCollectorScript: string(logCollector),
 		KubernetesVersion:  UserDataInput.KubernetesVersion,
 		NodeadmConfig:      UserDataInput.NodeadmConfigYaml,
 		NodeadmUrl:         UserDataInput.NodeadmUrls.AMD,
