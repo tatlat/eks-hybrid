@@ -1,4 +1,4 @@
-name: build-and-unit-test
+name: build-e2e-test-binaries
 on:
   push:
     tags:
@@ -22,17 +22,5 @@ jobs:
           go-version: "1.21"
           check-latest: true
           cache: true
-      - name: build application
-        run: make build-cross-platform
-  test:
-    name: unit-test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "1.21"
-          check-latest: true
-          cache: true
-      - name: build application
-        run: make test
+      - name: build e2e test binaries
+        run: make e2e-tests-binary e2e-test
