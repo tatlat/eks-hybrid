@@ -321,6 +321,11 @@ func (t *TestRunner) deleteEKSCluster(ctx context.Context, clusterName string) e
 	_, err := svc.DeleteCluster(&eks.DeleteClusterInput{
 		Name: aws.String(clusterName),
 	})
+	if err != nil && isErrCode(err, eks.ErrCodeResourceNotFoundException) {
+		fmt.Printf("Cluster %s already deleted\n", clusterName)
+		return nil
+	}
+
 	if err != nil {
 		return fmt.Errorf("failed to delete EKS hybrid cluster %s: %v", clusterName, err)
 	}

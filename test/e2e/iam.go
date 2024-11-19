@@ -64,16 +64,21 @@ func (t *TestRunner) deleteIamRole() error {
 		RoleName:  aws.String(roleName),
 		PolicyArn: aws.String(eksClusterPolicyArn),
 	})
-	if err != nil {
+	if err != nil && isErrCode(err, iam.ErrCodeNoSuchEntityException) {
+		fmt.Printf("AmazonEKSClusterPolicy already detached from role %s\n", roleName)
+	} else if err != nil {
 		return fmt.Errorf("failed to detach AmazonEKSClusterPolicy from role %s: %v", roleName, err)
+	} else {
+		fmt.Printf("Detached AmazonEKSClusterPolicy from role %s\n", roleName)
 	}
-
-	fmt.Printf("Detached AmazonEKSClusterPolicy from role %s\n", roleName)
 
 	_, err = svc.DeleteRole(&iam.DeleteRoleInput{
 		RoleName: aws.String(roleName),
 	})
-	if err != nil {
+	if err != nil && isErrCode(err, iam.ErrCodeNoSuchEntityException) {
+		fmt.Printf("role %s already deleted\n", roleName)
+		return nil
+	} else if err != nil {
 		return fmt.Errorf("failed to delete role %s: %v", roleName, err)
 	}
 
