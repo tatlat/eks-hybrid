@@ -384,7 +384,10 @@ func (t *TestRunner) deleteVpc(vpc vpcConfig) error {
 	}
 
 	_, err := svc.DeleteVpc(input)
-	if err != nil {
+	if err != nil && isErrCode(err, "InvalidVpcID.NotFound") {
+		fmt.Printf("VPC %s already deleted\n", vpc.vpcID)
+		return nil
+	} else if err != nil {
 		return fmt.Errorf("failed to delete VPC: %v", err)
 	}
 
@@ -401,6 +404,10 @@ func (t *TestRunner) deleteSubnet(subnetID string) error {
 	}
 
 	_, err := svc.DeleteSubnet(input)
+	if err != nil && isErrCode(err, "InvalidSubnetID.NotFound") {
+		fmt.Printf("subnet %s already deleted\n", subnetID)
+		return nil
+	}
 	if err != nil {
 		return fmt.Errorf("failed to delete subnet: %v", err)
 	}
