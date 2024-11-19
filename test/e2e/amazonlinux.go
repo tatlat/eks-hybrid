@@ -15,11 +15,11 @@ import (
 var al23CloudInit []byte
 
 type amazonLinuxCloudInitData struct {
-	NodeadmConfig      string
-	NodeadmUrl         string
-	KubernetesVersion  string
-	Provider           string
-	RootPasswordHash   string
+	NodeadmConfig     string
+	NodeadmUrl        string
+	KubernetesVersion string
+	Provider          string
+	RootPasswordHash  string
 }
 
 type AmazonLinux2023 struct {
@@ -47,9 +47,9 @@ func (a AmazonLinux2023) Name() string {
 
 func (a AmazonLinux2023) InstanceType() string {
 	if a.Architecture == amd64Arch {
-		return "m5.large"
+		return "m5.2xlarge"
 	}
-	return "t4g.large"
+	return "t4g.2xlarge"
 }
 
 func (a AmazonLinux2023) AMIName(ctx context.Context, awsSession *session.Session) (string, error) {
@@ -59,11 +59,11 @@ func (a AmazonLinux2023) AMIName(ctx context.Context, awsSession *session.Sessio
 
 func (a AmazonLinux2023) BuildUserData(UserDataInput UserDataInput) ([]byte, error) {
 	data := amazonLinuxCloudInitData{
-		KubernetesVersion:  UserDataInput.KubernetesVersion,
-		NodeadmConfig:      UserDataInput.NodeadmConfigYaml,
-		NodeadmUrl:         UserDataInput.NodeadmUrls.AMD,
-		Provider:           UserDataInput.Provider,
-		RootPasswordHash:   UserDataInput.RootPasswordHash,
+		KubernetesVersion: UserDataInput.KubernetesVersion,
+		NodeadmConfig:     UserDataInput.NodeadmConfigYaml,
+		NodeadmUrl:        UserDataInput.NodeadmUrls.AMD,
+		Provider:          UserDataInput.Provider,
+		RootPasswordHash:  UserDataInput.RootPasswordHash,
 	}
 
 	if a.Architecture == arm64Arch {
