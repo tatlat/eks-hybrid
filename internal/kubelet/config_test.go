@@ -125,12 +125,17 @@ func TestHybridCloudProvider(t *testing.T) {
 				Region: "us-west-2",
 			},
 			Hybrid: &api.HybridOptions{
-				NodeName: "my-node",
 				IAMRolesAnywhere: &api.IAMRolesAnywhere{
+					NodeName:       "my-node",
 					TrustAnchorARN: "arn:aws:iam::222211113333:role/AmazonEKSConnectorAgentRole",
 					ProfileARN:     "dummy-profile-arn",
 					RoleARN:        "dummy-assume-role-arn",
 				},
+			},
+		},
+		Status: api.NodeConfigStatus{
+			Hybrid: api.HybridDetails{
+				NodeName: "my-node",
 			},
 		},
 	}
@@ -139,7 +144,7 @@ func TestHybridCloudProvider(t *testing.T) {
 	kubeletConfig := defaultKubeletSubConfig()
 	kubeletConfig.withHybridCloudProvider(&nodeConfig, kubeletArgs)
 	assert.Equal(t, kubeletArgs["cloud-provider"], "")
-	assert.Equal(t, kubeletArgs["hostname-override"], nodeConfig.Spec.Hybrid.NodeName)
+	assert.Equal(t, kubeletArgs["hostname-override"], nodeConfig.Status.Hybrid.NodeName)
 	assert.Equal(t, *kubeletConfig.ProviderID, expectedProviderId)
 }
 
@@ -151,8 +156,8 @@ func TestHybridLabels(t *testing.T) {
 				Region: "us-west-2",
 			},
 			Hybrid: &api.HybridOptions{
-				NodeName: "my-node",
 				IAMRolesAnywhere: &api.IAMRolesAnywhere{
+					NodeName:       "my-node",
 					TrustAnchorARN: "arn:aws:iam::222211113333:role/AmazonEKSConnectorAgentRole",
 					ProfileARN:     "dummy-profile-arn",
 					RoleARN:        "dummy-assume-role-arn",

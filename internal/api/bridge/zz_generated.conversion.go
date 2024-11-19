@@ -187,7 +187,7 @@ func Convert_api_ContainerdOptions_To_v1alpha1_ContainerdOptions(in *api.Contain
 }
 
 func autoConvert_v1alpha1_HybridOptions_To_api_HybridOptions(in *v1alpha1.HybridOptions, out *api.HybridOptions, s conversion.Scope) error {
-	out.NodeName = in.NodeName
+	out.EnableCredentialsFile = in.EnableCredentialsFile
 	out.IAMRolesAnywhere = (*api.IAMRolesAnywhere)(unsafe.Pointer(in.IAMRolesAnywhere))
 	out.SSM = (*api.SSM)(unsafe.Pointer(in.SSM))
 	return nil
@@ -199,7 +199,7 @@ func Convert_v1alpha1_HybridOptions_To_api_HybridOptions(in *v1alpha1.HybridOpti
 }
 
 func autoConvert_api_HybridOptions_To_v1alpha1_HybridOptions(in *api.HybridOptions, out *v1alpha1.HybridOptions, s conversion.Scope) error {
-	out.NodeName = in.NodeName
+	out.EnableCredentialsFile = in.EnableCredentialsFile
 	out.IAMRolesAnywhere = (*v1alpha1.IAMRolesAnywhere)(unsafe.Pointer(in.IAMRolesAnywhere))
 	out.SSM = (*v1alpha1.SSM)(unsafe.Pointer(in.SSM))
 	return nil
@@ -211,6 +211,7 @@ func Convert_api_HybridOptions_To_v1alpha1_HybridOptions(in *api.HybridOptions, 
 }
 
 func autoConvert_v1alpha1_IAMRolesAnywhere_To_api_IAMRolesAnywhere(in *v1alpha1.IAMRolesAnywhere, out *api.IAMRolesAnywhere, s conversion.Scope) error {
+	out.NodeName = in.NodeName
 	out.TrustAnchorARN = in.TrustAnchorARN
 	out.ProfileARN = in.ProfileARN
 	out.RoleARN = in.RoleARN
@@ -224,6 +225,7 @@ func Convert_v1alpha1_IAMRolesAnywhere_To_api_IAMRolesAnywhere(in *v1alpha1.IAMR
 }
 
 func autoConvert_api_IAMRolesAnywhere_To_v1alpha1_IAMRolesAnywhere(in *api.IAMRolesAnywhere, out *v1alpha1.IAMRolesAnywhere, s conversion.Scope) error {
+	out.NodeName = in.NodeName
 	out.TrustAnchorARN = in.TrustAnchorARN
 	out.ProfileARN = in.ProfileARN
 	out.RoleARN = in.RoleARN

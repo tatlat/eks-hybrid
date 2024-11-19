@@ -43,7 +43,7 @@
     "verbosity": 2
   },
   "protectKernelDefaults": true,
-  "providerID": "eks-hybrid:///us-west-2/my-cluster/mock-hybrid-node",
+  "providerID": "eks-hybrid:///us-west-2/my-cluster/",
   "readOnlyPort": 0,
   "serializeImagePulls": false,
   "serverTLSBootstrap": true,

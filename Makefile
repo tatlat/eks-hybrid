@@ -49,7 +49,7 @@ generate: generate-code generate-doc ## Generate code and documentation.
 .PHONY: generate-code
 generate-code: controller-gen conversion-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
 	$(CONTROLLER_GEN) object paths="./..."
-	$(CONVERSION_GEN) --extra-dirs="./internal/api/bridge" --go-header-file=/dev/null -v0
+	$(CONVERSION_GEN) --go-header-file=/dev/null --output-file zz_generated.conversion.go -v0 github.com/aws/eks-hybrid/internal/api/bridge
 
 .PHONY: generate-doc
 generate-doc: crd-ref-docs

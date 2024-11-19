@@ -37,6 +37,7 @@ type NodeConfigSpec struct {
 
 type NodeConfigStatus struct {
 	Instance InstanceDetails `json:"instance,omitempty"`
+	Hybrid   HybridDetails   `json:"hybrid,omitempty"`
 	Defaults DefaultOptions  `json:"default,omitempty"`
 }
 
@@ -47,6 +48,10 @@ type InstanceDetails struct {
 	AvailabilityZone string `json:"availabilityZone,omitempty"`
 	MAC              string `json:"mac,omitempty"`
 	PrivateDNSName   string `json:"privateDnsName,omitempty"`
+}
+
+type HybridDetails struct {
+	NodeName string `json:"nodeName,omitempty"`
 }
 
 type DefaultOptions struct {
@@ -117,7 +122,6 @@ const (
 )
 
 type HybridOptions struct {
-	NodeName              string            `json:"nodeName,omitempty"`
 	EnableCredentialsFile bool              `json:"enableCredentialsFile,omitempty"`
 	IAMRolesAnywhere      *IAMRolesAnywhere `json:"iamRolesAnywhere,omitempty"`
 	SSM                   *SSM              `json:"ssm,omitempty"`
@@ -152,6 +156,7 @@ func (nc NodeConfig) GetNodeType() NodeType {
 }
 
 type IAMRolesAnywhere struct {
+	NodeName       string `json:"nodeName,omitempty"`
 	TrustAnchorARN string `json:"trustAnchorArn,omitempty"`
 	ProfileARN     string `json:"profileArn,omitempty"`
 	RoleARN        string `json:"roleArn,omitempty"`
