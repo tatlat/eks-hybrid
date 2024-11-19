@@ -21,11 +21,11 @@ import (
 	"github.com/aws/aws-sdk-go/service/iam"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/ssm"
-	"github.com/aws/eks-hybrid/internal/creds"
 	"github.com/go-logr/logr"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 	"sigs.k8s.io/yaml"
@@ -39,6 +39,7 @@ const (
 var (
 	filePath string
 	suite    *suiteConfiguration
+	ca       *certificate = &certificate{}
 )
 
 type TestConfig struct {
@@ -51,8 +52,10 @@ type TestConfig struct {
 }
 
 type suiteConfiguration struct {
-	TestConfig     *TestConfig        `json:"testConfig"`
-	EC2StackOutput *e2eCfnStackOutput `json:"ec2StackOutput"`
+	TestConfig             *TestConfig        `json:"testConfig"`
+	EC2StackOutput         *e2eCfnStackOutput `json:"ec2StackOutput"`
+	RolesAnywhereCACertPEM []byte             `json:"rolesAnywhereCACertPEM"`
+	RolesAnywhereCAKeyPEM  []byte             `json:"rolesAnywhereCAPrivateKeyPEM"`
 }
 
 func init() {
@@ -102,7 +105,7 @@ func getCredentialProviderNames(providers []NodeadmCredentialsProvider) string {
 	for _, provider := range providers {
 		names = append(names, string(provider.Name()))
 	}
-	return strings.Join(names, ", ")
+	return strings.Join(names, "-")
 }
 
 type peeredVPCTest struct {
@@ -123,13 +126,15 @@ type peeredVPCTest struct {
 	stackOut *e2eCfnStackOutput
 
 	nodeadmURLs NodeadmURLs
+
+	rolesAnywhereCA *certificate
 }
 
 func skipCleanup() bool {
 	return os.Getenv("SKIP_CLEANUP") == "true"
 }
 
-var credentialProviders = []NodeadmCredentialsProvider{&SsmProvider{}}
+var credentialProviders = []NodeadmCredentialsProvider{&SsmProvider{}, &IamRolesAnywhereProvider{}}
 
 var _ = SynchronizedBeforeSuite(
 	// This function only runs once, on the first process
@@ -159,14 +164,18 @@ var _ = SynchronizedBeforeSuite(
 			providerFilter = credentialProviders
 		}
 
+		rolesAnywhereCA, err := createCA()
+		Expect(err).NotTo(HaveOccurred())
+
 		stackName := fmt.Sprintf("EKSHybridCI-%s-%s", removeSpecialChars(config.ClusterName), getCredentialProviderNames(providerFilter))
 		stack := &e2eCfnStack{
-			clusterName:         cluster.clusterName,
-			clusterArn:          cluster.clusterArn,
-			credentialProviders: providerFilter,
-			stackName:           GetTruncatedName(stackName, 60),
-			cfn:                 cfnClient,
-			iam:                 iamClient,
+			clusterName:            cluster.clusterName,
+			clusterArn:             cluster.clusterArn,
+			credentialProviders:    providerFilter,
+			stackName:              GetTruncatedName(stackName, 60),
+			iamRolesAnywhereCACert: rolesAnywhereCA.CertPEM,
+			cfn:                    cfnClient,
+			iam:                    iamClient,
 		}
 		stackOut, err := stack.deploy(ctx, logger)
 		Expect(err).NotTo(HaveOccurred(), "e2e nodes stack should have been deployed")
@@ -184,8 +193,10 @@ var _ = SynchronizedBeforeSuite(
 
 		suiteJson, err := yaml.Marshal(
 			&suiteConfiguration{
-				TestConfig:     config,
-				EC2StackOutput: stackOut,
+				TestConfig:             config,
+				EC2StackOutput:         stackOut,
+				RolesAnywhereCACertPEM: rolesAnywhereCA.CertPEM,
+				RolesAnywhereCAKeyPEM:  rolesAnywhereCA.KeyPEM,
 			},
 		)
 		Expect(err).NotTo(HaveOccurred(), "suite config should be marshalled successfully")
@@ -255,6 +266,11 @@ var _ = Describe("Hybrid Nodes", func() {
 			test.cfnClient = cloudformation.New(awsSession)
 			test.iamClient = iam.New(awsSession)
 
+			ca, err := parseCertificate(suite.RolesAnywhereCACertPEM, suite.RolesAnywhereCAKeyPEM)
+			Expect(err).NotTo(HaveOccurred())
+
+			test.rolesAnywhereCA = ca
+
 			// TODO: ideally this should be an input to the tests and not just
 			// assume same name/path used by the setup command.
 			clientConfig, err := clientcmd.BuildConfigFromFlags("", kubeconfigPath(suite.TestConfig.ClusterName))
@@ -267,12 +283,16 @@ var _ = Describe("Hybrid Nodes", func() {
 			Expect(err).NotTo(HaveOccurred(), "expected to get cluster details")
 
 			for _, provider := range credentialProviders {
-				switch provider.Name() {
-				case creds.SsmCredentialProvider:
-					if ssmProvider, ok := provider.(*SsmProvider); ok {
-						ssmProvider.ssmClient = test.ssmClient
-						ssmProvider.role = test.stackOut.SSMNodeRoleName
-					}
+				switch p := provider.(type) {
+				case *SsmProvider:
+					p.ssmClient = test.ssmClient
+					p.role = test.stackOut.SSMNodeRoleName
+				case *IamRolesAnywhereProvider:
+					p.nodeName = fmt.Sprintf("%s-%s", p.Name(), strings.ToLower(rand.String(10)))
+					p.roleARN = test.stackOut.IRANodeRoleARN
+					p.profileARN = test.stackOut.IRAProfileARN
+					p.trustAnchorARN = test.stackOut.IRATrustAnchorARN
+					p.ca = test.rolesAnywhereCA
 				}
 			}
 
@@ -301,6 +321,10 @@ var _ = Describe("Hybrid Nodes", func() {
 								removeSpecialChars(os.Name()),
 								removeSpecialChars(string(provider.Name())),
 							)
+
+							files, err := provider.FilesForNode()
+							Expect(err).NotTo(HaveOccurred())
+
 							nodeadmConfig, err := provider.NodeadmConfig(test.cluster)
 							Expect(err).NotTo(HaveOccurred(), "expected to build nodeconfig")
 
@@ -321,6 +345,7 @@ var _ = Describe("Hybrid Nodes", func() {
 								NodeadmConfigYaml: string(nodeadmConfigYaml),
 								Provider:          string(provider.Name()),
 								RootPasswordHash:  rootPasswordHash,
+								Files:             files,
 							})
 							Expect(err).NotTo(HaveOccurred(), "expected to successfully build user data")
 
@@ -364,11 +389,11 @@ var _ = Describe("Hybrid Nodes", func() {
 							test.logger.Info("Resetting hybrid node...")
 
 							uninstallNodeTest := uninstallNodeTest{
-								k8s:           test.k8sClient,
-								nodeIPAddress: ec2.ipAddress,
-								logger:        test.logger,
-								ssm:           test.ssmClient,
-								provider:      provider,
+								k8s:      test.k8sClient,
+								ssm:      test.ssmClient,
+								ec2:      ec2,
+								provider: provider,
+								logger:   test.logger,
 							}
 							Expect(uninstallNodeTest.Run(ctx)).To(Succeed(), "node should have been reset sucessfully")
 
@@ -433,46 +458,47 @@ func (t joinNodeTest) Run(ctx context.Context) error {
 }
 
 type uninstallNodeTest struct {
-	k8s           *kubernetes.Clientset
-	ssm           *ssm.SSM
-	nodeIPAddress string
-	logger        logr.Logger
-	provider      NodeadmCredentialsProvider
+	k8s      *kubernetes.Clientset
+	ssm      *ssm.SSM
+	ec2      ec2Instance
+	provider NodeadmCredentialsProvider
+	logger   logr.Logger
 }
 
 func (u uninstallNodeTest) Run(ctx context.Context) error {
 	// get the hybrid node registered using nodeadm by the internal IP of an EC2 Instance
-	node, err := waitForNode(ctx, u.k8s, u.nodeIPAddress, u.logger)
+	node, err := waitForNode(ctx, u.k8s, u.ec2.ipAddress, u.logger)
 	if err != nil {
 		return err
 	}
 	if node == nil {
 		return fmt.Errorf("returned node is nil")
 	}
-	nodeName := node.Name
 
-	// runNodeadmUninstall takes instanceID as a parameter. Here we are passing nodeName.
-	// In case of ssm credential provider, nodeName i.e. "mi-0dddf39dfb164d78a" would be the instanceID.
-	// In case of iam ra credential provider, nodeName i.e. "i-0dddf39dfb164d78a" would be the instanceID.
-	if err = runNodeadmUninstall(ctx, u.ssm, nodeName, u.logger); err != nil {
+	hybridNode := HybridNode{
+		ec2Instance: u.ec2,
+		node:        *node,
+	}
+
+	if err = runNodeadmUninstall(ctx, u.ssm, u.provider.InstanceID(hybridNode), u.logger); err != nil {
 		return err
 	}
 	u.logger.Info("Waiting for hybrid node to be not ready...")
-	if err = waitForHybridNodeToBeNotReady(ctx, u.k8s, nodeName, u.logger); err != nil {
+	if err = waitForHybridNodeToBeNotReady(ctx, u.k8s, node.Name, u.logger); err != nil {
 		return err
 	}
 
-	u.logger.Info("Deleting hybrid node from the cluster", "hybrid node", nodeName)
-	if err = deleteNode(ctx, u.k8s, nodeName); err != nil {
+	u.logger.Info("Deleting hybrid node from the cluster", "hybrid node", node.Name)
+	if err = deleteNode(ctx, u.k8s, node.Name); err != nil {
 		return err
 	}
-	u.logger.Info("Node deleted successfully", "node", nodeName)
+	u.logger.Info("Node deleted successfully", "node", node.Name)
 
-	u.logger.Info("Waiting for node to be unregistered", "node", nodeName)
-	if err = u.provider.VerifyUninstall(ctx, nodeName); err != nil {
+	u.logger.Info("Waiting for node to be unregistered", "node", node.Name)
+	if err = u.provider.VerifyUninstall(ctx, node.Name); err != nil {
 		return nil
 	}
-	u.logger.Info("Node unregistered successfully", "node", nodeName)
+	u.logger.Info("Node unregistered successfully", "node", node.Name)
 
 	return nil
 }

@@ -13,6 +13,11 @@ write_files:
   - content: |
 {{ .NodeadmConfig | indent 6 }}
     path: nodeadm-config.yaml
+{{ range $file := .Files }}
+  - content: |
+{{ $file.Content | indent 6 }}
+    path: {{ $file.Path }}
+{{- end }}
 runcmd:
   - echo "Downloading nodeadm binary"
   - curl -s --retry 5 -L "{{ .NodeadmUrl }}" -o /tmp/nodeadm

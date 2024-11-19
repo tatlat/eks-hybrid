@@ -29,6 +29,7 @@ type ubuntuCloudInitData struct {
 	KubernetesVersion string
 	Provider          string
 	RootPasswordHash  string
+	Files             []File
 }
 
 func templateFuncMap() map[string]interface{} {
@@ -79,6 +80,7 @@ func (u Ubuntu2004) BuildUserData(UserDataInput UserDataInput) ([]byte, error) {
 		NodeadmUrl:        UserDataInput.NodeadmUrls.AMD,
 		Provider:          UserDataInput.Provider,
 		RootPasswordHash:  UserDataInput.RootPasswordHash,
+		Files:             UserDataInput.Files,
 	}
 
 	if u.Architecture == arm64Arch {
@@ -127,6 +129,7 @@ func (u Ubuntu2204) BuildUserData(UserDataInput UserDataInput) ([]byte, error) {
 		NodeadmUrl:        UserDataInput.NodeadmUrls.AMD,
 		Provider:          UserDataInput.Provider,
 		RootPasswordHash:  UserDataInput.RootPasswordHash,
+		Files:             UserDataInput.Files,
 	}
 
 	if u.Architecture == arm64Arch {
@@ -175,6 +178,7 @@ func (u Ubuntu2404) BuildUserData(UserDataInput UserDataInput) ([]byte, error) {
 		NodeadmUrl:        UserDataInput.NodeadmUrls.AMD,
 		Provider:          UserDataInput.Provider,
 		RootPasswordHash:  UserDataInput.RootPasswordHash,
+		Files:             UserDataInput.Files,
 	}
 
 	if u.Architecture == arm64Arch {

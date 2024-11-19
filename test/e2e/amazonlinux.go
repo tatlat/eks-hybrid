@@ -20,6 +20,7 @@ type amazonLinuxCloudInitData struct {
 	KubernetesVersion string
 	Provider          string
 	RootPasswordHash  string
+	Files             []File
 }
 
 type AmazonLinux2023 struct {
@@ -64,6 +65,7 @@ func (a AmazonLinux2023) BuildUserData(UserDataInput UserDataInput) ([]byte, err
 		NodeadmUrl:        UserDataInput.NodeadmUrls.AMD,
 		Provider:          UserDataInput.Provider,
 		RootPasswordHash:  UserDataInput.RootPasswordHash,
+		Files:             UserDataInput.Files,
 	}
 
 	if a.Architecture == arm64Arch {
