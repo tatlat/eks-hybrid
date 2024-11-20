@@ -13,6 +13,7 @@ kind: Installation
 metadata:
   name: default
 spec:
+  registry: 381492195191.dkr.ecr.us-west-2.amazonaws.com/
   calicoNetwork:
     ipPools:
     - cidr: {{.PodCIDR}}
