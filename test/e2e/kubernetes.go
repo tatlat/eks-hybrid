@@ -28,11 +28,18 @@ const (
 // waitForNode wait for the node to join the cluster and fetches the node info from an internal IP address of the node
 func waitForNode(ctx context.Context, k8s *kubernetes.Clientset, internalIP string, logger logr.Logger) (*corev1.Node, error) {
 	foundNode := &corev1.Node{}
+	consecutiveErrors := 0
 	err := wait.PollUntilContextTimeout(ctx, hybridNodeDelayInterval, hybridNodeWaitTimeout, true, func(ctx context.Context) (done bool, err error) {
 		nodes, err := k8s.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
 		if err != nil {
-			return false, fmt.Errorf("listing nodes when looking for node with IP %s: %w", internalIP, err)
+			consecutiveErrors += 1
+			if consecutiveErrors > 3 {
+				return false, fmt.Errorf("listing nodes when looking for node with IP %s: %w", internalIP, err)
+			}
+			logger.Info("Retryable error listing nodes when looking for node with IP. Continuing to poll", "internalIP", internalIP, "error", err)
+			return false, nil // continue polling
 		}
+		consecutiveErrors = 0
 		node := nodeByInternalIP(nodes, internalIP)
 		if node != nil {
 			foundNode = node
