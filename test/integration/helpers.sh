@@ -224,9 +224,52 @@ function wait::dbus-ready() {
   wait::path-exists /run/systemd/private
 }
 
+# run_in_background run a command in the background and wait for a specified period
+# If the command is still running after the wait period, assume it will not fail and continue
+# If the command has finished, check its exit status
+# Return 0 if the command finished successfully within the wait period, otherwise return the exit status
+function run_in_background() {
+    local command="$1"
+    local wait_time=${2:-1} # Default wait time is 1 second
+
+    # Run the command in the background
+    eval "$command &"
+    local pid=$!
+
+    # Wait for the specified period
+    sleep "$wait_time"
+
+    # Check if the process is still running
+    if kill -0 "$pid" 2>/dev/null; then
+        echo "Command [${command}] is still running, assuming it won't fail, continuing..."
+        return 0
+    else
+        # Process has finished; check its exit status
+        wait "$pid"
+        local status=$?
+        if [ $status -ne 0 ]; then
+            echo "Command [${command}] failed with exit status $status"
+            return $status
+        fi
+        echo "Command [${command}] finished successfully within the wait period"
+        return 0
+    fi
+}
+
 function mock::aws() {
   local CONFIG_PATH=${1:-/etc/aemm-default-config.json}
-  [ "${IMDS_MOCK_ONLY_CONFIGURE:-}" = "true" ] || imds-mock --config-file $CONFIG_PATH &
+  if [ "${IMDS_MOCK_ONLY_CONFIGURE:-}" != "true" ] ;then
+    if [ ! -f "$CONFIG_PATH" ]; then
+      echo "Config file $CONFIG_PATH does not exist"
+      exit 1
+    fi
+
+    if ! run_in_background "imds-mock --config-file $CONFIG_PATH" 1; then
+      echo "Setting up IMDS mock failed"
+      exit 1
+    fi
+  fi
+
   export AWS_EC2_METADATA_SERVICE_ENDPOINT=http://localhost:1338
   [ "${AWS_MOCK_ONLY_CONFIGURE:-}" = "true" ] || $HOME/.local/bin/moto_server -p5000 &
   export AWS_ACCESS_KEY_ID='testing'

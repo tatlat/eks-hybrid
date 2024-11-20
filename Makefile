@@ -123,7 +123,7 @@ CONVERSION_GEN ?= $(LOCALBIN)/conversion-gen
 CRD_REF_DOCS ?= $(LOCALBIN)/crd-ref-docs
 ENVTEST ?= $(LOCALBIN)/setup-envtest
 GOLANGCI_LINT_CONFIG ?= .github/workflows/golangci-lint.yml
-GOLANGCI_LINT := $(LOCALBIN)/golangci-lint
+GOLANGCI_LINT ?= $(LOCALBIN)/golangci-lint
 GINKGO ?= $(LOCALBIN)/ginkgo
 
 ## Tool Versions
@@ -172,6 +172,7 @@ $(GINKGO): $(LOCALBIN)
 update-deps:
 	$(GO) get $(shell $(GO) list -f '{{if not (or .Main .Indirect)}}{{.Path}}{{end}}' -mod=mod -m all) && $(GO) mod tidy
 
+golangci-lint: $(GOLANGCI_LINT) ## Download golangci-lint.
 $(GOLANGCI_LINT): $(LOCALBIN) $(GOLANGCI_LINT_CONFIG)
 	$(eval GOLANGCI_LINT_VERSION?=$(shell cat .github/workflows/golangci-lint.yml | yq e '.jobs.golangci.steps[] | select(.name == "golangci-lint") .with.version' -))
 	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(LOCALBIN) $(GOLANGCI_LINT_VERSION)
