@@ -21,4 +21,6 @@ set -o pipefail
 VERSION="$1"
 
 curl -s --retry 5 -o tigera-operator.yaml https://raw.githubusercontent.com/projectcalico/calico/$VERSION/manifests/tigera-operator.yaml
+sed -i -e 's/quay.io/381492195191.dkr.ecr.us-west-2.amazonaws.com/g' tigera-operator.yaml
+
 echo "$VERSION" > VERSION

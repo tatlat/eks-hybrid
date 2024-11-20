@@ -1,0 +1,33 @@
+affinity:
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: eks.amazonaws.com/compute-type
+          operator: In
+          values:
+          - hybrid
+operator:
+  image:
+    repository: "381492195191.dkr.ecr.us-west-2.amazonaws.com/cilium/operator"
+    tag: "v1.16.3"
+    imagePullPolicy: "IfNotPresent"
+    digest: "sha256:6e2925ef47a1c76e183c48f95d4ce0d34a1e5e848252f910476c3e11ce1ec94b"
+  replicas: 1
+  unmanagedPodWatcher:
+    restart: false
+ipam:
+  mode: cluster-pool
+envoy:
+  enabled: false
+image:
+  repository: "381492195191.dkr.ecr.us-west-2.amazonaws.com/cilium/cilium"
+  tag: "v1.16.3"
+  imagePullPolicy: "IfNotPresent"
+  digest: "sha256:62d2a09bbef840a46099ac4c69421c90f84f28d018d479749049011329aa7f28"
+preflight:
+  image:
+    repository: "381492195191.dkr.ecr.us-west-2.amazonaws.com/cilium/cilium"
+    tag: "v1.16.3"
+    imagePullPolicy: "IfNotPresent"
+    digest: "sha256:62d2a09bbef840a46099ac4c69421c90f84f28d018d479749049011329aa7f28"
