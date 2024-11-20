@@ -238,7 +238,8 @@ func (t *TestRunner) createEKSCluster(ctx context.Context, clusterName, kubernet
 		},
 		RoleArn: aws.String(t.Status.RoleArn),
 		Tags: map[string]*string{
-			"Name": aws.String(fmt.Sprintf("%s-%s", clusterName, kubernetesVersion)),
+			"Name":            aws.String(fmt.Sprintf("%s-%s", clusterName, kubernetesVersion)),
+			TestClusterTagKey: aws.String(clusterName),
 		},
 		AccessConfig: &eks.CreateAccessConfigRequest{
 			AuthenticationMode: aws.String("API_AND_CONFIG_MAP"),
