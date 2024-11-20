@@ -1,2 +1,3 @@
 # we don't want to constantly invalidate the build cache while we're writing a new test case
 cases/
+run.sh
