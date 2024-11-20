@@ -14,4 +14,4 @@ artifacts:
   files:
   - "_bin/**/*"
   - "buildspecs/*"
-  - "hack/run-e2e.sh"
+  - "hack/*"
