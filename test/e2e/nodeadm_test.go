@@ -105,13 +105,6 @@ func getCredentialProviderNames(providers []NodeadmCredentialsProvider) string {
 	return strings.Join(names, ", ")
 }
 
-func getTruncatedName(name string, limit int) string {
-	if len(name) > limit {
-		name = name[:limit]
-	}
-	return name
-}
-
 type peeredVPCTest struct {
 	aws         awsconfig.Config // TODO: move everything to aws sdk v2
 	awsSession  *session.Session
@@ -171,7 +164,7 @@ var _ = SynchronizedBeforeSuite(
 			clusterName:         cluster.clusterName,
 			clusterArn:          cluster.clusterArn,
 			credentialProviders: providerFilter,
-			stackName:           getTruncatedName(stackName, 60),
+			stackName:           GetTruncatedName(stackName, 60),
 			cfn:                 cfnClient,
 			iam:                 iamClient,
 		}
