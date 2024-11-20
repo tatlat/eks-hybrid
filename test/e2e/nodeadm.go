@@ -49,6 +49,7 @@ type NodeadmOS interface {
 type NodeadmCredentialsProvider interface {
 	Name() creds.CredentialProvider
 	NodeadmConfig(cluster *hybridCluster) (*api.NodeConfig, error)
+	VerifyUninstall(ctx context.Context, instanceId string) error
 }
 
 type SsmProvider struct {
@@ -88,6 +89,10 @@ func (s *SsmProvider) NodeadmConfig(cluster *hybridCluster) (*api.NodeConfig, er
 			},
 		},
 	}, nil
+}
+
+func (s *SsmProvider) VerifyUninstall(ctx context.Context, instanceId string) error {
+	return waitForManagedInstanceUnregistered(ctx, s.ssmClient, instanceId)
 }
 
 func parseS3URL(s3URL string) (bucket, key string, err error) {

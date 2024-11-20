@@ -368,6 +368,7 @@ var _ = Describe("Hybrid Nodes", func() {
 								nodeIPAddress: ec2.ipAddress,
 								logger:        test.logger,
 								ssm:           test.ssmClient,
+								provider:      provider,
 							}
 							Expect(uninstallNodeTest.Run(ctx)).To(Succeed(), "node should have been reset sucessfully")
 
@@ -436,6 +437,7 @@ type uninstallNodeTest struct {
 	ssm           *ssm.SSM
 	nodeIPAddress string
 	logger        logr.Logger
+	provider      NodeadmCredentialsProvider
 }
 
 func (u uninstallNodeTest) Run(ctx context.Context) error {
@@ -465,6 +467,12 @@ func (u uninstallNodeTest) Run(ctx context.Context) error {
 		return err
 	}
 	u.logger.Info("Node deleted successfully", "node", nodeName)
+
+	u.logger.Info("Waiting for node to be unregistered", "node", nodeName)
+	if err = u.provider.VerifyUninstall(ctx, nodeName); err != nil {
+		return nil
+	}
+	u.logger.Info("Node unregistered successfully", "node", nodeName)
 
 	return nil
 }
