@@ -36,11 +36,39 @@ type e2eCfnStackOutput struct {
 }
 
 func (e *e2eCfnStack) deploy(ctx context.Context, logger logr.Logger) (*e2eCfnStackOutput, error) {
+	if err := e.deployStack(ctx, logger); err != nil {
+		return nil, err
+	}
+
+	output, err := e.readStackOutput(ctx, logger)
+	if err != nil {
+		return nil, err
+	}
+
+	// We create the instance profile manually instead of as part of the CFN stack because it's faster.
+	// This sucks because of the complexity it adds both to create and delete, having to deal with
+	// partial creations where the instance profile might exist already and role might have been added or not.
+	// But it speeds up the test about 2.5 minutes, so it's worth it. For some reason, creating
+	// instance profiles from CFN
+	// is very slow: https://repost.aws/questions/QUoU5UybeUR2S2iYNEJiStiQ/cloudformation-provisioning-of-aws-iam-instanceprofile-takes-a-long-time
+	// I suspect this is because CFN has a hardcoded ~2.5 minutes wait after instance profile creation before
+	// considering it "created". Probably to avoid eventual consistency issues when using the instance profile in
+	// another resource immediately after. We have to deal with that problem ourselves now by retrying the ec2 instance
+	// creation on "invalid IAM instance profile" error.
+	output.InstanceProfileARN, err = e.createInstanceProfile(ctx, logger, output.SSMNodeRoleName)
+	if err != nil {
+		return nil, err
+	}
+
+	return output, nil
+}
+
+func (e *e2eCfnStack) deployStack(ctx context.Context, logger logr.Logger) error {
 	resp, err := e.cfn.DescribeStacksWithContext(ctx, &cloudformation.DescribeStacksInput{
 		StackName: aws.String(e.stackName),
 	})
 	if aerr, ok := err.(awserr.Error); ok && aerr.Code() != "ValidationError" {
-		return nil, fmt.Errorf("looking for hybrid nodes cfn stack: %w", err)
+		return fmt.Errorf("looking for hybrid nodes cfn stack: %w", err)
 	}
 	params := []*cloudformation.Parameter{
 		{
@@ -71,7 +99,7 @@ func (e *e2eCfnStack) deploy(ctx context.Context, logger logr.Logger) (*e2eCfnSt
 			},
 		})
 		if err != nil {
-			return nil, fmt.Errorf("creating hybrid nodes cfn stack: %w", err)
+			return fmt.Errorf("creating hybrid nodes cfn stack: %w", err)
 		}
 
 		logger.Info("Waiting for hybrid nodes stack to be created", "stackName", e.stackName)
@@ -79,7 +107,7 @@ func (e *e2eCfnStack) deploy(ctx context.Context, logger logr.Logger) (*e2eCfnSt
 			StackName: aws.String(e.stackName),
 		}, request.WithWaiterDelay(request.ConstantWaiterDelay(2*time.Second)))
 		if err != nil {
-			return nil, fmt.Errorf("waiting for hybrid nodes cfn stack: %w", err)
+			return fmt.Errorf("waiting for hybrid nodes cfn stack: %w", err)
 		}
 	} else {
 		logger.Info("Updating hybrid nodes stack", "stackName", e.stackName)
@@ -93,11 +121,11 @@ func (e *e2eCfnStack) deploy(ctx context.Context, logger logr.Logger) (*e2eCfnSt
 		})
 
 		if aerr, ok := err.(awserr.Error); err != nil && (!ok || aerr.Message() != "No updates are to be performed.") {
-			return nil, fmt.Errorf("updating hybrid nodes cfn stack: %w", err)
+			return fmt.Errorf("updating hybrid nodes cfn stack: %w", err)
 		} else if ok && aerr.Message() == "No updates are to be performed." {
 			logger.Info("No updates are to be performed for hybrid nodes stack", "stackName", e.stackName)
 			// Skip waiting for update completion since no update occurred
-			return e.readStackOutput(ctx, logger)
+			return nil
 		}
 
 		logger.Info("Waiting for hybrid nodes stack to be updated", "stackName", e.stackName)
@@ -105,31 +133,11 @@ func (e *e2eCfnStack) deploy(ctx context.Context, logger logr.Logger) (*e2eCfnSt
 			StackName: aws.String(e.stackName),
 		}, request.WithWaiterDelay(request.ConstantWaiterDelay(5*time.Second)))
 		if err != nil {
-			return nil, fmt.Errorf("waiting for hybrid nodes cfn stack: %w", err)
+			return fmt.Errorf("waiting for hybrid nodes cfn stack: %w", err)
 		}
 	}
 
-	output, err := e.readStackOutput(ctx, logger)
-	if err != nil {
-		return nil, err
-	}
-
-	// We create the instance profile manually instead of as part of the CFN stack because it's faster.
-	// This sucks because of the complexity it adds both to create and delete, having to deal with
-	// partial creations where the instance profile might exist already and role might have been added or not.
-	// But it speeds up the test about 2.5 minutes, so it's worth it. For some reason, creating
-	// instance profiles from CFN
-	// is very slow: https://repost.aws/questions/QUoU5UybeUR2S2iYNEJiStiQ/cloudformation-provisioning-of-aws-iam-instanceprofile-takes-a-long-time
-	// I suspect this is because CFN has a hardcoded ~2.5 minutes wait after instance profile creation before
-	// considering it "created". Probably to avoid eventual consistency issues when using the instance profile in
-	// another resource immediately after. We have to deal with that problem ourselves now by retrying the ec2 instance
-	// creation on "invalid IAM instance profile" error.
-	output.InstanceProfileARN, err = e.createInstanceProfile(ctx, logger, output.SSMNodeRoleName)
-	if err != nil {
-		return nil, err
-	}
-
-	return output, nil
+	return nil
 }
 
 func (s *e2eCfnStack) createInstanceProfile(ctx context.Context, logger logr.Logger, roleName string) (instanceProfileArn string, err error) {
