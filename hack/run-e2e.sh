@@ -19,6 +19,8 @@ set -o pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 
+source $REPO_ROOT/hack/common.sh
+
 CLUSTER_NAME="${1?Please specifiy the Cluster Name}"
 REGION="${2?Please specify the AWS region}"
 KUBERNETES_VERSION="${3?Please specify the Kubernetes version}"
@@ -48,10 +50,18 @@ spec:
     podCidr: 10.2.0.0/16
 EOF
 
+function cleanup(){
+  if [ -f $RESOURCES_YAML ]; then
+    retry $BIN_DIR/e2e-test cleanup -f $RESOURCES_YAML
+  fi
+  $REPO_ROOT/hack/e2e-cleanup.sh $CLUSTER_NAME
+}
+
+trap "cleanup" EXIT
+
 RESOURCES_YAML=$CONFIG_DIR/$CLUSTER_NAME-resources.yaml
 $BIN_DIR/e2e-test setup -s $CONFIG_DIR/e2e-setup-spec.yaml
 
-trap "$BIN_DIR/e2e-test cleanup -f $RESOURCES_YAML" EXIT
 mv /tmp/setup-resources-output.yaml $RESOURCES_YAML
 
 VPC_ID="$(yq -r '.status.hybridVpcID' $RESOURCES_YAML)"

@@ -20,6 +20,8 @@ import (
 	sigyaml "sigs.k8s.io/yaml"
 )
 
+const TestClusterTagKey = "Nodeadm-E2E-Tests-Cluster"
+
 type TestRunner struct {
 	Session *session.Session   `yaml:"-"`
 	Spec    TestResourceSpec   `yaml:"spec"`
@@ -109,6 +111,7 @@ func (t *TestRunner) CreateResources(ctx context.Context) error {
 
 	// Create EKS cluster VPC
 	clusterVpcParam := vpcSubnetParams{
+		clusterName:       t.Spec.ClusterName,
 		vpcName:           fmt.Sprintf("%s-vpc", t.Spec.ClusterName),
 		vpcCidr:           t.Spec.ClusterNetwork.VpcCidr,
 		publicSubnetCidr:  t.Spec.ClusterNetwork.PublicSubnetCidr,
@@ -149,6 +152,7 @@ func (t *TestRunner) CreateResources(ctx context.Context) error {
 
 	// Create hybrid nodes VPC
 	hybridNodesVpcParam := vpcSubnetParams{
+		clusterName:       t.Spec.ClusterName,
 		vpcName:           fmt.Sprintf("%s-hybrid-node-vpc", t.Spec.ClusterName),
 		vpcCidr:           t.Spec.HybridNetwork.VpcCidr,
 		publicSubnetCidr:  t.Spec.HybridNetwork.PublicSubnetCidr,

@@ -30,6 +30,10 @@ func (t *TestRunner) createEKSClusterRole() error {
 	_, err := svc.CreateRole(&iam.CreateRoleInput{
 		RoleName:                 aws.String(roleName),
 		AssumeRolePolicyDocument: aws.String(assumeRolePolicyDocument),
+		Tags: []*iam.Tag{{
+			Key:   aws.String(TestClusterTagKey),
+			Value: aws.String(t.Spec.ClusterName),
+		}},
 	})
 	if err != nil && !isErrCode(err, iam.ErrCodeEntityAlreadyExistsException) {
 		return fmt.Errorf("failed to create role: %w", err)

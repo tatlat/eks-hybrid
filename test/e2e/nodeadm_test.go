@@ -328,6 +328,7 @@ var _ = Describe("Hybrid Nodes", func() {
 							Expect(err).NotTo(HaveOccurred(), "expected to successfully retrieve ami id")
 
 							ec2Input := ec2InstanceConfig{
+								clusterName:        test.cluster.clusterName,
 								instanceName:       instanceName,
 								amiID:              amiId,
 								instanceType:       os.InstanceType(),

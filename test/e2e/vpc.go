@@ -16,6 +16,7 @@ type vpcConfig struct {
 
 // vpcSubnetParams holds information about the VPC params
 type vpcSubnetParams struct {
+	clusterName       string
 	vpcName           string
 	vpcCidr           string
 	publicSubnetCidr  string
@@ -29,7 +30,7 @@ func (t *TestRunner) createVPCResources(client *ec2.EC2, vpcSubnetParams vpcSubn
 		return nil, fmt.Errorf("failed to create VPC: %v", err)
 	}
 
-	publicSubnetId, err := createSubnet(client, vpcId, vpcSubnetParams.publicSubnetCidr, t.Spec.ClusterRegion+"a", vpcSubnetParams.vpcName+"-public-subnet")
+	publicSubnetId, err := createSubnet(client, vpcId, vpcSubnetParams.publicSubnetCidr, t.Spec.ClusterRegion+"a", vpcSubnetParams.vpcName+"-public-subnet", vpcSubnetParams.clusterName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create public subnet: %v", err)
 	}
@@ -44,7 +45,7 @@ func (t *TestRunner) createVPCResources(client *ec2.EC2, vpcSubnetParams vpcSubn
 		return nil, fmt.Errorf("failed to create route table: %v", err)
 	}
 
-	igwId, err := createInternetGateway(client, vpcId)
+	igwId, err := createInternetGateway(client, vpcId, vpcSubnetParams.clusterName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Internet Gateway: %v", err)
 	}
@@ -59,7 +60,7 @@ func (t *TestRunner) createVPCResources(client *ec2.EC2, vpcSubnetParams vpcSubn
 		return nil, fmt.Errorf("failed to associate route table with public subnet: %v", err)
 	}
 
-	privateSubnetId, err := createSubnet(client, vpcId, vpcSubnetParams.privateSubnetCidr, t.Spec.ClusterRegion+"b", vpcSubnetParams.vpcName+"-private-subnet")
+	privateSubnetId, err := createSubnet(client, vpcId, vpcSubnetParams.privateSubnetCidr, t.Spec.ClusterRegion+"b", vpcSubnetParams.vpcName+"-private-subnet", vpcSubnetParams.clusterName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create private subnet: %v", err)
 	}
@@ -109,6 +110,10 @@ func createVPC(client *ec2.EC2, vpcParam vpcSubnetParams) (string, error) {
 						Key:   aws.String("Name"),
 						Value: aws.String(vpcParam.vpcName),
 					},
+					{
+						Key:   aws.String(TestClusterTagKey),
+						Value: aws.String(vpcParam.clusterName),
+					},
 				},
 			},
 		},
@@ -123,7 +128,7 @@ func createVPC(client *ec2.EC2, vpcParam vpcSubnetParams) (string, error) {
 	return vpcId, nil
 }
 
-func createSubnet(client *ec2.EC2, vpcID, subnetCidr, az, tagName string) (subnetID string, err error) {
+func createSubnet(client *ec2.EC2, vpcID, subnetCidr, az, tagName string, clusterName string) (subnetID string, err error) {
 	subnet, err := client.CreateSubnet(&ec2.CreateSubnetInput{
 		VpcId:            aws.String(vpcID),
 		CidrBlock:        aws.String(subnetCidr),
@@ -142,6 +147,10 @@ func createSubnet(client *ec2.EC2, vpcID, subnetCidr, az, tagName string) (subne
 				Key:   aws.String("Name"),
 				Value: aws.String(tagName),
 			},
+			{
+				Key:   aws.String(TestClusterTagKey),
+				Value: aws.String(clusterName),
+			},
 		},
 	})
 	if err != nil {
@@ -150,8 +159,20 @@ func createSubnet(client *ec2.EC2, vpcID, subnetCidr, az, tagName string) (subne
 	return subnetId, nil
 }
 
-func createInternetGateway(client *ec2.EC2, vpcId string) (string, error) {
-	igwOutput, err := client.CreateInternetGateway(&ec2.CreateInternetGatewayInput{})
+func createInternetGateway(client *ec2.EC2, vpcId string, clusterName string) (string, error) {
+	igwOutput, err := client.CreateInternetGateway(&ec2.CreateInternetGatewayInput{
+		TagSpecifications: []*ec2.TagSpecification{
+			{
+				ResourceType: aws.String("internet-gateway"),
+				Tags: []*ec2.Tag{
+					{
+						Key:   aws.String(TestClusterTagKey),
+						Value: aws.String(clusterName),
+					},
+				},
+			},
+		},
+	})
 	if err != nil {
 		return "", fmt.Errorf("failed to create Internet Gateway: %v", err)
 	}
@@ -263,6 +284,17 @@ func (t *TestRunner) createVPCPeering() (string, error) {
 	result, err := svc.CreateVpcPeeringConnection(&ec2.CreateVpcPeeringConnectionInput{
 		VpcId:     aws.String(t.Status.ClusterVpcID),
 		PeerVpcId: aws.String(t.Status.HybridVpcID),
+		TagSpecifications: []*ec2.TagSpecification{
+			{
+				ResourceType: aws.String("vpc-peering-connection"),
+				Tags: []*ec2.Tag{
+					{
+						Key:   aws.String(TestClusterTagKey),
+						Value: aws.String(t.Spec.ClusterName),
+					},
+				},
+			},
+		},
 	})
 	if err != nil {
 		return "", fmt.Errorf("failed to create VPC peering connection: %v", err)

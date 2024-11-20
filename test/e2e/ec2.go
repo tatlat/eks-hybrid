@@ -21,6 +21,7 @@ import (
 
 // instanceConfig holds the configuration for the EC2 instance.
 type ec2InstanceConfig struct {
+	clusterName        string
 	instanceName       string
 	amiID              string
 	instanceType       string
@@ -101,6 +102,10 @@ func (e *ec2InstanceConfig) create(ctx context.Context, ec2Client *ec2.Client, s
 					{
 						Key:   aws.String("Name"),
 						Value: aws.String(e.instanceName),
+					},
+					{
+						Key:   aws.String(TestClusterTagKey),
+						Value: aws.String(e.clusterName),
 					},
 				},
 			},
