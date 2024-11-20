@@ -29,10 +29,10 @@ variable "credential_provider" {
   }
 }
 
-variable "nodeadm_link" {
+variable "nodeadm_arch" {
   type        = string
-  default     = "https://hybrid-test-endpoint.s3.us-west-2.amazonaws.com/nodeadm"
-  description = "Temporary nodeadm download link simulating a publicly available endpoint."
+  default     = "amd"
+  description = "Architecture for nodeadm install. Choose 'amd' or 'arm'. Default is 'amd'."
 }
 
 variable "aws_profile" {
@@ -239,6 +239,7 @@ locals {
   qemu_format = var.format
   iso_url = var.iso_url
   iso_checksum = var.iso_checksum
+  nodeadm_link = "https://hybrid-assets.eks.amazonaws.com/latest/bin/linux/${var.nodeadm_arch}64/nodeadm"
 }
 
 ######################
@@ -736,7 +737,7 @@ build {
       "sudo apt-get update -y",
       "sudo apt-get install -y curl",
       "sudo apt update",
-      "curl '${var.nodeadm_link}' -o nodeadm",
+      "curl '${local.nodeadm_link}' -o nodeadm",
       "chmod +x nodeadm",
       "sudo ./nodeadm install ${local.k8s_release} --credential-provider ${local.auth_value}",
     ]
@@ -748,7 +749,7 @@ build {
     environment_vars = [
       "rhsm_username=${var.rhsm_username}",
       "rhsm_password=${var.rhsm_password}",
-      "nodeadm_link=${var.nodeadm_link}",
+      "nodeadm_link=${local.nodeadm_link}",
       "auth_value=${local.auth_value}",
       "rhel_version=${var.rhel_version}",
       "k8s_version=${var.k8s_version}"
