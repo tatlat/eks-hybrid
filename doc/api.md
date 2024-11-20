@@ -46,6 +46,7 @@ _Appears in:_
 | Field | Description |
 | --- | --- |
 | `nodeName` _string_ | NodeName is the name the node will adopt. |
+| `enableCredentialsFile` _boolean_ | EnableCredentialsFile enables a shared credentials file on the host at /eks-hybrid/.aws/credentials For SSM, this means that nodeadm will not create symlink from `/root/.aws/credentials` to `/eks-hybrid/.aws/credentials`. For IAM Roles Anywhere, this means that nodeadm will not set up a systemd service to write and refresh the credentials to `/eks-hybrid/.aws/credentials`. |
 | `iamRolesAnywhere` _[IAMRolesAnywhere](#iamrolesanywhere)_ | IAMRolesAnywhere includes IAM Roles Anywhere specific configuration and is mutually exclusive with SSM. |
 | `ssm` _[SSM](#ssm)_ | SSM includes Systems Manager specific configuration and is mutually exclusive with IAMRolesAnywhere. |
 

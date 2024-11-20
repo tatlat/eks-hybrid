@@ -1,6 +1,6 @@
 module github.com/aws/eks-hybrid
 
-go 1.21
+go 1.23
 
 require (
 	github.com/aws/aws-sdk-go v1.55.5
@@ -15,11 +15,9 @@ require (
 	github.com/coreos/go-systemd/v22 v22.5.0
 	github.com/go-ini/ini v1.67.0
 	github.com/go-logr/zapr v1.3.0
-	github.com/golang/mock v1.6.0
 	github.com/integrii/flaggy v1.5.2
 	github.com/onsi/ginkgo/v2 v2.19.0
 	github.com/onsi/gomega v1.33.1
-	github.com/pbnjay/memory v0.0.0-20210728143218-7b4eea64cf58
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.9.0
 	github.com/tredoe/osutil v1.5.0
@@ -97,7 +95,7 @@ require (
 	github.com/spf13/pflag v1.0.5 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/net v0.26.0 // indirect
-	golang.org/x/sys v0.23.0
+	golang.org/x/sys v0.23.0 // indirect
 	golang.org/x/text v0.17.0 // indirect
 	google.golang.org/protobuf v1.33.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect

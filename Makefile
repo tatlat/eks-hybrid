@@ -49,7 +49,7 @@ generate: generate-code generate-doc ## Generate code and documentation.
 .PHONY: generate-code
 generate-code: controller-gen conversion-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
 	$(CONTROLLER_GEN) object paths="./..."
-	$(CONVERSION_GEN) --input-dirs="./internal/api/bridge" --output-file-base=zz_generated.conversion --output-base="./" --go-header-file=/dev/null -v0
+	$(CONVERSION_GEN) --extra-dirs="./internal/api/bridge" --go-header-file=/dev/null -v0
 
 .PHONY: generate-doc
 generate-doc: crd-ref-docs
@@ -128,8 +128,8 @@ GINKGO ?= $(LOCALBIN)/ginkgo
 
 ## Tool Versions
 KUSTOMIZE_VERSION ?= v5.0.1
-CONTROLLER_TOOLS_VERSION ?= v0.12.0
-CODE_GENERATOR_VERSION ?= v0.28.1
+CONTROLLER_TOOLS_VERSION ?= v0.16.3
+CODE_GENERATOR_VERSION ?= v0.30.6
 CRD_REF_DOCS_VERSION ?= cf959ab94ea543cb8efd25dc35081880b7ca6a81
 GINKGO_VERSION ?= v2.19.0
 
