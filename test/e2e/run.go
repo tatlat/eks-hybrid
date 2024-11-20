@@ -218,9 +218,9 @@ func (t *TestRunner) CreateResources(ctx context.Context) error {
 	}
 
 	clientConfig, err := clientcmd.BuildConfigFromFlags("", kubeconfigPath(t.Spec.ClusterName))
-    if err != nil {
-        return fmt.Errorf("loading kubeconfig: %v", err)
-    }
+	if err != nil {
+		return fmt.Errorf("loading kubeconfig: %v", err)
+	}
 
 	k8sClient, err := kubernetes.NewForConfig(clientConfig)
 	if err != nil {
@@ -315,4 +315,11 @@ func (t *TestRunner) saveSetupConfigAsYAML(outputFile string) error {
 // replaceDotsWithDashes replaces dots in the Kubernetes version with dashes
 func replaceDotsWithDashes(version string) string {
 	return strings.Replace(version, ".", "-", -1)
+}
+
+func GetTruncatedName(name string, limit int) string {
+	if len(name) > limit {
+		name = name[:limit]
+	}
+	return name
 }

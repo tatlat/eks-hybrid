@@ -88,5 +88,6 @@ func (t *TestRunner) deleteIamRole() error {
 }
 
 func getRoleName(name string) string {
-	return fmt.Sprintf("%s-hybrid-node", name)
+	roleName := fmt.Sprintf("%s-hybrid-role", name)
+	return GetTruncatedName(roleName, 64)
 }
