@@ -5,10 +5,17 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"runtime"
 	"time"
 
 	"github.com/pkg/errors"
+
+	"github.com/aws/eks-hybrid/cmd/nodeadm/version"
 )
+
+const userAgentHeader = "User-Agent"
+
+var userAgent = fmt.Sprintf("nodeadm/%s (%s/%s)", version.GitVersion, runtime.GOOS, runtime.GOARCH)
 
 func GetHttpFile(ctx context.Context, uri string) ([]byte, error) {
 	reader, err := GetHttpFileReader(ctx, uri)
@@ -30,6 +37,7 @@ func GetHttpFileReader(ctx context.Context, uri string) (io.ReadCloser, error) {
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed creating request from url: %s", uri)
 	}
+	request.Header.Add(userAgentHeader, userAgent)
 
 	httpRetryClient := newRetryableHttpClient(2*time.Second, 3)
 	resp, err := httpRetryClient.Do(request)
