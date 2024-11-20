@@ -22,7 +22,7 @@ Resources:
     Condition: CreateSSMRole
     Type: AWS::IAM::Role
     Properties: 
-      RoleName: !Sub "HybridNodesIAMRoleSSM-${AWS::StackName}"
+      RoleName: !Sub "${AWS::StackName}-ssm"
       AssumeRolePolicyDocument: 
         Version: '2012-10-17'
         Statement: 
@@ -64,13 +64,13 @@ Resources:
         - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryPullOnly
       Tags: 
         - Key: Name
-          Value: !Sub '${AWS::StackName}-ssm-role'
+          Value: !Sub '${AWS::StackName}'
 
   # Create IAM Role for EC2
   EC2Role:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub "HybridNodesEC2Role-${AWS::StackName}"
+      RoleName: !Sub "${AWS::StackName}-ec2"
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
