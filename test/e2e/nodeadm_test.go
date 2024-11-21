@@ -449,7 +449,7 @@ func (t joinNodeTest) Run(ctx context.Context) error {
 
 	t.logger.Info("Creating a test pod on the hybrid node...")
 	podName := getNginxPodName(nodeName)
-	if err = createNginxPodInNode(ctx, t.k8s, nodeName); err != nil {
+	if err = createNginxPodInNode(ctx, t.k8s, nodeName, t.logger); err != nil {
 		return err
 	}
 	t.logger.Info(fmt.Sprintf("Pod %s created and running on node %s", podName, nodeName))
