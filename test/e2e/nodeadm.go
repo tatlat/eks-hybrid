@@ -61,11 +61,22 @@ type NodeadmOS interface {
 
 type NodeadmCredentialsProvider interface {
 	Name() creds.CredentialProvider
-	GetNodeName() string
-	NodeadmConfig(cluster *hybridCluster) (*api.NodeConfig, error)
+	NodeadmConfig(node NodeSpec) (*api.NodeConfig, error)
 	VerifyUninstall(ctx context.Context, instanceId string) error
 	InstanceID(node HybridNode) string
-	FilesForNode() ([]File, error)
+	FilesForNode(spec NodeSpec) ([]File, error)
+}
+
+// NodeSpec is a specification for a node.
+type NodeSpec struct {
+	Cluster  *HybridCluster
+	OS       CredsOS
+	Provider NodeadmCredentialsProvider
+}
+
+// CredsOS is the Node OS.
+type CredsOS interface {
+	Name() string
 }
 
 type SsmProvider struct {
@@ -82,15 +93,11 @@ func (s *SsmProvider) Name() creds.CredentialProvider {
 	return creds.SsmCredentialProvider
 }
 
-func (s *SsmProvider) GetNodeName() string {
-	return ""
-}
-
 func (s *SsmProvider) InstanceID(node HybridNode) string {
 	return node.node.Name
 }
 
-func (s *SsmProvider) NodeadmConfig(cluster *hybridCluster) (*api.NodeConfig, error) {
+func (s *SsmProvider) NodeadmConfig(node NodeSpec) (*api.NodeConfig, error) {
 	ssmActivationDetails, err := createSSMActivation(s.ssmClient, s.role, ssmActivationName)
 	if err != nil {
 		return nil, err
@@ -102,8 +109,8 @@ func (s *SsmProvider) NodeadmConfig(cluster *hybridCluster) (*api.NodeConfig, er
 		},
 		Spec: api.NodeConfigSpec{
 			Cluster: api.ClusterDetails{
-				Name:   cluster.clusterName,
-				Region: cluster.clusterRegion,
+				Name:   node.Cluster.clusterName,
+				Region: node.Cluster.clusterRegion,
 			},
 			Hybrid: &api.HybridOptions{
 				SSM: &api.SSM{
@@ -119,12 +126,11 @@ func (s *SsmProvider) VerifyUninstall(ctx context.Context, instanceId string) er
 	return waitForManagedInstanceUnregistered(ctx, s.ssmClient, instanceId)
 }
 
-func (s *SsmProvider) FilesForNode() ([]File, error) {
+func (s *SsmProvider) FilesForNode(_ NodeSpec) ([]File, error) {
 	return nil, nil
 }
 
 type IamRolesAnywhereProvider struct {
-	nodeName       string
 	trustAnchorARN string
 	profileARN     string
 	roleARN        string
@@ -135,15 +141,11 @@ func (i *IamRolesAnywhereProvider) Name() creds.CredentialProvider {
 	return creds.IamRolesAnywhereCredentialProvider
 }
 
-func (i *IamRolesAnywhereProvider) GetNodeName() string {
-	return i.nodeName
-}
-
 func (i *IamRolesAnywhereProvider) InstanceID(node HybridNode) string {
 	return node.ec2Instance.instanceID
 }
 
-func (i *IamRolesAnywhereProvider) NodeadmConfig(cluster *hybridCluster) (*api.NodeConfig, error) {
+func (i *IamRolesAnywhereProvider) NodeadmConfig(spec NodeSpec) (*api.NodeConfig, error) {
 	return &api.NodeConfig{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "node.eks.aws/v1alpha1",
@@ -151,11 +153,11 @@ func (i *IamRolesAnywhereProvider) NodeadmConfig(cluster *hybridCluster) (*api.N
 		},
 		Spec: api.NodeConfigSpec{
 			Cluster: api.ClusterDetails{
-				Name:   cluster.clusterName,
-				Region: cluster.clusterRegion,
+				Name:   spec.Cluster.clusterName,
+				Region: spec.Cluster.clusterRegion,
 			},
 			Hybrid: &api.HybridOptions{
-				NodeName: i.nodeName,
+				NodeName: i.nodeName(spec),
 				IAMRolesAnywhere: &api.IAMRolesAnywhere{
 					RoleARN:        i.roleARN,
 					TrustAnchorARN: i.trustAnchorARN,
@@ -166,12 +168,16 @@ func (i *IamRolesAnywhereProvider) NodeadmConfig(cluster *hybridCluster) (*api.N
 	}, nil
 }
 
+func (i *IamRolesAnywhereProvider) nodeName(node NodeSpec) string {
+	return "node-" + string(i.Name()) + "-" + node.OS.Name()
+}
+
 func (i *IamRolesAnywhereProvider) VerifyUninstall(ctx context.Context, instanceId string) error {
 	return nil
 }
 
-func (i *IamRolesAnywhereProvider) FilesForNode() ([]File, error) {
-	nodeCertificate, err := createCertificateForNode(i.ca.Cert, i.ca.Key, i.nodeName)
+func (i *IamRolesAnywhereProvider) FilesForNode(spec NodeSpec) ([]File, error) {
+	nodeCertificate, err := createCertificateForNode(i.ca.Cert, i.ca.Key, i.nodeName(spec))
 	if err != nil {
 		return nil, err
 	}

@@ -25,7 +25,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 	"sigs.k8s.io/yaml"
@@ -122,7 +121,7 @@ type peeredVPCTest struct {
 
 	logger logr.Logger
 
-	cluster  *hybridCluster
+	cluster  *HybridCluster
 	stackOut *e2eCfnStackOutput
 
 	nodeadmURLs NodeadmURLs
@@ -288,7 +287,6 @@ var _ = Describe("Hybrid Nodes", func() {
 					p.ssmClient = test.ssmClient
 					p.role = test.stackOut.SSMNodeRoleName
 				case *IamRolesAnywhereProvider:
-					p.nodeName = fmt.Sprintf("%s-%s", p.Name(), strings.ToLower(rand.String(10)))
 					p.roleARN = test.stackOut.IRANodeRoleARN
 					p.profileARN = test.stackOut.IRAProfileARN
 					p.trustAnchorARN = test.stackOut.IRATrustAnchorARN
@@ -316,16 +314,22 @@ var _ = Describe("Hybrid Nodes", func() {
 							Expect(os).NotTo(BeNil())
 							Expect(provider).NotTo(BeNil())
 
+							nodeSpec := NodeSpec{
+								OS:       os,
+								Cluster:  test.cluster,
+								Provider: provider,
+							}
+
 							instanceName := fmt.Sprintf("EKSHybridCI-%s-%s-%s",
 								removeSpecialChars(test.cluster.clusterName),
 								removeSpecialChars(os.Name()),
 								removeSpecialChars(string(provider.Name())),
 							)
 
-							files, err := provider.FilesForNode()
+							files, err := provider.FilesForNode(nodeSpec)
 							Expect(err).NotTo(HaveOccurred())
 
-							nodeadmConfig, err := provider.NodeadmConfig(test.cluster)
+							nodeadmConfig, err := provider.NodeadmConfig(nodeSpec)
 							Expect(err).NotTo(HaveOccurred(), "expected to build nodeconfig")
 
 							nodeadmConfigYaml, err := yaml.Marshal(&nodeadmConfig)
