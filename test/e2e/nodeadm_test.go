@@ -14,6 +14,7 @@ import (
 
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	ec2v2 "github.com/aws/aws-sdk-go-v2/service/ec2"
+	ssmv2 "github.com/aws/aws-sdk-go-v2/service/ssm"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/cloudformation"
 	"github.com/aws/aws-sdk-go/service/ec2"
@@ -26,6 +27,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/client-go/kubernetes"
+	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"sigs.k8s.io/yaml"
 )
@@ -109,10 +111,13 @@ type peeredVPCTest struct {
 	ec2Client   *ec2.EC2
 	ec2ClientV2 *ec2v2.Client
 	ssmClient   *ssm.SSM
-	cfnClient   *cloudformation.CloudFormation
-	k8sClient   *kubernetes.Clientset
-	s3Client    *s3.S3
-	iamClient   *iam.IAM
+	ssmClientV2 *ssmv2.Client
+
+	cfnClient       *cloudformation.CloudFormation
+	k8sClient       *kubernetes.Clientset
+	k8sClientConfig *restclient.Config
+	s3Client        *s3.S3
+	iamClient       *iam.IAM
 
 	logger logr.Logger
 
@@ -256,6 +261,7 @@ var _ = Describe("Hybrid Nodes", func() {
 			test.ec2Client = ec2.New(awsSession)
 			test.ec2ClientV2 = ec2v2.NewFromConfig(aws) // TODO: move everything else to ec2 sdk v2
 			test.ssmClient = ssm.New(awsSession)
+			test.ssmClientV2 = ssmv2.NewFromConfig(aws)
 			test.s3Client = s3.New(awsSession)
 			test.cfnClient = cloudformation.New(awsSession)
 			test.iamClient = iam.New(awsSession)
@@ -280,6 +286,7 @@ var _ = Describe("Hybrid Nodes", func() {
 				switch p := provider.(type) {
 				case *SsmProvider:
 					p.ssmClient = test.ssmClient
+					p.ssmClientV2 = test.ssmClientV2
 					p.role = test.stackOut.SSMNodeRoleName
 				case *IamRolesAnywhereProvider:
 					p.roleARN = test.stackOut.IRANodeRoleARN
@@ -324,7 +331,7 @@ var _ = Describe("Hybrid Nodes", func() {
 							files, err := provider.FilesForNode(nodeSpec)
 							Expect(err).NotTo(HaveOccurred())
 
-							nodeadmConfig, err := provider.NodeadmConfig(nodeSpec)
+							nodeadmConfig, err := provider.NodeadmConfig(ctx, nodeSpec)
 							Expect(err).NotTo(HaveOccurred(), "expected to build nodeconfig")
 
 							nodeadmConfigYaml, err := yaml.Marshal(&nodeadmConfig)

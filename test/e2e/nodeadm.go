@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	ssmv2 "github.com/aws/aws-sdk-go-v2/service/ssm"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
@@ -64,7 +65,7 @@ type NodeadmOS interface {
 
 type NodeadmCredentialsProvider interface {
 	Name() creds.CredentialProvider
-	NodeadmConfig(node NodeSpec) (*api.NodeConfig, error)
+	NodeadmConfig(ctx context.Context, node NodeSpec) (*api.NodeConfig, error)
 	VerifyUninstall(ctx context.Context, instanceId string) error
 	InstanceID(node HybridEC2dNode) string
 	FilesForNode(spec NodeSpec) ([]File, error)
@@ -83,8 +84,9 @@ type CredsOS interface {
 }
 
 type SsmProvider struct {
-	ssmClient *ssm.SSM
-	role      string
+	ssmClient   *ssm.SSM
+	ssmClientV2 *ssmv2.Client
+	role        string
 }
 
 type NodeadmURLs struct {
@@ -100,8 +102,8 @@ func (s *SsmProvider) InstanceID(node HybridEC2dNode) string {
 	return node.node.Name
 }
 
-func (s *SsmProvider) NodeadmConfig(node NodeSpec) (*api.NodeConfig, error) {
-	ssmActivationDetails, err := createSSMActivation(s.ssmClient, s.role, ssmActivationName)
+func (s *SsmProvider) NodeadmConfig(ctx context.Context, node NodeSpec) (*api.NodeConfig, error) {
+	ssmActivationDetails, err := createSSMActivation(ctx, s.ssmClientV2, s.role, ssmActivationName)
 	if err != nil {
 		return nil, err
 	}
@@ -148,7 +150,7 @@ func (i *IamRolesAnywhereProvider) InstanceID(node HybridEC2dNode) string {
 	return node.ec2Instance.instanceID
 }
 
-func (i *IamRolesAnywhereProvider) NodeadmConfig(spec NodeSpec) (*api.NodeConfig, error) {
+func (i *IamRolesAnywhereProvider) NodeadmConfig(ctx context.Context, spec NodeSpec) (*api.NodeConfig, error) {
 	return &api.NodeConfig{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "node.eks.aws/v1alpha1",

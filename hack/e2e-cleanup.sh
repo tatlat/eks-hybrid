@@ -57,7 +57,7 @@ function is_eks_cluster_deleted(){
 
     # +1 means to return 1 if the key exists, otherwise return nothing
     if [ ! ${CLUSTER_STATUSES[$name]+1} ]; then
-        cluster_status="$(command aws eks describe-cluster --name $name --query 'cluster.status' --output text)"
+        cluster_status="$(command aws eks describe-cluster --name $name --query 'cluster.status' --output text 2>/dev/null)"
         if [ $? != 0 ]; then
             # 1 = false
             CLUSTER_STATUSES[$name]="DELETING"
@@ -72,6 +72,15 @@ function is_eks_cluster_deleted(){
         # 1 = false
         return 1
     fi
+}
+
+function role_cluster_name_tag(){
+    role="$1"
+    cluster_name="$(command aws iam list-role-tags --query "Tags[*]" --role-name $role --output json 2>/dev/null | jq -r "map(select(.Key == \"$TEST_CLUSTER_TAG_KEY\"))[0].Value")"
+    if [ $? != 0 ]; then
+        cluster_name=""
+    fi
+    echo "$cluster_name"
 }
 
 function delete_cluster(){
@@ -148,7 +157,7 @@ fi
 # Loop through role names and get tags
 for role in $(aws iam list-roles --query 'Roles[*].RoleName' --output text); do
     if [[ $role == *-hybrid-node ]] || [[ $role == nodeadm-e2e-tests* ]]; then
-        cluster_name="$(aws iam list-role-tags --query "Tags[*]" --role-name $role --output json | jq -r "map(select(.Key == \"$TEST_CLUSTER_TAG_KEY\"))[0].Value")"
+        cluster_name="$(role_cluster_name_tag $role)"
         if [ -n "$CLUSTER_NAME" ] && [ "$cluster_name" != "$CLUSTER_NAME" ]; then
             continue
         fi
