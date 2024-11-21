@@ -29,6 +29,7 @@ type rhelCloudInitData struct {
 	RhelUsername      string
 	RhelPassword      string
 	RootPasswordHash  string
+	Files             []File
 }
 
 type RedHat8 struct {
@@ -82,6 +83,7 @@ func (r RedHat8) BuildUserData(UserDataInput UserDataInput) ([]byte, error) {
 		RhelUsername:      r.RhelUsername,
 		RhelPassword:      r.RhelPassword,
 		RootPasswordHash:  UserDataInput.RootPasswordHash,
+		Files:             UserDataInput.Files,
 	}
 
 	if r.Architecture == arm64Arch {
@@ -112,6 +114,7 @@ func NewRedHat9ARM(rhelUsername string, rhelPassword string) *RedHat9 {
 	rh9.Architecture = arm64Arch
 	return rh9
 }
+
 func (r RedHat9) Name() string {
 	if r.Architecture == amd64Arch {
 		return "rhel9-amd64"
@@ -141,6 +144,7 @@ func (r RedHat9) BuildUserData(UserDataInput UserDataInput) ([]byte, error) {
 		RhelUsername:      r.RhelUsername,
 		RhelPassword:      r.RhelPassword,
 		RootPasswordHash:  UserDataInput.RootPasswordHash,
+		Files:             UserDataInput.Files,
 	}
 
 	if r.Architecture == arm64Arch {

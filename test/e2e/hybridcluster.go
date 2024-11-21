@@ -12,7 +12,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/eks"
 )
 
-type hybridCluster struct {
+type HybridCluster struct {
 	clusterName       string
 	clusterArn        string
 	clusterRegion     string
@@ -80,8 +80,8 @@ func getDefaultSecurityGroup(ctx context.Context, client *ec2.EC2, vpcID string)
 	return *result.SecurityGroups[0].GroupId, nil
 }
 
-func getHybridClusterDetails(ctx context.Context, eksClient *eks.EKS, ec2Client *ec2.EC2, clusterName, clusterRegion, hybridVpcID string) (*hybridCluster, error) {
-	cluster := &hybridCluster{
+func getHybridClusterDetails(ctx context.Context, eksClient *eks.EKS, ec2Client *ec2.EC2, clusterName, clusterRegion, hybridVpcID string) (*HybridCluster, error) {
+	cluster := &HybridCluster{
 		clusterName:   clusterName,
 		clusterRegion: clusterRegion,
 	}

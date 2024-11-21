@@ -57,6 +57,11 @@ write_files:
   - content: |
 {{ .NodeadmConfig | indent 6 }}
     path: nodeadm-config.yaml
+{{ range $file := .Files }}
+  - content: |
+{{ $file.Content | indent 6 }}
+    path: {{ $file.Path }}
+{{- end }}
 runcmd:
   - systemctl restart apparmor.service
   - echo "Downloading nodeadm binary"

@@ -22,12 +22,15 @@ import (
 	"github.com/tredoe/osutil/user/crypt"
 	"github.com/tredoe/osutil/user/crypt/sha512_crypt"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-const ssmActivationName = "eks-hybrid-ssm-provider"
-const amd64Arch = "x86_64"
-const arm64Arch = "arm64"
+const (
+	ssmActivationName = "eks-hybrid-ssm-provider"
+	amd64Arch         = "x86_64"
+	arm64Arch         = "arm64"
+)
 
 type UserDataInput struct {
 	CredsProviderName string
@@ -36,6 +39,19 @@ type UserDataInput struct {
 	NodeadmConfigYaml string
 	Provider          string
 	RootPasswordHash  string
+	Files             []File
+}
+
+// HybridEC2dNode represents a Hybrid Node backed by an EC2 instance.
+type HybridEC2dNode struct {
+	ec2Instance ec2Instance
+	node        corev1.Node
+}
+
+// File represents a file in disk.
+type File struct {
+	Content string
+	Path    string
 }
 
 // NodeadmOS defines an interface for operating system-specific behavior.
@@ -48,8 +64,22 @@ type NodeadmOS interface {
 
 type NodeadmCredentialsProvider interface {
 	Name() creds.CredentialProvider
-	NodeadmConfig(cluster *hybridCluster) (*api.NodeConfig, error)
+	NodeadmConfig(node NodeSpec) (*api.NodeConfig, error)
 	VerifyUninstall(ctx context.Context, instanceId string) error
+	InstanceID(node HybridEC2dNode) string
+	FilesForNode(spec NodeSpec) ([]File, error)
+}
+
+// NodeSpec is a specification for a node.
+type NodeSpec struct {
+	Cluster  *HybridCluster
+	OS       CredsOS
+	Provider NodeadmCredentialsProvider
+}
+
+// CredsOS is the Node OS.
+type CredsOS interface {
+	Name() string
 }
 
 type SsmProvider struct {
@@ -66,7 +96,11 @@ func (s *SsmProvider) Name() creds.CredentialProvider {
 	return creds.SsmCredentialProvider
 }
 
-func (s *SsmProvider) NodeadmConfig(cluster *hybridCluster) (*api.NodeConfig, error) {
+func (s *SsmProvider) InstanceID(node HybridEC2dNode) string {
+	return node.node.Name
+}
+
+func (s *SsmProvider) NodeadmConfig(node NodeSpec) (*api.NodeConfig, error) {
 	ssmActivationDetails, err := createSSMActivation(s.ssmClient, s.role, ssmActivationName)
 	if err != nil {
 		return nil, err
@@ -78,8 +112,8 @@ func (s *SsmProvider) NodeadmConfig(cluster *hybridCluster) (*api.NodeConfig, er
 		},
 		Spec: api.NodeConfigSpec{
 			Cluster: api.ClusterDetails{
-				Name:   cluster.clusterName,
-				Region: cluster.clusterRegion,
+				Name:   node.Cluster.clusterName,
+				Region: node.Cluster.clusterRegion,
 			},
 			Hybrid: &api.HybridOptions{
 				SSM: &api.SSM{
@@ -93,6 +127,73 @@ func (s *SsmProvider) NodeadmConfig(cluster *hybridCluster) (*api.NodeConfig, er
 
 func (s *SsmProvider) VerifyUninstall(ctx context.Context, instanceId string) error {
 	return waitForManagedInstanceUnregistered(ctx, s.ssmClient, instanceId)
+}
+
+func (s *SsmProvider) FilesForNode(_ NodeSpec) ([]File, error) {
+	return nil, nil
+}
+
+type IamRolesAnywhereProvider struct {
+	trustAnchorARN string
+	profileARN     string
+	roleARN        string
+	ca             *certificate
+}
+
+func (i *IamRolesAnywhereProvider) Name() creds.CredentialProvider {
+	return creds.IamRolesAnywhereCredentialProvider
+}
+
+func (i *IamRolesAnywhereProvider) InstanceID(node HybridEC2dNode) string {
+	return node.ec2Instance.instanceID
+}
+
+func (i *IamRolesAnywhereProvider) NodeadmConfig(spec NodeSpec) (*api.NodeConfig, error) {
+	return &api.NodeConfig{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "node.eks.aws/v1alpha1",
+			Kind:       "NodeConfig",
+		},
+		Spec: api.NodeConfigSpec{
+			Cluster: api.ClusterDetails{
+				Name:   spec.Cluster.clusterName,
+				Region: spec.Cluster.clusterRegion,
+			},
+			Hybrid: &api.HybridOptions{
+				NodeName: i.nodeName(spec),
+				IAMRolesAnywhere: &api.IAMRolesAnywhere{
+					RoleARN:        i.roleARN,
+					TrustAnchorARN: i.trustAnchorARN,
+					ProfileARN:     i.profileARN,
+				},
+			},
+		},
+	}, nil
+}
+
+func (i *IamRolesAnywhereProvider) nodeName(node NodeSpec) string {
+	return "node-" + string(i.Name()) + "-" + node.OS.Name()
+}
+
+func (i *IamRolesAnywhereProvider) VerifyUninstall(ctx context.Context, instanceId string) error {
+	return nil
+}
+
+func (i *IamRolesAnywhereProvider) FilesForNode(spec NodeSpec) ([]File, error) {
+	nodeCertificate, err := createCertificateForNode(i.ca.Cert, i.ca.Key, i.nodeName(spec))
+	if err != nil {
+		return nil, err
+	}
+	return []File{
+		{
+			Content: string(nodeCertificate.CertPEM),
+			Path:    "/etc/iam/pki/server.pem",
+		},
+		{
+			Content: string(nodeCertificate.KeyPEM),
+			Path:    "/etc/iam/pki/server.key",
+		},
+	}, nil
 }
 
 func parseS3URL(s3URL string) (bucket, key string, err error) {
@@ -146,13 +247,14 @@ func runNodeadmUninstall(ctx context.Context, client *ssm.SSM, instanceID string
 		instanceID: instanceID,
 		commands:   commands,
 	}
+	// TODO: handle provider specific ssm command wait status
 	outputs, err := ssmConfig.runCommandsOnInstanceWaitForInProgress(ctx, logger)
 	if err != nil {
 		return fmt.Errorf("running SSM command: %w", err)
 	}
 	logger.Info("Nodeadm Uninstall", "output", outputs)
 	for _, output := range outputs {
-		if *output.Status != "InProgress" {
+		if *output.Status != "Success" && *output.Status != "InProgress" {
 			return fmt.Errorf("node uninstall SSM command did not properly reach InProgress")
 		}
 	}
@@ -172,7 +274,7 @@ func generateOSPassword() (string, string, error) {
 	salt := s.GenerateWRounds(s.SaltLenMax, 4096)
 	hash, err := c.Generate(password, salt)
 	if err != nil {
-		return "", "", fmt.Errorf("error gemerating root password: %s\n", err)
+		return "", "", fmt.Errorf("generating root password: %s", err)
 	}
 	return string(password), string(hash), nil
 }

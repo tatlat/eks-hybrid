@@ -7,6 +7,7 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -21,18 +22,24 @@ import (
 var cfnTemplateBody []byte
 
 type e2eCfnStack struct {
-	clusterName         string
-	stackName           string
-	credentialProviders []NodeadmCredentialsProvider
-	clusterArn          string
-	cfn                 *cloudformation.CloudFormation
-	iam                 *iam.IAM
+	clusterName            string
+	stackName              string
+	credentialProviders    []NodeadmCredentialsProvider
+	clusterArn             string
+	cfn                    *cloudformation.CloudFormation
+	iam                    *iam.IAM
+	iamRolesAnywhereCACert []byte
 }
 
 type e2eCfnStackOutput struct {
+	EC2Role            string `json:"EC2Role"`
 	InstanceProfileARN string `json:"instanceProfileARN"`
 	SSMNodeRoleName    string `json:"ssmNodeRoleName"`
 	SSMNodeRoleARN     string `json:"ssmNodeRoleARN"`
+	IRANodeRoleName    string `json:"iraNodeRoleName"`
+	IRANodeRoleARN     string `json:"iraNodeRoleARN"`
+	IRATrustAnchorARN  string `json:"iraTrustAnchorARN"`
+	IRAProfileARN      string `json:"iraProfileARN"`
 }
 
 func (e *e2eCfnStack) deploy(ctx context.Context, logger logr.Logger) (*e2eCfnStackOutput, error) {
@@ -55,7 +62,7 @@ func (e *e2eCfnStack) deploy(ctx context.Context, logger logr.Logger) (*e2eCfnSt
 	// considering it "created". Probably to avoid eventual consistency issues when using the instance profile in
 	// another resource immediately after. We have to deal with that problem ourselves now by retrying the ec2 instance
 	// creation on "invalid IAM instance profile" error.
-	output.InstanceProfileARN, err = e.createInstanceProfile(ctx, logger, output.SSMNodeRoleName)
+	output.InstanceProfileARN, err = e.createInstanceProfile(ctx, logger, output.EC2Role)
 	if err != nil {
 		return nil, err
 	}
@@ -79,11 +86,16 @@ func (e *e2eCfnStack) deployStack(ctx context.Context, logger logr.Logger) error
 			ParameterKey:   aws.String("clusterArn"),
 			ParameterValue: aws.String(e.clusterArn),
 		},
+		{
+			ParameterKey:   aws.String("caBundleCert"),
+			ParameterValue: aws.String(string(e.iamRolesAnywhereCACert)),
+		},
 	}
 
 	for _, credProvider := range e.credentialProviders {
 		params = append(params, &cloudformation.Parameter{
-			ParameterKey:   aws.String(string(credProvider.Name())),
+			// assume that the name of the param is the same as the name of the provider minus the dashes
+			ParameterKey:   aws.String(strings.ReplaceAll(string(credProvider.Name()), "-", "")),
 			ParameterValue: aws.String("true"),
 		})
 	}
@@ -203,10 +215,20 @@ func (e *e2eCfnStack) readStackOutput(ctx context.Context, logger logr.Logger) (
 	// extract relevant stack outputs
 	for _, output := range resp.Stacks[0].Outputs {
 		switch aws.StringValue(output.OutputKey) {
+		case "EC2Role":
+			result.EC2Role = *output.OutputValue
 		case "SSMNodeRoleName":
 			result.SSMNodeRoleName = *output.OutputValue
 		case "SSMNodeRoleARN":
 			result.SSMNodeRoleARN = *output.OutputValue
+		case "IRANodeRoleName":
+			result.IRANodeRoleName = *output.OutputValue
+		case "IRANodeRoleARN":
+			result.IRANodeRoleARN = *output.OutputValue
+		case "IRATrustAnchorARN":
+			result.IRATrustAnchorARN = *output.OutputValue
+		case "IRAProfileARN":
+			result.IRAProfileARN = *output.OutputValue
 		}
 	}
 
@@ -215,7 +237,7 @@ func (e *e2eCfnStack) readStackOutput(ctx context.Context, logger logr.Logger) (
 }
 
 func (e *e2eCfnStack) delete(ctx context.Context, logger logr.Logger, output *e2eCfnStackOutput) error {
-	instanceProfileName := e.instanceProfileName(output.SSMNodeRoleName)
+	instanceProfileName := e.instanceProfileName(output.EC2Role)
 	logger.Info("Deleting instance profile", "instanceProfileName", instanceProfileName)
 	instanceProfile, err := e.iam.GetInstanceProfileWithContext(ctx, &iam.GetInstanceProfileInput{
 		InstanceProfileName: aws.String(instanceProfileName),
