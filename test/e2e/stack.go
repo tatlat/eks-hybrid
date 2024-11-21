@@ -7,7 +7,7 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
-	"regexp"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -94,7 +94,8 @@ func (e *e2eCfnStack) deployStack(ctx context.Context, logger logr.Logger) error
 
 	for _, credProvider := range e.credentialProviders {
 		params = append(params, &cloudformation.Parameter{
-			ParameterKey:   aws.String(removeSpecialChar(string(credProvider.Name()))),
+			// assume that the name of the param is the same as the name of the provider minus the dashes
+			ParameterKey:   aws.String(strings.ReplaceAll(string(credProvider.Name()), "-", "")),
 			ParameterValue: aws.String("true"),
 		})
 	}
@@ -149,11 +150,6 @@ func (e *e2eCfnStack) deployStack(ctx context.Context, logger logr.Logger) error
 	}
 
 	return nil
-}
-
-func removeSpecialChar(input string) string {
-	re := regexp.MustCompile(`[^a-zA-Z0-9]+`)
-	return re.ReplaceAllString(input, "")
 }
 
 func (s *e2eCfnStack) createInstanceProfile(ctx context.Context, logger logr.Logger, roleName string) (instanceProfileArn string, err error) {

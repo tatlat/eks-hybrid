@@ -82,11 +82,6 @@ func readTestConfig(configPath string) (*TestConfig, error) {
 	return config, nil
 }
 
-func removeSpecialChars(input string) string {
-	re := regexp.MustCompile(`[^a-zA-Z0-9-]+`)
-	return re.ReplaceAllString(input, "")
-}
-
 func enabledCredentialsProviders(providers []NodeadmCredentialsProvider) []NodeadmCredentialsProvider {
 	filter := GinkgoLabelFilter()
 	providerList := []NodeadmCredentialsProvider{}
@@ -505,4 +500,10 @@ func (u uninstallNodeTest) Run(ctx context.Context) error {
 	u.logger.Info("Node unregistered successfully", "node", node.Name)
 
 	return nil
+}
+
+// removeSpecialChars removes everything except alphanumeric characters and hyphens from a string.
+func removeSpecialChars(input string) string {
+	re := regexp.MustCompile(`[^a-zA-Z0-9-]+`)
+	return re.ReplaceAllString(input, "")
 }

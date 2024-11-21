@@ -47,6 +47,8 @@ type HybridEC2dNode struct {
 	ec2Instance ec2Instance
 	node        corev1.Node
 }
+
+// File represents a file in disk.
 type File struct {
 	Content string
 	Path    string
