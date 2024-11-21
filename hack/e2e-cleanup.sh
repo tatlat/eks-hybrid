@@ -36,7 +36,7 @@ fi
 
 
 function aws() {
-    retry build::common::echo_and_run command aws "$@"    
+    retry build::common::echo_and_run command aws "$@"
 }
 
 function older_than_one_day(){
@@ -44,10 +44,10 @@ function older_than_one_day(){
 
     createDate=$($DATE -d"$created" +%s)
     olderThan=$($DATE --date "1 second ago" +%s)
-    if [[ $createDate -lt $olderThan ]]; then       
-        return 0  # 0 = true
-    else       
-        return 1  # 1 = false
+    if [[ $createDate -lt $olderThan ]]; then
+        return 0 # 0 = true
+    else
+        return 1 # 1 = false
     fi
 }
 
@@ -68,30 +68,30 @@ function is_eks_cluster_deleted(){
     if [ "DELETING" == ${CLUSTER_STATUSES[$name]} ]; then
         # 0 = true
         return 0
-    else   
-        # 1 = false   
+    else
+        # 1 = false
         return 1
     fi
 }
 
 function delete_cluster(){
     eks_cluster="$1"
- 
+
      aws eks delete-cluster --name $eks_cluster
-} 
+}
 
 function delete_instance(){
     instance_id="$1"
     cluster_name="$2"
-   
+
     aws ec2 terminate-instances --instance-ids $instance_id
 }
 
 function delete_peering_connection(){
     peering_connection_id="$1"
     cluster_name="$2"
-    
-    aws ec2 delete-vpc-peering-connection --vpc-peering-connection-id $peering_connection_id  
+
+    aws ec2 delete-vpc-peering-connection --vpc-peering-connection-id $peering_connection_id
 }
 
 function delete_role(){
@@ -107,16 +107,16 @@ function delete_vpc(){
     vpc="$1"
     cluster_name="$2"
 
-    for internet_gateway in $(aws ec2 describe-internet-gateways --filters "Name=attachment.vpc-id,Values=$vpc" --query "InternetGateways[*].InternetGatewayId"  --output text); do 
+    for internet_gateway in $(aws ec2 describe-internet-gateways --filters "Name=attachment.vpc-id,Values=$vpc" --query "InternetGateways[*].InternetGatewayId"  --output text); do
         aws ec2 detach-internet-gateway --internet-gateway-id $internet_gateway --vpc-id $vpc
         aws ec2 delete-internet-gateway --internet-gateway-id $internet_gateway
     done
 
-    for subnet in $(aws ec2 describe-subnets --filters "Name=vpc-id,Values=$vpc" --query "Subnets[*].SubnetId" --output text); do 
+    for subnet in $(aws ec2 describe-subnets --filters "Name=vpc-id,Values=$vpc" --query "Subnets[*].SubnetId" --output text); do
         aws ec2 delete-subnet --subnet-id $subnet
     done
 
-    main_route_table=$(aws ec2  describe-route-tables --filters "Name=vpc-id,Values=$vpc" "Name=association.main,Values=true" --query "RouteTables[*].RouteTableId" --output text)
+    main_route_table=$(aws ec2 describe-route-tables --filters "Name=vpc-id,Values=$vpc" "Name=association.main,Values=true" --query "RouteTables[*].RouteTableId" --output text)
     for rt in $(aws ec2 describe-route-tables --filters "Name=vpc-id,Values=$vpc" --query "RouteTables[*].RouteTableId" --output text); do
         if [[ "$rt" != "$main_route_table" ]]; then
             aws ec2 delete-route-table --route-table-id $rt
@@ -130,14 +130,17 @@ for eks_cluster in $(aws eks list-clusters --query "clusters" --output text); do
     if [ -n "$CLUSTER_NAME" ] && [ "$eks_cluster" == "$CLUSTER_NAME" ]; then
         delete_cluster $eks_cluster
         break
-    fi    
+    fi
+    if is_eks_cluster_deleted $eks_cluster; then
+        continue
+    fi
     describe=$(aws eks describe-cluster --name $eks_cluster --query 'cluster.{tags:tags,createdAt:createdAt}')
     if older_than_one_day "$(echo $describe | jq -r ".createdAt")"; then
         if [ "true" == $(echo $describe | jq ".tags | has(\"$TEST_CLUSTER_TAG_KEY\")") ]; then
             delete_cluster $eks_cluster
-        fi 
+        fi
     fi
-    
+
 done
 
 # Loop through role names and get tags
@@ -147,7 +150,7 @@ for role in $(aws iam list-roles --query 'Roles[*].RoleName' --no-paginate --out
         if [ -z "$cluster_name" ] || ! is_eks_cluster_deleted $cluster_name; then
             continue
         fi
-        if [ -z "$CLUSTER_NAME" ] || [ "$cluster_name" == "$CLUSTER_NAME" ]; then        
+        if [ -z "$CLUSTER_NAME" ] || [ "$cluster_name" == "$CLUSTER_NAME" ]; then
             delete_role $role
         fi
     fi
@@ -167,7 +170,7 @@ for reservations in $(aws ec2 describe-instances --filters $TEST_CLUSTER_TAG_KEY
     done
 done
 
-for peering_connection in $(aws ec2 describe-vpc-peering-connections --filters $TEST_CLUSTER_TAG_KEY_FILTER --query "VpcPeeringConnections[*].{VpcPeeringConnectionId:VpcPeeringConnectionId,Tags:Tags,StatusCode:Status.Code}" --output json | jq -c '.[]'); do     
+for peering_connection in $(aws ec2 describe-vpc-peering-connections --filters $TEST_CLUSTER_TAG_KEY_FILTER --query "VpcPeeringConnections[*].{VpcPeeringConnectionId:VpcPeeringConnectionId,Tags:Tags,StatusCode:Status.Code}" --output json | jq -c '.[]'); do
     if [ "deleted" == "$(echo "$peering_connection" | jq -r '.StatusCode')" ]; then
         continue
     fi
