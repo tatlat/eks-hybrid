@@ -43,7 +43,7 @@ function older_than_one_day(){
     created="$1"
 
     createDate=$($DATE -d"$created" +%s)
-    olderThan=$($DATE --date "1 second ago" +%s)
+    olderThan=$($DATE --date "1 day ago" +%s)
     if [[ $createDate -lt $olderThan ]]; then
         return 0 # 0 = true
     else
@@ -126,33 +126,37 @@ function delete_vpc(){
     aws ec2 delete-vpc --vpc-id $vpc
 }
 
-for eks_cluster in $(aws eks list-clusters --query "clusters" --output text); do
-    if [ -n "$CLUSTER_NAME" ] && [ "$eks_cluster" == "$CLUSTER_NAME" ]; then
-        delete_cluster $eks_cluster
-        break
+if [ -n "$CLUSTER_NAME" ]; then
+    if ! is_eks_cluster_deleted $CLUSTER_NAME; then
+        delete_cluster $CLUSTER_NAME
     fi
-    if is_eks_cluster_deleted $eks_cluster; then
-        continue
-    fi
-    describe=$(aws eks describe-cluster --name $eks_cluster --query 'cluster.{tags:tags,createdAt:createdAt}')
-    if older_than_one_day "$(echo $describe | jq -r ".createdAt")"; then
-        if [ "true" == $(echo $describe | jq ".tags | has(\"$TEST_CLUSTER_TAG_KEY\")") ]; then
-            delete_cluster $eks_cluster
+    CLUSTER_STATUSES[$CLUSTER_NAME]="DELETING"
+else
+    for eks_cluster in $(aws eks list-clusters --query "clusters" --output text); do
+        if is_eks_cluster_deleted $eks_cluster; then
+            continue
         fi
-    fi
-
-done
+        describe=$(aws eks describe-cluster --name $eks_cluster --query 'cluster.{tags:tags,createdAt:createdAt}')
+        if older_than_one_day "$(echo $describe | jq -r ".createdAt")"; then
+            if [ "true" == $(echo $describe | jq ".tags | has(\"$TEST_CLUSTER_TAG_KEY\")") ]; then
+                delete_cluster $eks_cluster
+            fi
+        fi
+    done
+fi
 
 # Loop through role names and get tags
-for role in $(aws iam list-roles --query 'Roles[*].RoleName' --no-paginate --output text); do
-    if [[ $role == *-hybrid-node ]]; then
+for role in $(aws iam list-roles --query 'Roles[*].RoleName' --output text); do
+    if [[ $role == *-hybrid-node ]] || [[ $role == nodeadm-e2e-tests* ]]; then
         cluster_name="$(aws iam list-role-tags --query "Tags[*]" --role-name $role --output json | jq -r "map(select(.Key == \"$TEST_CLUSTER_TAG_KEY\"))[0].Value")"
+        if [ -n "$CLUSTER_NAME" ] && [ "$cluster_name" != "$CLUSTER_NAME" ]; then
+            continue
+        fi
         if [ -z "$cluster_name" ] || ! is_eks_cluster_deleted $cluster_name; then
             continue
         fi
-        if [ -z "$CLUSTER_NAME" ] || [ "$cluster_name" == "$CLUSTER_NAME" ]; then
-            delete_role $role
-        fi
+        
+        delete_role $role        
     fi
 done
 
@@ -191,8 +195,35 @@ for vpc in $(aws ec2 describe-vpcs --filters $TEST_CLUSTER_TAG_KEY_FILTER --quer
     delete_vpc $vpc $cluster_name
 done
 
+for activation in $(aws ssm describe-activations --query "ActivationList[*].{ActivationId:ActivationId,IamRole:IamRole,Expired:Expired}" --output json | jq -c '.[]'); do
+    iam_role=$(echo $activation | jq -r ".IamRole")
+    if [ -n "$CLUSTER_NAME" ] && [[ $iam_role != EKSHybridCI-$CLUSTER_NAME* ]]; then
+        continue
+    fi
+    if [[ $iam_role != EKSHybridCI* ]]; then
+        continue
+    fi
+    expired=$(echo $activation | jq -r ".Expired")
+    if [ -z "$CLUSTER_NAME" ] && [ "false" == $expired ]; then
+        continue
+    fi
+    id=$(echo $activation | jq -r ".ActivationId")
+    aws ssm delete-activation --activation-id $id
+done
 
 
-# TODO:
-#  hybrid activations
-#  registered managed instances
+for managed_instance in $(aws ssm describe-instance-information --max-items 100 --filters "Key=ResourceType,Values=ManagedInstance" "Key=PingStatus,Values=ConnectionLost" --query "InstanceInformationList[*].{InstanceId:InstanceId,LastPingDateTime:LastPingDateTime,IamRole:IamRole}" --output json | jq -c '.[]'); do
+    iam_role=$(echo $managed_instance | jq -r ".IamRole")
+    if [ -n "$CLUSTER_NAME" ] && [[ $iam_role != *EKSHybridCI-$CLUSTER_NAME* ]]; then
+        continue
+    fi
+    if [[ $iam_role != *EKSHybridCI* ]]; then
+        continue
+    fi
+    last_ping=$(echo $managed_instance | jq -r ".LastPingDateTime")
+    if [ -z "$CLUSTER_NAME" ] && ! older_than_one_day $last_ping; then
+        continue
+    fi
+    id=$(echo $managed_instance | jq -r ".InstanceId")
+    aws ssm deregister-managed-instance --instance-id $id
+done

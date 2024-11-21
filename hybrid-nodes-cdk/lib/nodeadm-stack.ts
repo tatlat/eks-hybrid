@@ -97,6 +97,10 @@ export class NodeadmBuildStack extends cdk.Stack {
           type: codebuild.BuildEnvironmentVariableType.SECRETS_MANAGER,
           value: `${goproxySecret.secretArn}:endpoint`,
         },
+        ARTIFACTS_BUCKET: {
+          type: codebuild.BuildEnvironmentVariableType.PLAINTEXT,
+          value: nodeadmBinaryBucket.bucketName,
+        },
         MANIFEST_HOST: {
           type: codebuild.BuildEnvironmentVariableType.PLAINTEXT,
           value: eksReleaseManifestHost,
@@ -107,6 +111,14 @@ export class NodeadmBuildStack extends cdk.Stack {
         computeType: codebuild.ComputeType.LARGE,
       },
     });
+
+    codeBuildProject.role!.addToPrincipalPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['s3:PutObject*'],
+        resources: [nodeadmBinaryBucket.bucketArn, `${nodeadmBinaryBucket.bucketArn}/*`],
+      }),
+    );
 
     const buildOutput = new codepipeline.Artifact();
     const buildAction = new codepipeline_actions.CodeBuildAction({
@@ -218,8 +230,20 @@ export class NodeadmBuildStack extends cdk.Stack {
             effect: iam.Effect.ALLOW,
           }),
           new iam.PolicyStatement({
-            actions: ['ssm:CreateActivation'],
+            actions: [
+              'ssm:CreateActivation',
+              'ssm:DescribeActivations',
+              'ssm:DeleteActivation',
+              'ssm:DescribeInstanceInformation'
+            ],
             resources: ['*'],
+            effect: iam.Effect.ALLOW,
+          }),
+          new iam.PolicyStatement({
+            actions: [
+              'ssm:DeregisterManagedInstance'
+            ],
+            resources: ['arn:aws:ssm:*:*:managed-instance/*'],
             effect: iam.Effect.ALLOW,
           }),
           new iam.PolicyStatement({
@@ -237,7 +261,7 @@ export class NodeadmBuildStack extends cdk.Stack {
           new iam.PolicyStatement({
             effect: iam.Effect.ALLOW,
             actions: ['s3:GetObject', 's3:ListBucket'],
-            resources: [eksHybridBetaBucketARN, `${eksHybridBetaBucketARN}/*`],
+            resources: [eksHybridBetaBucketARN, `${eksHybridBetaBucketARN}/*`, nodeadmBinaryBucket.bucketArn, `${nodeadmBinaryBucket.bucketArn}/*`],
           }),
           new iam.PolicyStatement({
             effect: iam.Effect.ALLOW,
@@ -333,12 +357,12 @@ export class NodeadmBuildStack extends cdk.Stack {
           actions: [buildAction],
         },
         {
-          stageName: 'Upload-Artifacts',
-          actions: [devReleaseAction],
-        },
-        {
           stageName: 'E2E-Tests',
           actions: [...e2eTestsActions],
+        },
+        {
+          stageName: 'Upload-Artifacts',
+          actions: [devReleaseAction],
         },
       ],
     });
