@@ -45,8 +45,8 @@ export class NodeadmBuildStack extends cdk.Stack {
       }
     });
 
-    let rhelUsername = ""
-    let rhelPassword = ""
+    let rhelUsername = '';
+    let rhelPassword = '';
     if (process.env['RHEL_USERNAME'] !== undefined && process.env['RHEL_USERNAME'] !== '') {
       rhelUsername = process.env['RHEL_USERNAME']!
     } else {
@@ -105,7 +105,6 @@ export class NodeadmBuildStack extends cdk.Stack {
       environment: {
         buildImage: codebuild.LinuxBuildImage.fromDockerRegistry(builderBaseImage),
         computeType: codebuild.ComputeType.LARGE,
-        
       },
     });
 
@@ -148,6 +147,9 @@ export class NodeadmBuildStack extends cdk.Stack {
               'iam:DeleteRolePolicy',
               'iam:DetachRolePolicy',
               'iam:GetRole',
+              'iam:ListAttachedRolePolicies',
+              'iam:ListRoles',
+              'iam:ListRoleTags',
               'iam:PassRole',
               'iam:PutRolePolicy',
               'iam:TagRole',
@@ -190,6 +192,7 @@ export class NodeadmBuildStack extends cdk.Stack {
               'ec2:DescribeRouteTables',
               'ec2:DescribeSecurityGroups',
               'ec2:DescribeSubnets',
+              'ec2:DescribeVpcPeeringConnections',
               'ec2:DescribeVpcs',
               'ec2:DetachInternetGateway',
               'ec2:ModifySubnetAttribute',
@@ -233,7 +236,7 @@ export class NodeadmBuildStack extends cdk.Stack {
           }),
           new iam.PolicyStatement({
             effect: iam.Effect.ALLOW,
-            actions: ['s3:GetObject', 's3:HeadObject', 's3:ListBucket'],
+            actions: ['s3:GetObject', 's3:ListBucket'],
             resources: [eksHybridBetaBucketARN, `${eksHybridBetaBucketARN}/*`],
           }),
           new iam.PolicyStatement({
@@ -243,6 +246,7 @@ export class NodeadmBuildStack extends cdk.Stack {
               'eks:CreateCluster',
               'eks:DescribeCluster',
               'eks:DeleteCluster',
+              'eks:ListClusters',
               'eks:TagResource',
             ],
             resources: [`arn:aws:eks:${this.region}:${this.account}:cluster/*`],
