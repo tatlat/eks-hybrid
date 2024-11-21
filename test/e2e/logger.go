@@ -2,7 +2,6 @@ package e2e
 
 import (
 	"os"
-	"time"
 
 	"github.com/go-logr/logr"
 	"github.com/go-logr/zapr"
@@ -12,8 +11,7 @@ import (
 
 func NewLogger() logr.Logger {
 	encoderCfg := zap.NewDevelopmentEncoderConfig()
-	encoderCfg.EncodeLevel = nil
-	encoderCfg.EncodeTime = func(t time.Time, enc zapcore.PrimitiveArrayEncoder) {}
+	encoderCfg.EncodeLevel = zapcore.CapitalColorLevelEncoder
 
 	consoleEncoder := zapcore.NewConsoleEncoder(encoderCfg)
 	core := zapcore.NewCore(consoleEncoder, zapcore.AddSync(os.Stdout), zapcore.DebugLevel)
