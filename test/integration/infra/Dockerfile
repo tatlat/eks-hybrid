@@ -1,10 +1,10 @@
-FROM golang:1.21 AS imds-mock-build
+FROM golang:1.23 AS imds-mock-build
 ARG GOPROXY
 RUN go env -w GOPROXY=${GOPROXY}
 RUN GOBIN=/bin go install github.com/aws/amazon-ec2-metadata-mock/cmd@v1.11.2
 RUN mv /bin/cmd /imds-mock
 
-FROM golang:1.21 AS nodeadm-build
+FROM golang:1.23 AS nodeadm-build
 WORKDIR /go/src/github.com/aws/eks-hybrid
 ARG GOPROXY
 RUN go env -w GOPROXY=${GOPROXY}
