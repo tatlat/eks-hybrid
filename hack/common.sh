@@ -21,6 +21,11 @@ function build::common::echo_and_run() {
     "$@"
 }
 
+function fail() {
+  echo $1 >&2
+  exit 1
+}
+
 function retry() {
     local n=1
     local max=20
