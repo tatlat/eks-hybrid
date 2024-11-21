@@ -113,7 +113,6 @@ Resources:
       RoleName: !Sub '${AWS::StackName}-ira'
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryPullOnly
-        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
       Policies:
         - PolicyName: EKSDescribeCluster
           PolicyDocument:
@@ -145,6 +144,8 @@ Resources:
             Condition:
               StringEquals:
                 'sts:RoleSessionName': '${aws:PrincipalTag/x509Subject/CN}'
+              ArnEquals:
+                'aws:SourceArn': !GetAtt TrustAnchor.TrustAnchorArn
     DependsOn:
     - TrustAnchor
   
