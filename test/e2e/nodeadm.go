@@ -42,7 +42,8 @@ type UserDataInput struct {
 	Files             []File
 }
 
-type HybridNode struct {
+// HybridEC2dNode represents a Hybrid Node backed by an EC2 instance.
+type HybridEC2dNode struct {
 	ec2Instance ec2Instance
 	node        corev1.Node
 }
@@ -63,7 +64,7 @@ type NodeadmCredentialsProvider interface {
 	Name() creds.CredentialProvider
 	NodeadmConfig(node NodeSpec) (*api.NodeConfig, error)
 	VerifyUninstall(ctx context.Context, instanceId string) error
-	InstanceID(node HybridNode) string
+	InstanceID(node HybridEC2dNode) string
 	FilesForNode(spec NodeSpec) ([]File, error)
 }
 
@@ -93,7 +94,7 @@ func (s *SsmProvider) Name() creds.CredentialProvider {
 	return creds.SsmCredentialProvider
 }
 
-func (s *SsmProvider) InstanceID(node HybridNode) string {
+func (s *SsmProvider) InstanceID(node HybridEC2dNode) string {
 	return node.node.Name
 }
 
@@ -141,7 +142,7 @@ func (i *IamRolesAnywhereProvider) Name() creds.CredentialProvider {
 	return creds.IamRolesAnywhereCredentialProvider
 }
 
-func (i *IamRolesAnywhereProvider) InstanceID(node HybridNode) string {
+func (i *IamRolesAnywhereProvider) InstanceID(node HybridEC2dNode) string {
 	return node.ec2Instance.instanceID
 }
 

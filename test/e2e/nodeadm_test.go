@@ -479,7 +479,7 @@ func (u uninstallNodeTest) Run(ctx context.Context) error {
 		return fmt.Errorf("returned node is nil")
 	}
 
-	hybridNode := HybridNode{
+	hybridNode := HybridEC2dNode{
 		ec2Instance: u.ec2,
 		node:        *node,
 	}
