@@ -1,0 +1,24 @@
+# Please see the documentation for all configuration options:
+# https://docs.github.com/github/administering-a-repository/configuration-options-for-dependency-updates
+version: 2
+updates:
+# GitHub Actions
+- package-ecosystem: "github-actions"
+  directory: "/"
+  schedule:
+      interval: "weekly"
+  labels:
+    - "dependabot"
+- package-ecosystem: "gomod"
+  directories:
+  - "/"
+  schedule:
+    interval: "weekly"
+    day: "monday"
+  ## group all dependencies in one PR to avoid churn.
+  groups:
+    all-go-mod-patch-and-minor:
+      patterns: [ "*" ]
+      update-types: [ "patch", "minor" ]
+  labels:
+    - "dependabot"
