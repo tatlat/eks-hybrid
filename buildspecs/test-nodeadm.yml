@@ -2,8 +2,8 @@ version: 0.2
 
 env:
   secrets-manager:
-    RHEL_USERNAME: "redhat-credentials:username"
-    RHEL_PASSWORD: "redhat-credentials:password"
+    RHEL_USERNAME: "nodeadm-e2e-tests-redhat-credentials:username"
+    RHEL_PASSWORD: "nodeadm-e2e-tests-redhat-credentials:password"
 
 phases:
   build:

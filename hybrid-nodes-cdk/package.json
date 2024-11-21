@@ -1,0 +1,32 @@
+{
+  "name": "hybrid-nodes-cdk",
+  "version": "0.1.0",
+  "bin": {
+    "hybrid-nodes-cdk": "bin/hybrid-nodes-cdk.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "test": "echo OK",
+    "lint": "eslint --cache lib && prettier --list-different --cache .",
+    "format": "eslint --fix --cache lib && prettier --write --cache .",
+    "cdk": "cdk"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3.2.0",
+    "@eslint/js": "^9.15.0",
+    "@types/node": "22.7.9",
+    "@typescript-eslint/eslint-plugin": "^8.15.0",
+    "aws-cdk": "2.166.0",
+    "ts-node": "^10.9.2",
+    "typescript": "~5.6.3",
+    "eslint-config-prettier": "^8.7.0",
+    "prettier": "^2.8.4"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "2.166.0",
+    "constructs": "^10.0.0",
+    "eslint": "^9.15.0",
+    "source-map-support": "^0.5.21"
+  }
+}

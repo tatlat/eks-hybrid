@@ -1,0 +1,52 @@
+#!/bin/bash
+set -euo pipefail
+IFS=$'\n\t'
+
+config_file="cdk_dev_env.json"
+
+get_value() {
+  local description=$1
+  local config_path=$2
+  local default_value=$3
+
+  local value=$default_value
+
+  # Use the previous value if it is in the config file
+  if [ -f "$config_file" ]; then
+    local previous_value
+    previous_value=$(jq -r "$config_path" "$config_file")
+    if [ "$previous_value" != "null" ]; then
+      value=$previous_value
+    fi
+  fi
+
+  local entered_value
+  read -er -p "$description [$value]: " entered_value
+
+  # Use the value provided if there was one
+  if [ -n "$entered_value" ]; then
+    value=$entered_value
+  fi
+
+  # Fail if nothing was set
+  if [ -z "$value" ]; then
+    echo "Value is required" >&2
+    exit 1
+  fi
+
+  echo "$value"
+}
+
+ACCOUNT_ID=$(get_value "Destination account number" ".account_id" "")
+REGION=$(get_value "AWS Region where the devstack should be deployed" ".region" "us-west-2")
+GITHUB_USERNAME=$(get_value "GitHub username that is the owner of eks-hybrid repo" ".github_username" "aws")
+
+cat <<EOF >$config_file
+{
+  "account_id": "$ACCOUNT_ID",
+  "region": "$REGION",
+  "github_username": "$GITHUB_USERNAME"
+}
+EOF
+
+echo "Successfully created the configuration file. Run \"cdk synth\" to pick up any changes."
