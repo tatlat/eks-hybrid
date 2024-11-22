@@ -42,6 +42,7 @@ func (hnp *hybridNodeProvider) PreProcessDaemon() error {
 			return err
 		}
 	} else if hnp.nodeConfig.IsIAMRolesAnywhere() {
+		hnp.nodeConfig.Status.Hybrid.NodeName = hnp.nodeConfig.Spec.Hybrid.IAMRolesAnywhere.NodeName
 		if hnp.nodeConfig.Spec.Hybrid.EnableCredentialsFile {
 			hnp.logger.Info("Configuring aws_signing_helper_update daemon")
 			signingHelper := iamrolesanywhere.NewSigningHelperDaemon(hnp.daemonManager, &hnp.nodeConfig.Spec)

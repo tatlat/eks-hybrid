@@ -33,7 +33,7 @@ func (s *ssm) registerMachine(cfg *api.NodeConfig, force bool) error {
 	if err != nil {
 		return err
 	}
-	s.nodeConfig.Spec.Hybrid.NodeName = registeredNodeName
+	s.nodeConfig.Status.Hybrid.NodeName = registeredNodeName
 	return nil
 }
 

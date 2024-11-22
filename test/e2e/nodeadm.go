@@ -162,8 +162,8 @@ func (i *IamRolesAnywhereProvider) NodeadmConfig(ctx context.Context, spec NodeS
 				Region: spec.Cluster.clusterRegion,
 			},
 			Hybrid: &api.HybridOptions{
-				NodeName: i.nodeName(spec),
 				IAMRolesAnywhere: &api.IAMRolesAnywhere{
+					NodeName:       i.nodeName(spec),
 					RoleARN:        i.roleARN,
 					TrustAnchorARN: i.trustAnchorARN,
 					ProfileARN:     i.profileARN,

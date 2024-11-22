@@ -45,7 +45,7 @@ func (s *SigningHelperDaemon) Configure() error {
 		"ProfileARN":                s.spec.Hybrid.IAMRolesAnywhere.ProfileARN,
 		"RoleARN":                   s.spec.Hybrid.IAMRolesAnywhere.RoleARN,
 		"Region":                    s.spec.Cluster.Region,
-		"NodeName":                  s.spec.Hybrid.NodeName,
+		"NodeName":                  s.spec.Hybrid.IAMRolesAnywhere.NodeName,
 	}); err != nil {
 		return fmt.Errorf("executing aws_signing_helper_update service template: %v", err)
 	}

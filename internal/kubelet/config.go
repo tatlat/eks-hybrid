@@ -279,7 +279,7 @@ func (ksc *kubeletConfig) withHybridCloudProvider(cfg *api.NodeConfig, flags map
 	// provider ID needs to be specified when the cloud provider is external or empty string
 	ksc.ProviderID = ptr.String(getHybridProviderId(cfg))
 	// hostname is overriden to the node name provided in the spec
-	flags["hostname-override"] = cfg.Spec.Hybrid.NodeName
+	flags["hostname-override"] = cfg.Status.Hybrid.NodeName
 }
 
 func (ksc *kubeletConfig) withHybridNodeLabels(cfg *api.NodeConfig, flags map[string]string) {
@@ -502,7 +502,7 @@ func getProviderId(availabilityZone, instanceId string) string {
 }
 
 func getHybridProviderId(cfg *api.NodeConfig) string {
-	return fmt.Sprintf("%s:///%s/%s/%s", hybridProviderIdPrefix, cfg.Spec.Cluster.Region, cfg.Spec.Cluster.Name, cfg.Spec.Hybrid.NodeName)
+	return fmt.Sprintf("%s:///%s/%s/%s", hybridProviderIdPrefix, cfg.Spec.Cluster.Region, cfg.Spec.Cluster.Name, cfg.Status.Hybrid.NodeName)
 }
 
 // Get the IP of the node depending on the ipFamily configured for the cluster

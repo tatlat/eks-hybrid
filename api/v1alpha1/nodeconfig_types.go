@@ -106,9 +106,6 @@ const (
 
 // HybridOptions defines the options specific to hybrid node enrollment.
 type HybridOptions struct {
-	// NodeName is the name the node will adopt.
-	NodeName string `json:"nodeName,omitempty"`
-
 	// EnableCredentialsFile enables a shared credentials file on the host at /eks-hybrid/.aws/credentials
 	// For SSM, this means that nodeadm will not create symlink from `/root/.aws/credentials` to `/eks-hybrid/.aws/credentials`.
 	// For IAM Roles Anywhere, this means that nodeadm will not set up a systemd service to write and refresh the credentials to `/eks-hybrid/.aws/credentials`.
@@ -136,6 +133,9 @@ func (nc NodeConfig) IsOutpostNode() bool {
 
 // IAMRolesAnywhere defines IAM Roles Anywhere specific configuration.
 type IAMRolesAnywhere struct {
+	// NodeName is the name the node will adopt.
+	NodeName string `json:"nodeName,omitempty"`
+
 	// TrustAnchorARN is the ARN of the trust anchor.
 	TrustAnchorARN string `json:"trustAnchorArn,omitempty"`
 

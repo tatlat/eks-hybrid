@@ -27,7 +27,7 @@ func (hnp *hybridNodeProvider) ConfigureAws() error {
 			ProfileARN:           hnp.nodeConfig.Spec.Hybrid.IAMRolesAnywhere.ProfileARN,
 			RoleARN:              hnp.nodeConfig.Spec.Hybrid.IAMRolesAnywhere.RoleARN,
 			Region:               hnp.nodeConfig.Spec.Cluster.Region,
-			NodeName:             hnp.nodeConfig.Spec.Hybrid.NodeName,
+			NodeName:             hnp.nodeConfig.Status.Hybrid.NodeName,
 			ConfigPath:           hnp.nodeConfig.Spec.Hybrid.IAMRolesAnywhere.AwsConfigPath,
 			SigningHelperBinPath: iamrolesanywhere.SigningHelperBinPath,
 		}); err != nil {
