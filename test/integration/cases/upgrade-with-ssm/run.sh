@@ -31,6 +31,7 @@ assert::path-exists /opt/cni/bin/
 assert::path-exists /etc/eks/image-credential-provider/ecr-credential-provider
 assert::path-exists /usr/local/bin/aws-iam-authenticator
 assert::path-exists /opt/ssm/ssm-setup-cli
+assert::path-exists /usr/bin/amazon-ssm-agent
 assert::files-equal /opt/nodeadm/tracker expected-nodeadm-tracker
 assert::path-exists /etc/systemd/system/kubelet.service
 assert::files-equal /etc/systemd/system/kubelet.service expected-kubelet-systemd-unit
@@ -67,6 +68,7 @@ assert::path-exists /opt/cni/bin/
 assert::path-exists /etc/eks/image-credential-provider/ecr-credential-provider
 assert::path-exists /usr/local/bin/aws-iam-authenticator
 assert::path-exists /opt/ssm/ssm-setup-cli
+assert::path-exists /usr/bin/amazon-ssm-agent
 assert::files-equal /opt/nodeadm/tracker expected-nodeadm-tracker
 assert::path-exists /etc/systemd/system/kubelet.service
 assert::files-equal /etc/systemd/system/kubelet.service expected-kubelet-systemd-unit

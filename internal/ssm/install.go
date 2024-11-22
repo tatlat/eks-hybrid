@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"os"
+	"os/exec"
 	"path"
 
 	"github.com/pkg/errors"
@@ -40,6 +41,12 @@ func Install(ctx context.Context, tracker *tracker.Tracker, source Source) error
 		return errors.Wrap(err, "failed to install ssm installer")
 	}
 
+	installCmd := exec.Command(installerPath, "-install", "-region", DefaultSsmInstallerRegion)
+	out, err := installCmd.CombinedOutput()
+	if err != nil {
+		return errors.Wrapf(err, "failed to install ssm agent: %s", out)
+	}
+
 	return tracker.Add(artifact.Ssm)
 }
 
@@ -52,7 +59,7 @@ func Uninstall(ctx context.Context, pkgSource PkgSource) error {
 	// SSM would not be fully installed and registered, hence it's not required to run
 	// deregister instance.
 	if err != nil && os.IsNotExist(err) {
-		return os.RemoveAll(installerPath)
+		return uninstallPreRegisterComponents(ctx, pkgSource)
 	} else if err != nil {
 		return err
 	}
@@ -76,9 +83,8 @@ func Uninstall(ctx context.Context, pkgSource PkgSource) error {
 		}
 	}
 
-	ssmPkg := pkgSource.GetSSMPackage(ctx)
-	if err := artifact.UninstallPackage(ssmPkg); err != nil {
-		return errors.Wrapf(err, "failed to uninstall ssm")
+	if err := uninstallPreRegisterComponents(ctx, pkgSource); err != nil {
+		return err
 	}
 
 	if err := os.RemoveAll(path.Dir(registrationFilePath)); err != nil {
@@ -89,12 +95,15 @@ func Uninstall(ctx context.Context, pkgSource PkgSource) error {
 		return errors.Wrapf(err, "failed to uninstall ssm config files")
 	}
 
-	err = os.RemoveAll(symlinkedAWSConfigPath)
-	if err != nil {
-		return errors.Wrapf(err, "removing directory %s", symlinkedAWSConfigPath)
-	}
+	return os.RemoveAll(symlinkedAWSConfigPath)
+}
 
-	return os.RemoveAll(path.Dir(installerPath))
+func uninstallPreRegisterComponents(ctx context.Context, pkgSource PkgSource) error {
+	ssmPkg := pkgSource.GetSSMPackage(ctx)
+	if err := artifact.UninstallPackage(ssmPkg); err != nil {
+		return errors.Wrapf(err, "failed to uninstall ssm")
+	}
+	return os.RemoveAll(installerPath)
 }
 
 // redownloadInstaller deletes and downloads a new ssm installer

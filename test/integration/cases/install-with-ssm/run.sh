@@ -16,7 +16,7 @@ declare SUPPORTED_VERSIONS=(1.26 1.27 1.28 1.29 1.30)
 
 for VERSION in ${SUPPORTED_VERSIONS}
 do
-    nodeadm install $VERSION   --credential-provider ssm
+    nodeadm install $VERSION --credential-provider ssm
 
     assert::path-exists /usr/bin/containerd
     assert::path-exists /usr/sbin/iptables
@@ -29,6 +29,7 @@ do
     assert::path-exists /usr/local/bin/aws-iam-authenticator
 
     assert::path-exists /opt/ssm/ssm-setup-cli
+    assert::path-exists /usr/bin/amazon-ssm-agent
 
     assert::files-equal /opt/nodeadm/tracker expected-nodeadm-tracker
 
@@ -43,5 +44,6 @@ do
     assert::path-not-exist /usr/local/bin/aws-iam-authenticator
     assert::path-not-exist /usr/bin/containerd
     assert::path-not-exist /opt/ssm/ssm-setup-cli
+    assert::path-not-exist /usr/bin/amazon-ssm-agent
     assert::path-not-exist /opt/nodeadm/tracker
 done
