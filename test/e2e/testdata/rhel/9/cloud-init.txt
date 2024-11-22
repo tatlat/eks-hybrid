@@ -19,6 +19,9 @@ write_files:
     path: {{ $file.Path }}
 {{- end }}
 runcmd:
+  - sudo dnf install -y {{ .SSMAgentURL }}
+  - sudo systemctl start amazon-ssm-agent
+  - sudo systemctl enable amazon-ssm-agent
   - echo "Downloading nodeadm binary"
   - curl -s --retry 5 -L "{{ .NodeadmUrl }}" -o /tmp/nodeadm
   - chmod +x /tmp/nodeadm
