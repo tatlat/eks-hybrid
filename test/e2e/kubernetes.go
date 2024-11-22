@@ -67,6 +67,7 @@ func nodeByInternalIP(nodes *corev1.NodeList, nodeIP string) *corev1.Node {
 }
 
 func waitForHybridNodeToBeReady(ctx context.Context, k8s *kubernetes.Clientset, nodeName string, logger logr.Logger) error {
+	consecutiveErrors := 0
 	err := wait.PollUntilContextTimeout(ctx, nodePodDelayInterval, hybridNodeWaitTimeout, true, func(ctx context.Context) (done bool, err error) {
 		node, err := k8s.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
 		if apierrors.IsNotFound(err) {
@@ -74,9 +75,14 @@ func waitForHybridNodeToBeReady(ctx context.Context, k8s *kubernetes.Clientset, 
 			return false, nil
 		}
 		if err != nil {
-			// error fetching node other than not found
-			return false, err
+			consecutiveErrors += 1
+			if consecutiveErrors > 3 {
+				return false, fmt.Errorf("getting hybrid node %s: %w", nodeName, err)
+			}
+			logger.Info("Retryable error getting hybrid node. Continuing to poll", "name", nodeName, "error", err)
+			return false, nil // continue polling
 		}
+		consecutiveErrors = 0
 
 		if nodeReady(node) {
 			logger.Info("Node is ready", "node", nodeName)
@@ -95,15 +101,22 @@ func waitForHybridNodeToBeReady(ctx context.Context, k8s *kubernetes.Clientset, 
 }
 
 func waitForHybridNodeToBeNotReady(ctx context.Context, k8s *kubernetes.Clientset, nodeName string, logger logr.Logger) error {
+	consecutiveErrors := 0
 	err := wait.PollUntilContextTimeout(ctx, nodePodDelayInterval, hybridNodeWaitTimeout, true, func(ctx context.Context) (done bool, err error) {
 		node, err := k8s.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
 		if err != nil {
-			return false, err
+			consecutiveErrors += 1
+			if consecutiveErrors > 3 {
+				return false, fmt.Errorf("getting hybrid node %s: %w", nodeName, err)
+			}
+			logger.Info("Retryable error getting hybrid node. Continuing to poll", "name", nodeName, "error", err)
+			return false, nil // continue polling
 		}
+		consecutiveErrors = 0
 
 		if !nodeReady(node) {
 			logger.Info("Node is not ready", "node", nodeName)
-			return true, nil // node is ready, stop polling
+			return true, nil // node is not ready, stop polling
 		} else {
 			logger.Info("Node is still ready", "node", nodeName)
 		}
@@ -130,7 +143,7 @@ func getNginxPodName(name string) string {
 	return "nginx-" + name
 }
 
-func createNginxPodInNode(ctx context.Context, k8s *kubernetes.Clientset, nodeName string) error {
+func createNginxPodInNode(ctx context.Context, k8s *kubernetes.Clientset, nodeName string, logger logr.Logger) error {
 	podName := getNginxPodName(nodeName)
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -162,24 +175,31 @@ func createNginxPodInNode(ctx context.Context, k8s *kubernetes.Clientset, nodeNa
 		return fmt.Errorf("creating the test pod: %w", err)
 	}
 
-	err = waitForPodToBeRunning(ctx, k8s, podName, podNamespace)
+	err = waitForPodToBeRunning(ctx, k8s, podName, podNamespace, nodeName, logger)
 	if err != nil {
 		return fmt.Errorf("waiting for test pod to be running: %w", err)
 	}
 	return nil
 }
 
-func waitForPodToBeRunning(ctx context.Context, k8s *kubernetes.Clientset, name, namespace string) error {
+func waitForPodToBeRunning(ctx context.Context, k8s *kubernetes.Clientset, name, namespace, nodeName string, logger logr.Logger) error {
+	consecutiveErrors := 0
 	return wait.PollUntilContextTimeout(ctx, nodePodDelayInterval, nodePodWaitTimeout, true, func(ctx context.Context) (done bool, err error) {
 		pod, err := k8s.CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
 		if err != nil {
-			return false, fmt.Errorf("getting test pod: %w", err)
+			consecutiveErrors += 1
+			if consecutiveErrors > 3 {
+				return false, fmt.Errorf("getting test pod: %w", err)
+			}
+			logger.Info("Retryable error getting test pod. Continuing to poll", "name", name, "error", err)
+			return false, nil // continue polling
 		}
+		consecutiveErrors = 0
 
 		if pod.Status.Phase == corev1.PodRunning {
-			return true, nil
+			return true, nil // pod is running, stop polling
 		}
-		return false, nil
+		return false, nil // continue polling
 	})
 }
 
