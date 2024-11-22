@@ -7,6 +7,8 @@ import (
 	"context"
 	"fmt"
 
+	awsv2 "github.com/aws/aws-sdk-go-v2/aws"
+	ssmv2 "github.com/aws/aws-sdk-go-v2/service/ssm"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/request"
@@ -14,16 +16,20 @@ import (
 	"github.com/go-logr/logr"
 )
 
-func createSSMActivation(client *ssm.SSM, iamRole string, ssmActivationName string) (*ssm.CreateActivationOutput, error) {
+func createSSMActivation(ctx context.Context, client *ssmv2.Client, iamRole string, ssmActivationName string) (*ssmv2.CreateActivationOutput, error) {
 	// Define the input for the CreateActivation API
-	input := &ssm.CreateActivationInput{
+	input := &ssmv2.CreateActivationInput{
 		IamRole:             aws.String(iamRole),
-		RegistrationLimit:   aws.Int64(2),
+		RegistrationLimit:   aws.Int32(2),
 		DefaultInstanceName: aws.String(ssmActivationName),
 	}
 
 	// Call CreateActivation to create the SSM activation
-	result, err := client.CreateActivation(input)
+	result, err := client.CreateActivation(ctx, input, func(o *ssmv2.Options) {
+		o.RetryMaxAttempts = 20
+		o.RetryMode = awsv2.RetryModeAdaptive
+	})
+
 	if err != nil {
 		return nil, fmt.Errorf("creating SSM activation: %v", err)
 	}
