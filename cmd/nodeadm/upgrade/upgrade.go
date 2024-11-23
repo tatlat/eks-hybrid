@@ -94,12 +94,12 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return err
 	}
 
+	nodeProvider.PopulateNodeConfigDefaults()
+
 	if err := nodeProvider.ValidateConfig(); err != nil {
 		return err
 	}
-	if err := nodeProvider.Enrich(); err != nil {
-		return err
-	}
+
 	credsProvider, err := creds.GetCredentialProviderFromNodeConfig(nodeProvider.GetNodeConfig())
 	if err != nil {
 		return err

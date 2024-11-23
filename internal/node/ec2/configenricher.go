@@ -13,16 +13,16 @@ import (
 	"github.com/aws/eks-hybrid/internal/aws/ecr"
 )
 
-func (enp *ec2NodeProvider) Enrich() error {
+func (enp *ec2NodeProvider) Enrich(ctx context.Context) error {
 	enp.logger.Info("Fetching instance details..")
 	imdsClient := imds.New(imds.Options{})
-	awsConfig, err := config.LoadDefaultConfig(context.TODO(), config.WithClientLogMode(aws.LogRetries), config.WithEC2IMDSRegion(func(o *config.UseEC2IMDSRegion) {
+	awsConfig, err := config.LoadDefaultConfig(ctx, config.WithClientLogMode(aws.LogRetries), config.WithEC2IMDSRegion(func(o *config.UseEC2IMDSRegion) {
 		o.Client = imdsClient
 	}))
 	if err != nil {
 		return err
 	}
-	instanceDetails, err := api.GetInstanceDetails(context.TODO(), imdsClient, ec2.NewFromConfig(awsConfig))
+	instanceDetails, err := api.GetInstanceDetails(ctx, imdsClient, ec2.NewFromConfig(awsConfig))
 	if err != nil {
 		return err
 	}

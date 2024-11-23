@@ -1,6 +1,8 @@
 package flows
 
 import (
+	"context"
+
 	"go.uber.org/zap"
 	"k8s.io/utils/strings/slices"
 
@@ -19,7 +21,22 @@ type Initer struct {
 	Logger       *zap.Logger
 }
 
-func (i *Initer) Run() error {
+func (i *Initer) Run(ctx context.Context) error {
+	i.NodeProvider.PopulateNodeConfigDefaults()
+
+	if err := i.NodeProvider.ValidateConfig(); err != nil {
+		return err
+	}
+
+	i.Logger.Info("Configuring Aws...")
+	if err := i.NodeProvider.ConfigureAws(ctx); err != nil {
+		return err
+	}
+
+	if err := i.NodeProvider.Enrich(ctx); err != nil {
+		return err
+	}
+
 	aspects := i.NodeProvider.GetAspects()
 	i.Logger.Info("Setting up system aspects...")
 	for _, aspect := range aspects {
@@ -36,11 +53,6 @@ func (i *Initer) Run() error {
 		if err := i.NodeProvider.PreProcessDaemon(); err != nil {
 			return err
 		}
-	}
-
-	i.Logger.Info("Configuring Aws...")
-	if err := i.NodeProvider.ConfigureAws(); err != nil {
-		return err
 	}
 
 	daemons, err := i.NodeProvider.GetDaemons()

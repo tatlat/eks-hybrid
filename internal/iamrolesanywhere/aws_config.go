@@ -102,8 +102,8 @@ func writeConfigFile(cfg AWSConfig) error {
 		return err
 	}
 
-	if err := os.WriteFile(cfg.ConfigPath, buf.Bytes(), 0644); err != nil {
-		return err
+	if err := os.WriteFile(cfg.ConfigPath, buf.Bytes(), 0o644); err != nil {
+		return fmt.Errorf("writing AWS config file: %w", err)
 	}
 
 	return nil

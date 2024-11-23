@@ -6,7 +6,7 @@ import (
 	"github.com/aws/eks-hybrid/internal/api"
 )
 
-func (hnp *hybridNodeProvider) withHybridValidators() {
+func (hnp *HybridNodeProvider) withHybridValidators() {
 	hnp.validator = func(cfg *api.NodeConfig) error {
 		if cfg.Spec.Cluster.Name == "" {
 			return fmt.Errorf("Name is missing in cluster configuration")
@@ -49,7 +49,7 @@ func (hnp *hybridNodeProvider) withHybridValidators() {
 	}
 }
 
-func (hnp *hybridNodeProvider) ValidateConfig() error {
+func (hnp *HybridNodeProvider) ValidateConfig() error {
 	hnp.logger.Info("Validating configuration...")
 	if err := hnp.validator(hnp.nodeConfig); err != nil {
 		return err
