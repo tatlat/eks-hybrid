@@ -103,7 +103,7 @@ func (s *SsmProvider) InstanceID(node HybridEC2dNode) string {
 }
 
 func (s *SsmProvider) NodeadmConfig(ctx context.Context, node NodeSpec) (*api.NodeConfig, error) {
-	ssmActivationDetails, err := createSSMActivation(ctx, s.ssmClientV2, s.role, ssmActivationName)
+	ssmActivationDetails, err := createSSMActivation(ctx, s.ssmClientV2, s.role, ssmActivationName, node.Cluster.clusterName)
 	if err != nil {
 		return nil, err
 	}

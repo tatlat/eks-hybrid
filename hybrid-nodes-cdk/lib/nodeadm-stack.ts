@@ -16,6 +16,18 @@ export class NodeadmBuildStack extends cdk.Stack {
       fs.readFileSync('cdk_dev_env.json', 'utf-8')
     );
 
+    const testClusterTagKey = "Nodeadm-E2E-Tests-Cluster"
+    const testClusterPrefix = "nodeadm-e2e-tests"
+    const requestTagCondition = {
+      StringLike: {
+        [`aws:RequestTag/${testClusterTagKey}`]: `${testClusterPrefix}-*`
+      } 
+    }
+    const resourceTagCondition = {
+      StringLike: {
+        [`aws:ResourceTag/${testClusterTagKey}`]: `${testClusterPrefix}-*`
+      } 
+    }
     for (const envVar of requiredEnvVars) {
       if (process.env[envVar] === undefined) {
         throw new Error(`Required environment variable '${envVar}' not set`);
@@ -115,7 +127,7 @@ export class NodeadmBuildStack extends cdk.Stack {
     codeBuildProject.role!.addToPrincipalPolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
-        actions: ['s3:PutObject*'],
+        actions: ['s3:PutObject*', 's3:ListBucket'],
         resources: [nodeadmBinaryBucket.bucketArn, `${nodeadmBinaryBucket.bucketArn}/*`],
       }),
     );
@@ -126,6 +138,21 @@ export class NodeadmBuildStack extends cdk.Stack {
       input: sourceOutput,
       outputs: [buildOutput],
       project: codeBuildProject,
+    });
+
+    const testsCleanupProject = new codebuild.PipelineProject(this, 'nodeadm-cleanup', {
+      projectName: 'nodeadm-cleanup',
+      buildSpec: codebuild.BuildSpec.fromSourceFilename('buildspecs/cleanup-nodeadm.yml'),
+      environment: {
+        buildImage: codebuild.LinuxBuildImage.fromDockerRegistry(builderBaseImage),
+        computeType: codebuild.ComputeType.LARGE,
+      },
+    });
+
+    const cleanupAction = new codepipeline_actions.CodeBuildAction({
+      actionName: 'Cleanup',
+      input: buildOutput,
+      project: testsCleanupProject,
     });
 
     const integrationTestProject = new codebuild.PipelineProject(this, 'nodeadm-e2e-tests-project', {
@@ -148,151 +175,311 @@ export class NodeadmBuildStack extends cdk.Stack {
         },
       },
     });
-    integrationTestProject.role!.attachInlinePolicy(
-      new iam.Policy(this, 'nodeadm-e2e-tests-runner-policy', {
-        statements: [
-          new iam.PolicyStatement({
-            actions: [
-              'iam:CreateRole',
-              'iam:AttachRolePolicy',
-              'iam:DeleteRole',
-              'iam:DeleteRolePolicy',
-              'iam:DetachRolePolicy',
-              'iam:GetRole',
-              'iam:ListAttachedRolePolicies',
-              'iam:ListRoles',
-              'iam:ListRoleTags',
-              'iam:PassRole',
-              'iam:PutRolePolicy',
-              'iam:TagRole',
-            ],
-            resources: [`arn:aws:iam::${this.account}:role/*`],
-            effect: iam.Effect.ALLOW,
-          }),
-          new iam.PolicyStatement({
-            actions: [
-              'iam:AddRoleToInstanceProfile',
-              'iam:CreateInstanceProfile',
-              'iam:DeleteInstanceProfile',
-              'iam:GetInstanceProfile',
-              'iam:RemoveRoleFromInstanceProfile',
-            ],
-            resources: [`arn:aws:iam::${this.account}:instance-profile/*`],
-            effect: iam.Effect.ALLOW,
-          }),
-          new iam.PolicyStatement({
-            actions: [
-              'ec2:AcceptVpcPeeringConnection',
-              'ec2:AssociateRouteTable',
-              'ec2:AttachInternetGateway',
-              'ec2:AuthorizeSecurityGroupIngress',
-              'ec2:CreateInternetGateway',
-              'ec2:CreateRoute',
-              'ec2:CreateRouteTable',
-              'ec2:CreateSubnet',
-              'ec2:CreateTags',
-              'ec2:CreateVpc',
-              'ec2:CreateVpcPeeringConnection',
-              'ec2:DeleteInternetGateway',
-              'ec2:DeleteRouteTable',
-              'ec2:DeleteSubnet',
-              'ec2:DeleteVpc',
-              'ec2:DeleteVpcPeeringConnection',
-              'ec2:DescribeImages',
-              'ec2:DescribeInstances',
-              'ec2:DescribeInternetGateways',
-              'ec2:DescribeRouteTables',
-              'ec2:DescribeSecurityGroups',
-              'ec2:DescribeSubnets',
-              'ec2:DescribeVpcPeeringConnections',
-              'ec2:DescribeVpcs',
-              'ec2:DetachInternetGateway',
-              'ec2:ModifySubnetAttribute',
-              'ec2:RebootInstances',
-              'ec2:RunInstances',
-              'ec2:TerminateInstances',
-            ],
-            resources: ['*'],
-            effect: iam.Effect.ALLOW,
-          }),
-          new iam.PolicyStatement({
-            actions: ['ssm:SendCommand'],
-            resources: [
-              'arn:aws:ec2:*:*:instance/*',
-              'arn:aws:ssm:*:*:managed-instance/*',
-              'arn:aws:ssm:*::document/AWS-RunShellScript',
-            ],
-            effect: iam.Effect.ALLOW,
-          }),
-          new iam.PolicyStatement({
-            actions: ['ssm:GetCommandInvocation'],
-            resources: [`arn:aws:ssm:*:${this.account}:*`],
-            effect: iam.Effect.ALLOW,
-          }),
-          new iam.PolicyStatement({
-            actions: [
-              'ssm:CreateActivation',
-              'ssm:DescribeActivations',
-              'ssm:DeleteActivation',
-              'ssm:DescribeInstanceInformation'
-            ],
-            resources: ['*'],
-            effect: iam.Effect.ALLOW,
-          }),
-          new iam.PolicyStatement({
-            actions: [
-              'ssm:DeregisterManagedInstance'
-            ],
-            resources: ['arn:aws:ssm:*:*:managed-instance/*'],
-            effect: iam.Effect.ALLOW,
-          }),
-          new iam.PolicyStatement({
-            actions: ['ssm:GetParameter'],
-            resources: [
-              `arn:aws:ssm:${this.region}:${this.account}:parameter/*`,
-              `arn:aws:ssm:${this.region}::parameter/*`,
-            ],
-            effect: iam.Effect.ALLOW,
-          }),
-          new iam.PolicyStatement({
-            actions: ['secretsmanager:GetSecretValue'],
-            resources: [`arn:aws:secretsmanager:${this.region}:${this.account}:secret:*`],
-          }),
-          new iam.PolicyStatement({
-            effect: iam.Effect.ALLOW,
-            actions: ['s3:GetObject', 's3:ListBucket'],
-            resources: [eksHybridBetaBucketARN, `${eksHybridBetaBucketARN}/*`, nodeadmBinaryBucket.bucketArn, `${nodeadmBinaryBucket.bucketArn}/*`],
-          }),
-          new iam.PolicyStatement({
-            effect: iam.Effect.ALLOW,
-            actions: [
-              'eks:CreateAccessEntry',
-              'eks:CreateCluster',
-              'eks:DescribeCluster',
-              'eks:DeleteCluster',
-              'eks:ListClusters',
-              'eks:TagResource',
-            ],
-            resources: [`arn:aws:eks:${this.region}:${this.account}:cluster/*`],
-          }),
-          new iam.PolicyStatement({
-            effect: iam.Effect.ALLOW,
-            actions: ['eks:DeleteAccessEntry', 'eks:DescribeAccessEntry', 'eks:ListAssociatedAccessPolicies'],
-            resources: [`arn:aws:eks:${this.region}:${this.account}:access-entry/*`],
-          }),
-          new iam.PolicyStatement({
-            effect: iam.Effect.ALLOW,
-            actions: [
-              'cloudformation:DescribeStacks',
-              'cloudformation:CreateStack',
-              'cloudformation:UpdateStack',
-              'cloudformation:DeleteStack',
-            ],
-            resources: [`arn:aws:cloudformation:${this.region}:${this.account}:stack/*`],
-          }),
-        ],
-      }),
-    );
+    
+    const testCreationCleanupPolicy = new iam.Policy(this, 'nodeadm-e2e-tests-runner-policy', {
+      statements: [
+        new iam.PolicyStatement({
+          actions: [
+            'iam:AttachRolePolicy',
+            'iam:GetRole',
+            'iam:ListRoles',
+            'iam:ListRoleTags',
+            'iam:PassRole',
+            'iam:PutRolePolicy',
+            'iam:TagRole',
+          ],
+          resources: [`arn:aws:iam::${this.account}:role/*`],
+          effect: iam.Effect.ALLOW,
+        }),
+        new iam.PolicyStatement({
+          actions: [
+            'iam:DeleteRolePolicy',
+            'iam:DetachRolePolicy',
+            'iam:GetRolePolicy',
+            'iam:ListAttachedRolePolicies',
+            'iam:ListInstanceProfilesForRole',
+            'iam:ListRolePolicies',  
+          ],
+          resources: [`arn:aws:iam::${this.account}:role/*`],
+          effect: iam.Effect.ALLOW,
+          conditions: resourceTagCondition,
+        }),
+        new iam.PolicyStatement({
+          actions: [
+            'iam:CreateRole',
+          ],
+          resources: [`arn:aws:iam::${this.account}:role/*`],
+          effect: iam.Effect.ALLOW,
+          conditions: requestTagCondition,
+        }),
+        new iam.PolicyStatement({
+          actions: [
+            'iam:DeleteRole',
+          ],
+          resources: [`arn:aws:iam::${this.account}:role/*`],
+          effect: iam.Effect.ALLOW,
+          conditions: resourceTagCondition,
+        }),
+        new iam.PolicyStatement({
+          actions: [
+            'iam:AddRoleToInstanceProfile', // remove after we have cleaned up those without tags in existing accounts
+            'iam:DeleteInstanceProfile', // remove after we have cleaned up those without tags in existing accounts
+            'iam:GetInstanceProfile',
+            'iam:ListInstanceProfiles',
+            'iam:RemoveRoleFromInstanceProfile',  // remove after we have cleaned up those without tags in existing accounts
+          ],
+          resources: [`arn:aws:iam::${this.account}:instance-profile/*`],
+          effect: iam.Effect.ALLOW,
+        }),
+        new iam.PolicyStatement({
+          actions: [
+            'iam:CreateInstanceProfile',
+            'iam:TagInstanceProfile'
+          ],
+          resources: [`arn:aws:iam::${this.account}:instance-profile/*`],
+          effect: iam.Effect.ALLOW,
+          conditions: requestTagCondition,
+        }),
+        new iam.PolicyStatement({
+          actions: [
+            'iam:AddRoleToInstanceProfile',
+            'iam:DeleteInstanceProfile',
+            'iam:RemoveRoleFromInstanceProfile',
+          ],
+          resources: [`arn:aws:iam::${this.account}:instance-profile/*`],
+          effect: iam.Effect.ALLOW,
+          conditions: resourceTagCondition,
+        }),
+        new iam.PolicyStatement({
+          actions: [
+            'ec2:AcceptVpcPeeringConnection',
+            'ec2:AssociateRouteTable',
+            'ec2:AttachInternetGateway',
+            'ec2:AuthorizeSecurityGroupIngress',
+            'ec2:CreateVpcPeeringConnection',  
+            'ec2:CreateRoute',
+            'ec2:CreateRouteTable',
+            'ec2:CreateSubnet',
+            'ec2:DeleteRouteTable',
+            'ec2:DescribeImages',
+            'ec2:DescribeInstances',
+            'ec2:DescribeInternetGateways',
+            'ec2:DescribeRouteTables',
+            'ec2:DescribeSecurityGroups',
+            'ec2:DescribeSubnets',
+            'ec2:DescribeVpcPeeringConnections',
+            'ec2:DescribeVpcs',
+            'ec2:ModifySubnetAttribute',
+            'ec2:RunInstances',
+          ],
+          resources: ['*'],
+          effect: iam.Effect.ALLOW,
+        }),
+        new iam.PolicyStatement({
+          actions: [
+            'ec2:CreateInternetGateway',
+            'ec2:CreateTags',
+            'ec2:CreateVpc',       
+          ],
+          resources: ['*'],
+          effect: iam.Effect.ALLOW,
+          conditions: requestTagCondition,
+        }),
+        new iam.PolicyStatement({
+          actions: [
+            'ec2:DeleteInternetGateway',
+            'ec2:DeleteSubnet',
+            'ec2:DeleteVpc',
+            'ec2:DeleteVpcPeeringConnection',
+            'ec2:DetachInternetGateway',
+            'ec2:RebootInstances',
+            'ec2:TerminateInstances',
+          ],
+          resources: ['*'],
+          effect: iam.Effect.ALLOW,
+          conditions: resourceTagCondition,
+        }),
+        new iam.PolicyStatement({
+          actions: ['ssm:SendCommand'],
+          resources: [
+            'arn:aws:ec2:*:*:instance/*',
+            'arn:aws:ssm:*:*:managed-instance/*',
+            'arn:aws:ssm:*::document/AWS-RunShellScript',
+          ],
+          effect: iam.Effect.ALLOW,
+        }),
+        new iam.PolicyStatement({
+          actions: ['ssm:GetCommandInvocation'],
+          resources: [`arn:aws:ssm:*:${this.account}:*`],
+          effect: iam.Effect.ALLOW,
+        }),
+        new iam.PolicyStatement({
+          actions: [
+            'ssm:DescribeActivations',
+            'ssm:DescribeInstanceInformation'
+          ],
+          resources: ['*'],
+          effect: iam.Effect.ALLOW,
+        }),
+        new iam.PolicyStatement({
+          actions: [
+            'ssm:CreateActivation',
+            'ssm:AddTagsToResource'
+          ],
+          resources: ['*'],
+          effect: iam.Effect.ALLOW,
+          conditions: requestTagCondition
+        }),
+        new iam.PolicyStatement({
+          actions: [
+            'ssm:DeleteActivation'
+          ],
+          resources: ['*'],
+          effect: iam.Effect.ALLOW
+        }),
+        new iam.PolicyStatement({
+          actions: [
+            'ssm:DeregisterManagedInstance'
+          ],
+          resources: [`arn:aws:ssm:${this.region}:${this.account}:managed-instance/*`],
+          effect: iam.Effect.ALLOW,
+          conditions: resourceTagCondition
+        }),
+        new iam.PolicyStatement({
+          actions: ['ssm:GetParameter'],
+          resources: [
+            `arn:aws:ssm:${this.region}:${this.account}:parameter/*`,
+            `arn:aws:ssm:${this.region}::parameter/*`,
+          ],
+          effect: iam.Effect.ALLOW,
+        }),
+        new iam.PolicyStatement({
+          actions: ['secretsmanager:GetSecretValue'],
+          resources: [`arn:aws:secretsmanager:${this.region}:${this.account}:secret:*`],
+        }),
+        new iam.PolicyStatement({
+          effect: iam.Effect.ALLOW,
+          actions: ['s3:GetObject', 's3:ListBucket'],
+          resources: [eksHybridBetaBucketARN, `${eksHybridBetaBucketARN}/*`, nodeadmBinaryBucket.bucketArn, `${nodeadmBinaryBucket.bucketArn}/*`],
+        }),
+        new iam.PolicyStatement({
+          effect: iam.Effect.ALLOW,
+          actions: [
+            'eks:CreateAccessEntry',
+            'eks:DescribeCluster',
+            'eks:ListClusters',
+            'eks:TagResource',
+          ],
+          resources: [
+            `arn:aws:eks:${this.region}:${this.account}:cluster/*`,
+            `arn:aws:eks:${this.region}:${this.account}:access-entry/*`
+          ],
+        }),
+        new iam.PolicyStatement({
+          effect: iam.Effect.ALLOW,
+          actions: [
+            'eks:CreateCluster',
+          ],
+          resources: [
+            `arn:aws:eks:${this.region}:${this.account}:cluster/*`,
+          ],
+          conditions: requestTagCondition,
+        }),
+        new iam.PolicyStatement({
+          effect: iam.Effect.ALLOW,
+          actions: [
+            'eks:DeleteCluster',
+          ],
+          resources: [
+            `arn:aws:eks:${this.region}:${this.account}:cluster/*`,
+          ],
+          conditions: resourceTagCondition,
+        }),
+        new iam.PolicyStatement({
+          effect: iam.Effect.ALLOW,
+          actions: ['eks:DeleteAccessEntry', 'eks:DescribeAccessEntry', 'eks:ListAssociatedAccessPolicies'],
+          resources: [`arn:aws:eks:${this.region}:${this.account}:access-entry/*`],
+        }),
+        new iam.PolicyStatement({
+          effect: iam.Effect.ALLOW,
+          actions: [
+            'cloudformation:DescribeStacks',
+            'cloudformation:UpdateStack',
+          ],
+          resources: [`arn:aws:cloudformation:${this.region}:${this.account}:stack/*`],
+        }),
+        new iam.PolicyStatement({
+          effect: iam.Effect.ALLOW,
+          actions: [
+            'cloudformation:CreateStack',
+          ],
+          resources: [`arn:aws:cloudformation:${this.region}:${this.account}:stack/*`],
+          conditions: requestTagCondition,
+        }),
+        new iam.PolicyStatement({
+          effect: iam.Effect.ALLOW,
+          actions: [
+            'cloudformation:DeleteStack',
+          ],
+          resources: [`arn:aws:cloudformation:${this.region}:${this.account}:stack/*`],
+          conditions: resourceTagCondition,
+        }),
+        new iam.PolicyStatement({
+          effect: iam.Effect.ALLOW,
+          actions: [
+            'cloudformation:ListStacks',
+            'cloudformation:DescribeStacks',
+          ],
+          resources: ['*'],
+        }),
+        new iam.PolicyStatement({
+          effect: iam.Effect.ALLOW,
+          actions: [
+            "rolesanywhere:CreateTrustAnchor",
+            "rolesanywhere:CreateProfile",
+          ],
+          resources: ['*'],
+          conditions: requestTagCondition,
+        }),
+        new iam.PolicyStatement({
+          effect: iam.Effect.ALLOW,
+          actions: [
+            "rolesanywhere:TagResource",
+          ],
+          resources: [
+            `arn:aws:rolesanywhere:${this.region}:${this.account}:trust-anchor/*`,
+            `arn:aws:rolesanywhere:${this.region}:${this.account}:profile/*`
+          ],
+          conditions: requestTagCondition,
+        }),
+        new iam.PolicyStatement({
+          effect: iam.Effect.ALLOW,
+          actions: [
+            "rolesanywhere:ListTagsForResource"
+          ],
+          resources: [
+            `arn:aws:rolesanywhere:${this.region}:${this.account}:trust-anchor/*`,
+            `arn:aws:rolesanywhere:${this.region}:${this.account}:profile/*`
+          ],
+        }),
+        new iam.PolicyStatement({
+          effect: iam.Effect.ALLOW,
+          actions: [
+            "rolesanywhere:DeleteProfile",
+            "rolesanywhere:DeleteTrustAnchor",
+            "rolesanywhere:GetTrustAnchor",
+            "rolesanywhere:GetProfile"
+          ],
+          resources: [
+            `arn:aws:rolesanywhere:${this.region}:${this.account}:trust-anchor/*`,
+            `arn:aws:rolesanywhere:${this.region}:${this.account}:profile/*`
+          ],
+          conditions: resourceTagCondition,
+        }),
+      ],
+    });
+    integrationTestProject.role!.attachInlinePolicy(testCreationCleanupPolicy);
+    testsCleanupProject.role!.attachInlinePolicy(testCreationCleanupPolicy);
 
     const e2eTestsActions: Array<codepipeline_actions.CodeBuildAction> = [];
     for (const kubeVersion of kubernetesVersions) {
@@ -332,7 +519,7 @@ export class NodeadmBuildStack extends cdk.Stack {
     codeBuildReleaseProject.role!.addToPrincipalPolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
-        actions: ['s3:PutObject*'],
+        actions: ['s3:PutObject*', 's3:ListBucket'],
         resources: [nodeadmBinaryBucket.bucketArn, `${nodeadmBinaryBucket.bucketArn}/*`],
       }),
     );
@@ -355,6 +542,10 @@ export class NodeadmBuildStack extends cdk.Stack {
         {
           stageName: 'Build',
           actions: [buildAction],
+        },
+        {
+          stageName: 'Cleanup',
+          actions: [cleanupAction],          
         },
         {
           stageName: 'E2E-Tests',

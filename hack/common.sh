@@ -28,8 +28,8 @@ function fail() {
 
 function retry() {
     local n=1
-    local max=20
-    local delay=5
+    local max=40
+    local delay=10
     while true; do
         "$@" && break || {
             if [[ $n -lt $max ]]; then

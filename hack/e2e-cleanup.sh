@@ -29,6 +29,8 @@ TEST_CLUSTER_TAG_KEY="Nodeadm-E2E-Tests-Cluster"
 
 CLUSTER_NAME=${1:-}
 
+TIME_SINCE=${TIME_SINCE:-"1 day ago"}
+
 TEST_CLUSTER_TAG_KEY_FILTER="Name=tag-key,Values=$TEST_CLUSTER_TAG_KEY"
 if [ -n "$CLUSTER_NAME" ]; then
     TEST_CLUSTER_TAG_KEY_FILTER+=" Name=tag:$TEST_CLUSTER_TAG_KEY,Values=$CLUSTER_NAME"
@@ -43,7 +45,7 @@ function older_than_one_day(){
     created="$1"
 
     createDate=$($DATE -d"$created" +%s)
-    olderThan=$($DATE --date "1 day ago" +%s)
+    olderThan=$($DATE --date "$TIME_SINCE" +%s)
     if [[ $createDate -lt $olderThan ]]; then
         return 0 # 0 = true
     else
@@ -74,6 +76,10 @@ function is_eks_cluster_deleted(){
     fi
 }
 
+# Some resources like tags require a second api call to retrieve tags, or other data
+# for these cases, we do not retry the request because if the cleanup is potentially running twice
+# or tests are finishing up and deleting resources, we have seen cases where the tag will be deleted
+# before we try to make the get tags call
 function role_cluster_name_tag(){
     role="$1"
     cluster_name="$(command aws iam list-role-tags --query "Tags[*]" --role-name $role --output json 2>/dev/null | jq -r "map(select(.Key == \"$TEST_CLUSTER_TAG_KEY\"))[0].Value")"
@@ -81,6 +87,29 @@ function role_cluster_name_tag(){
         cluster_name=""
     fi
     echo "$cluster_name"
+}
+
+# See above note about tags
+function instance_profile_cluster_name_tag(){
+    instance_profile="$1"
+    cluster_name="$(command aws iam get-instance-profile --query "InstanceProfile.Tags[*]" --instance-profile-name=$instance_profile --output json 2>/dev/null | jq -r "map(select(.Key == \"$TEST_CLUSTER_TAG_KEY\"))[0].Value")"
+    if [ $? != 0 ]; then
+        cluster_name=""
+    fi
+    echo "$cluster_name"
+}
+
+# For stack deletion we loop checking the status because in some cases
+# we have to rerequest the delete with the force option
+# we do not retry this call because we expect sometimes for it to come back empty
+function describe_stack(){
+    stack_name="$1"
+    
+    stack=$(command aws cloudformation describe-stacks --stack-name $stack_name --query "Stacks[*].{StackId:StackId,CreationTime:CreationTime,StackName:StackName,StackStatus:StackStatus,Tags:Tags}" --output json 2>/dev/null)
+    if [ $? != 0 ]; then
+        stack=""
+    fi
+    echo "$stack"
 }
 
 function delete_cluster(){
@@ -103,15 +132,34 @@ function delete_peering_connection(){
     aws ec2 delete-vpc-peering-connection --vpc-peering-connection-id $peering_connection_id
 }
 
+# Before deleting a role, it needs 
+# - to be removed from all instance profiles it is attached to
+# - attached polices need to be removed
+# - polices need to be removed from it
 function delete_role(){
     role="$1"
 
-    if [ ! -z "$(aws iam list-attached-role-policies --role-name $role --query "AttachedPolicies[*]" --output text)" ]; then
-        aws iam detach-role-policy --role-name $role --policy-arn "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
-    fi
+    for instance_profile in $(aws iam list-instance-profiles-for-role --role-name $role --query "InstanceProfiles[*].InstanceProfileName" --output text); do
+        aws iam remove-role-from-instance-profile --instance-profile-name $instance_profile --role-name $role
+    done
+
+    while : ; do
+        policy=$(aws iam list-attached-role-policies --role-name $role --query "AttachedPolicies[0].PolicyArn" --output text)
+        if [ -z "$policy" ] || [ "$policy" == "None" ]; then
+            break
+        fi
+        aws iam detach-role-policy --role-name $role --policy-arn $policy
+    done
+
+    for policy in $(aws iam list-role-policies --role-name $role --query "PolicyNames[*]" --output text); do
+        aws iam delete-role-policy --role-name $role --policy-name $policy
+    done
+
     aws iam delete-role --role-name $role
 }
 
+# Deleting vpcs requiring removing the igw, subnets and routes
+# Some of these resources take time to delete and these requests are all retired to handle this
 function delete_vpc(){
     vpc="$1"
     cluster_name="$2"
@@ -135,12 +183,18 @@ function delete_vpc(){
     aws ec2 delete-vpc --vpc-id $vpc
 }
 
+# When a cluster name is supplied it along with all its resources are deleted
+# No other resources are deleted
+# We force the cluster status to be deleting in this case so that all future resources
+# are deleted
 if [ -n "$CLUSTER_NAME" ]; then
     if ! is_eks_cluster_deleted $CLUSTER_NAME; then
         delete_cluster $CLUSTER_NAME
     fi
     CLUSTER_STATUSES[$CLUSTER_NAME]="DELETING"
 else
+    # list clusters does not support tag filters so we pull all clusters
+    # then describe to get the tags to filter out the ones that arent e2e tests clusters
     for eks_cluster in $(aws eks list-clusters --query "clusters" --output text); do
         if is_eks_cluster_deleted $eks_cluster; then
             continue
@@ -154,9 +208,14 @@ else
     done
 fi
 
-# Loop through role names and get tags
+# # list-roles does not allow filtering by tags so we have to pull them all
+# # then request their tags seperately
+# # We have the role =* checks to try and limit which roles we bother checking tags for
+# # but we only delete those with the e2e cluster tag
+# # If the cluster-name is passed to the script, only roles who's tag matches that cluster
+# # are deleted
 for role in $(aws iam list-roles --query 'Roles[*].RoleName' --output text); do
-    if [[ $role == *-hybrid-node ]] || [[ $role == nodeadm-e2e-tests* ]]; then
+    if [[ $role == *-hybrid-node ]] || [[ $role == nodeadm-e2e-tests* ]] || [[ $role == EKSHybridCI-* ]]; then
         cluster_name="$(role_cluster_name_tag $role)"
         if [ -n "$CLUSTER_NAME" ] && [ "$cluster_name" != "$CLUSTER_NAME" ]; then
             continue
@@ -164,11 +223,68 @@ for role in $(aws iam list-roles --query 'Roles[*].RoleName' --output text); do
         if [ -z "$cluster_name" ] || ! is_eks_cluster_deleted $cluster_name; then
             continue
         fi
-        
+      
         delete_role $role        
     fi
 done
 
+# # See note above about roles
+for instance_profile in $(aws iam list-instance-profiles  --query 'InstanceProfiles[*].InstanceProfileName' --output text); do
+    if [[ $instance_profile == EKSHybridCI-* ]]; then
+        cluster_name="$(instance_profile_cluster_name_tag $instance_profile)"
+        if [ -n "$CLUSTER_NAME" ] && [ "$cluster_name" != "$CLUSTER_NAME" ]; then
+            continue
+        fi
+        if [ -z "$cluster_name" ] || ! is_eks_cluster_deleted $cluster_name; then
+            continue
+        fi
+        aws iam delete-instance-profile --instance-profile-name $instance_profile        
+    fi
+done
+
+# # describe-stacks does not allow filter but it does return the tags for each stack
+# # This deletion is retried since in some cases it has to be remade with the force flag
+# # If the cluster-name is passed to the script, only stacks who's tag matches that cluster
+# # are deleted
+for stack in $(aws cloudformation describe-stacks --query "Stacks[*].{StackId:StackId,CreationTime:CreationTime,StackName:StackName,StackStatus:StackStatus,Tags:Tags}" --output json | jq -c '.[]'); do
+    while : ; do       
+        stack_name=$(echo $stack | jq -r ".StackName")
+        if [[ $stack_name != EKSHybridCI-* ]]; then
+            break
+        fi
+        if [ "false" == "$(echo $stack | jq ".Tags | map(has(\"$TEST_CLUSTER_TAG_KEY\"))")" ]; then
+            break
+        fi
+        cluster_name=$(echo $stack | jq -r ".Tags | map(select(.Key == \"$TEST_CLUSTER_TAG_KEY\"))[0].Value")
+        if [ -n "$CLUSTER_NAME" ] && [ "$cluster_name" != "$CLUSTER_NAME" ]; then
+            break
+        fi
+        created=$(echo $stack | jq -r ".CreationTime")
+        if [ -z "$CLUSTER_NAME" ] && ! older_than_one_day $created; then
+            break
+        fi
+        status=$(echo $stack | jq -r ".StackStatus")
+        deletion_mode="STANDARD"
+        if [ "$status" == "DELETE_FAILED" ]; then
+            deletion_mode="FORCE_DELETE_STACK"
+        fi
+        stack_name=$(echo $stack | jq -r ".StackName")
+        if [ "$status" != "DELETE_IN_PROGRESS" ]; then
+            aws cloudformation delete-stack --stack-name $stack_name --deletion-mode $deletion_mode
+        fi
+        sleep 5
+        stack=$(describe_stack $stack_name)
+        if [[ -n "$stack" ]]; then
+            stack="$(echo $stack | jq -c '.[]')"
+        else
+            break
+        fi
+    done
+done
+
+# # The passed in filters will only return instances with the e2e cluster tag
+# # If a cluster name was passed to the script, it also added to the filters so that we
+# # only are getting instances associated with that cluster
 for reservations in $(aws ec2 describe-instances --filters $TEST_CLUSTER_TAG_KEY_FILTER --query "Reservations[*].Instances[*].{InstanceId:InstanceId,Tags:Tags,State:State.Name}" --output json | jq -c '.[]'); do
     for ec2 in $(echo $reservations | jq -c '.[]'); do
         if [ "terminated" == "$(echo "$ec2" | jq -r '.State')" ]; then
@@ -183,6 +299,7 @@ for reservations in $(aws ec2 describe-instances --filters $TEST_CLUSTER_TAG_KEY
     done
 done
 
+# # See above note about instances
 for peering_connection in $(aws ec2 describe-vpc-peering-connections --filters $TEST_CLUSTER_TAG_KEY_FILTER --query "VpcPeeringConnections[*].{VpcPeeringConnectionId:VpcPeeringConnectionId,Tags:Tags,StatusCode:Status.Code}" --output json | jq -c '.[]'); do
     if [ "deleted" == "$(echo "$peering_connection" | jq -r '.StatusCode')" ]; then
         continue
@@ -195,6 +312,7 @@ for peering_connection in $(aws ec2 describe-vpc-peering-connections --filters $
     delete_peering_connection $peering_connection_id $cluster_name
 done
 
+# # See above note about vpcs
 for vpc in $(aws ec2 describe-vpcs --filters $TEST_CLUSTER_TAG_KEY_FILTER --query "Vpcs[*].{VpcId:VpcId,Tags:Tags}"| jq -c '.[]'); do
     cluster_name=$(echo $vpc | jq -r ".Tags | map(select(.Key == \"$TEST_CLUSTER_TAG_KEY\"))[0].Value")
     vpc=$(echo $vpc | jq -r ".VpcId")
@@ -204,29 +322,39 @@ for vpc in $(aws ec2 describe-vpcs --filters $TEST_CLUSTER_TAG_KEY_FILTER --quer
     delete_vpc $vpc $cluster_name
 done
 
-for activation in $(aws ssm describe-activations --query "ActivationList[*].{ActivationId:ActivationId,IamRole:IamRole,Expired:Expired}" --output json | jq -c '.[]'); do
-    iam_role=$(echo $activation | jq -r ".IamRole")
-    if [ -n "$CLUSTER_NAME" ] && [[ $iam_role != EKSHybridCI-$CLUSTER_NAME* ]]; then
+# # describe-activations does not allow filters but does return tags
+# # If the cluster-name is passed to the script, activations stacks who's tag matches that cluster
+# # are deleted
+# # Before deleting the activation, the associated managed instances are also deleted
+for activation in $(aws ssm describe-activations --query "ActivationList[*].{ActivationId:ActivationId,Tags:Tags}" --output json | jq -c '.[]'); do
+    cluster_name=$(echo $activation | jq -r ".Tags | select( . != null ) | map(select(.Key == \"$TEST_CLUSTER_TAG_KEY\"))[0].Value")
+    if [ -z "$cluster_name" ]; then
         continue
     fi
-    if [[ $iam_role != EKSHybridCI* ]]; then
+    if [ -n "$CLUSTER_NAME" ] && [ "$cluster_name" != "$CLUSTER_NAME" ]; then
         continue
     fi
-    expired=$(echo $activation | jq -r ".Expired")
-    if [ -z "$CLUSTER_NAME" ] && [ "false" == $expired ]; then
+    if ! is_eks_cluster_deleted $cluster_name; then
         continue
     fi
     id=$(echo $activation | jq -r ".ActivationId")
+    for managed_instance_id in $(aws ssm describe-instance-information --filters "Key=ActivationIds,Values=$id" --query "InstanceInformationList[*].InstanceId" --output text); do
+        aws ssm deregister-managed-instance --instance-id $managed_instance_id
+    done
+  
     aws ssm delete-activation --activation-id $id
 done
 
+# describe-instance-information allows filters and we filter only those with the e2e cluster tag
+# If a cluster name is passed to the script, it is also added to the filters
+describe_instance_filters="Key=tag-key,Values=$TEST_CLUSTER_TAG_KEY"
+if [ -n "$CLUSTER_NAME" ]; then
+    describe_instance_filters="Key=tag:$TEST_CLUSTER_TAG_KEY,Values=$CLUSTER_NAME"
+fi
 
-for managed_instance in $(aws ssm describe-instance-information --max-items 100 --filters "Key=ResourceType,Values=ManagedInstance" "Key=PingStatus,Values=ConnectionLost" --query "InstanceInformationList[*].{InstanceId:InstanceId,LastPingDateTime:LastPingDateTime,IamRole:IamRole}" --output json | jq -c '.[]'); do
-    iam_role=$(echo $managed_instance | jq -r ".IamRole")
-    if [ -n "$CLUSTER_NAME" ] && [[ $iam_role != *EKSHybridCI-$CLUSTER_NAME* ]]; then
-        continue
-    fi
-    if [[ $iam_role != *EKSHybridCI* ]]; then
+for managed_instance in $(aws ssm describe-instance-information --max-items 100 --filters "$describe_instance_filters" --query "InstanceInformationList[*].{InstanceId:InstanceId,LastPingDateTime:LastPingDateTime,ResourceType:ResourceType}" --output json | jq -c '.[]'); do
+    resource_type=$(echo $managed_instance | jq -r ".ResourceType")
+    if [ "$resource_type" != "ManagedInstance" ]; then  
         continue
     fi
     last_ping=$(echo $managed_instance | jq -r ".LastPingDateTime")
