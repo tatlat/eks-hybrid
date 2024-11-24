@@ -4,6 +4,9 @@ import (
 	"context"
 	"fmt"
 
+	awsv2 "github.com/aws/aws-sdk-go-v2/aws"
+	ec2v2 "github.com/aws/aws-sdk-go-v2/service/ec2"
+	ec2v2Types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/ec2"
 )
@@ -277,17 +280,17 @@ func addIngressRules(ctx context.Context, client *ec2.EC2, securityGroupID strin
 }
 
 // CreateVPCPeering creates a VPC peering connection between two VPCs
-func (t *TestRunner) createVPCPeering() (string, error) {
-	svc := ec2.New(t.Session)
+func (t *TestRunner) createVPCPeering(ctx context.Context) (string, error) {
+	svc := ec2v2.NewFromConfig(t.Config.(awsv2.Config))
 
 	// Create VPC peering connection
-	result, err := svc.CreateVpcPeeringConnection(&ec2.CreateVpcPeeringConnectionInput{
+	result, err := svc.CreateVpcPeeringConnection(ctx, &ec2v2.CreateVpcPeeringConnectionInput{
 		VpcId:     aws.String(t.Status.ClusterVpcID),
 		PeerVpcId: aws.String(t.Status.HybridVpcID),
-		TagSpecifications: []*ec2.TagSpecification{
+		TagSpecifications: []ec2v2Types.TagSpecification{
 			{
-				ResourceType: aws.String("vpc-peering-connection"),
-				Tags: []*ec2.Tag{
+				ResourceType: "vpc-peering-connection",
+				Tags: []ec2v2Types.Tag{
 					{
 						Key:   aws.String(TestClusterTagKey),
 						Value: aws.String(t.Spec.ClusterName),
@@ -295,7 +298,11 @@ func (t *TestRunner) createVPCPeering() (string, error) {
 				},
 			},
 		},
+	}, func(o *ec2v2.Options) {
+		o.RetryMaxAttempts = 20
+		o.RetryMode = awsv2.RetryModeAdaptive
 	})
+
 	if err != nil {
 		return "", fmt.Errorf("failed to create VPC peering connection: %v", err)
 	}
@@ -305,8 +312,11 @@ func (t *TestRunner) createVPCPeering() (string, error) {
 	fmt.Printf("VPC Peering Connection created: %s\n", peeringConnectionID)
 
 	// Accept the VPC peering request
-	_, err = svc.AcceptVpcPeeringConnection(&ec2.AcceptVpcPeeringConnectionInput{
+	_, err = svc.AcceptVpcPeeringConnection(ctx, &ec2v2.AcceptVpcPeeringConnectionInput{
 		VpcPeeringConnectionId: aws.String(peeringConnectionID),
+	}, func(o *ec2v2.Options) {
+		o.RetryMaxAttempts = 20
+		o.RetryMode = awsv2.RetryModeAdaptive
 	})
 	if err != nil {
 		return "", fmt.Errorf("failed to accept VPC peering connection: %v", err)

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ec2"
@@ -23,6 +24,7 @@ import (
 const TestClusterTagKey = "Nodeadm-E2E-Tests-Cluster"
 
 type TestRunner struct {
+	Config  awsconfig.Config   `yaml:"-"`
 	Session *session.Session   `yaml:"-"`
 	Spec    TestResourceSpec   `yaml:"spec"`
 	Status  TestResourceStatus `yaml:"status"`
@@ -98,6 +100,19 @@ func (t *TestRunner) NewAWSSession() (*session.Session, error) {
 	fmt.Printf("AWS session initialized in region: %s\n", t.Spec.ClusterRegion)
 
 	return sess, nil
+}
+
+func (t *TestRunner) NewAWSConfig(ctx context.Context) (awsconfig.Config, error) {
+	// Create a new config using shared credentials or environment variables
+	config, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(t.Spec.ClusterRegion))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create new AWS config: %v", err)
+	}
+
+	// Optionally, you can log the region for debugging purposes
+	fmt.Printf("AWS config initialized in region: %s\n", t.Spec.ClusterRegion)
+
+	return config, nil
 }
 
 func (t *TestRunner) CreateResources(ctx context.Context) error {
@@ -190,7 +205,7 @@ func (t *TestRunner) CreateResources(ctx context.Context) error {
 
 	// Create VPC Peering Connection between the cluster VPC and EC2 hybrid nodes VPC
 	fmt.Println("Creating VPC peering connection...")
-	t.Status.PeeringConnID, err = t.createVPCPeering()
+	t.Status.PeeringConnID, err = t.createVPCPeering(ctx)
 	if err != nil {
 		return fmt.Errorf("error creating VPC peering connection: %v", err)
 	}
