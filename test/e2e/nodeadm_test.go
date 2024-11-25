@@ -50,7 +50,7 @@ type TestConfig struct {
 	NodeadmUrlAMD   string `yaml:"nodeadmUrlAMD"`
 	NodeadmUrlARM   string `yaml:"nodeadmUrlARM"`
 	SetRootPassword bool   `yaml:"setRootPassword"`
-	NodeK8sVersion  string `json:"nodeK8SVersion"`
+	NodeK8sVersion  string `yaml:"nodeK8SVersion"`
 }
 
 type suiteConfiguration struct {

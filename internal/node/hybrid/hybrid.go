@@ -9,7 +9,7 @@ import (
 	"github.com/aws/eks-hybrid/internal/nodeprovider"
 )
 
-type hybridNodeProvider struct {
+type HybridNodeProvider struct {
 	nodeConfig    *api.NodeConfig
 	validator     func(config *api.NodeConfig) error
 	awsConfig     *aws.Config
@@ -17,8 +17,10 @@ type hybridNodeProvider struct {
 	logger        *zap.Logger
 }
 
-func NewHybridNodeProvider(nodeConfig *api.NodeConfig, logger *zap.Logger) (nodeprovider.NodeProvider, error) {
-	np := &hybridNodeProvider{
+type NodeProviderOpt func(*HybridNodeProvider)
+
+func NewHybridNodeProvider(nodeConfig *api.NodeConfig, logger *zap.Logger, opts ...NodeProviderOpt) (nodeprovider.NodeProvider, error) {
+	np := &HybridNodeProvider{
 		nodeConfig: nodeConfig,
 		logger:     logger,
 	}
@@ -26,18 +28,29 @@ func NewHybridNodeProvider(nodeConfig *api.NodeConfig, logger *zap.Logger) (node
 	if err := np.withDaemonManager(); err != nil {
 		return nil, err
 	}
+
+	for _, opt := range opts {
+		opt(np)
+	}
+
 	return np, nil
 }
 
-func (hnp *hybridNodeProvider) GetNodeConfig() *api.NodeConfig {
+func WithAWSConfig(config *aws.Config) NodeProviderOpt {
+	return func(hnp *HybridNodeProvider) {
+		hnp.awsConfig = config
+	}
+}
+
+func (hnp *HybridNodeProvider) GetNodeConfig() *api.NodeConfig {
 	return hnp.nodeConfig
 }
 
-func (hnp *hybridNodeProvider) Logger() *zap.Logger {
+func (hnp *HybridNodeProvider) Logger() *zap.Logger {
 	return hnp.logger
 }
 
-func (hnp *hybridNodeProvider) Cleanup() error {
+func (hnp *HybridNodeProvider) Cleanup() error {
 	hnp.daemonManager.Close()
 	return nil
 }

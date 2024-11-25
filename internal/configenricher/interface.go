@@ -1,5 +1,7 @@
 package configenricher
 
+import "context"
+
 type ConfigEnricher interface {
-	Enrich() error
+	Enrich(ctx context.Context) error
 }

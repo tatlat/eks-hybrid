@@ -19,5 +19,5 @@ func (u *Upgrader) Run(ctx context.Context) error {
 		return err
 	}
 
-	return u.Initer.Run()
+	return u.Initer.Run(ctx)
 }

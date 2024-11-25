@@ -1,6 +1,7 @@
 package init
 
 import (
+	"context"
 	"os"
 
 	"github.com/aws/eks-hybrid/internal/cli"
@@ -37,6 +38,7 @@ func (c *initCmd) Flaggy() *flaggy.Subcommand {
 }
 
 func (c *initCmd) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
+	ctx := context.Background()
 	log.Info("Checking user is root..")
 	root, err := cli.IsRunningAsRoot()
 	if err != nil {
@@ -66,18 +68,11 @@ func (c *initCmd) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return err
 	}
 
-	if err := nodeProvider.ValidateConfig(); err != nil {
-		return err
-	}
-	if err := nodeProvider.Enrich(); err != nil {
-		return err
-	}
-
 	initer := &flows.Initer{
 		NodeProvider: nodeProvider,
 		SkipPhases:   c.skipPhases,
 		Logger:       log,
 	}
 
-	return initer.Run()
+	return initer.Run(ctx)
 }
