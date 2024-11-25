@@ -50,6 +50,7 @@ type TestConfig struct {
 	NodeadmUrlAMD   string `yaml:"nodeadmUrlAMD"`
 	NodeadmUrlARM   string `yaml:"nodeadmUrlARM"`
 	SetRootPassword bool   `yaml:"setRootPassword"`
+	NodeK8sVersion  string `json:"nodeK8SVersion"`
 }
 
 type suiteConfiguration struct {
@@ -345,8 +346,13 @@ var _ = Describe("Hybrid Nodes", func() {
 								test.logger.Info(fmt.Sprintf("Instance Root Password: %s", rootPassword))
 							}
 
+							k8sVersion := test.cluster.kubernetesVersion
+							if suite.TestConfig.NodeK8sVersion != "" {
+								k8sVersion = suite.TestConfig.NodeK8sVersion
+							}
+
 							userdata, err := os.BuildUserData(UserDataInput{
-								KubernetesVersion: test.cluster.kubernetesVersion,
+								KubernetesVersion: k8sVersion,
 								NodeadmUrls:       test.nodeadmURLs,
 								NodeadmConfigYaml: string(nodeadmConfigYaml),
 								Provider:          string(provider.Name()),
