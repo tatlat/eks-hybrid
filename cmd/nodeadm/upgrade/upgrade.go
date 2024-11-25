@@ -19,6 +19,7 @@ import (
 	"github.com/aws/eks-hybrid/internal/kubelet"
 	"github.com/aws/eks-hybrid/internal/node"
 	"github.com/aws/eks-hybrid/internal/packagemanager"
+	"github.com/aws/eks-hybrid/internal/ssm"
 	"github.com/aws/eks-hybrid/internal/tracker"
 )
 
@@ -163,6 +164,7 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		Artifacts:      installed.Artifacts,
 		DaemonManager:  daemonManager,
 		PackageManager: packageManager,
+		SSMUninstall:   ssm.Uninstall,
 		Logger:         log,
 	}
 
