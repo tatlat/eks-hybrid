@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	awsv2 "github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/aws/retry"
 	ec2v2 "github.com/aws/aws-sdk-go-v2/service/ec2"
 	ec2v2Types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/aws/aws-sdk-go/aws"
@@ -315,6 +316,7 @@ func (t *TestRunner) createVPCPeering(ctx context.Context) (string, error) {
 	_, err = svc.AcceptVpcPeeringConnection(ctx, &ec2v2.AcceptVpcPeeringConnectionInput{
 		VpcPeeringConnectionId: aws.String(peeringConnectionID),
 	}, func(o *ec2v2.Options) {
+		o.Retryer = retry.AddWithErrorCodes(retry.NewStandard(), "InvalidVpcPeeringConnectionID.NotFound")
 		o.RetryMaxAttempts = 20
 		o.RetryMode = awsv2.RetryModeAdaptive
 	})
