@@ -30,6 +30,12 @@ func (hnp *hybridNodeProvider) withHybridValidators() {
 			if cfg.Spec.Hybrid.IAMRolesAnywhere.TrustAnchorARN == "" {
 				return fmt.Errorf("TrustAnchorARN is missing in hybrid iam roles anywhere configuration")
 			}
+			if cfg.Spec.Hybrid.IAMRolesAnywhere.NodeName == "" {
+				return fmt.Errorf("NodeName can't be empty in hybrid iam roles anywhere configuration")
+			}
+			if len(cfg.Spec.Hybrid.IAMRolesAnywhere.NodeName) > 64 {
+				return fmt.Errorf("NodeName can't be longer than 64 characters in hybrid iam roles anywhere configuration")
+			}
 		}
 		if cfg.IsSSM() {
 			if cfg.Spec.Hybrid.SSM.ActivationCode == "" {
