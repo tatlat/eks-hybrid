@@ -8,7 +8,6 @@ phases:
     - aws s3 cp _bin/arm64/nodeadm s3://$ARTIFACTS_BUCKET/latest-pre/linux/arm64/nodeadm
     - aws s3 cp _bin/e2e-test s3://$ARTIFACTS_BUCKET/latest-pre/e2e-test
     - aws s3 cp _bin/e2e.test s3://$ARTIFACTS_BUCKET/latest-pre/e2e.test
-    - aws s3 sync hack s3://$ARTIFACTS_BUCKET/latest-pre --acl public-read
 
 cache:
   paths:
