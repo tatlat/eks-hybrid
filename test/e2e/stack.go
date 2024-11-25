@@ -109,6 +109,10 @@ func (e *e2eCfnStack) deployStack(ctx context.Context, logger logr.Logger) error
 			Capabilities: []*string{
 				aws.String("CAPABILITY_NAMED_IAM"),
 			},
+			Tags: []*cloudformation.Tag{{
+				Key:   aws.String(TestClusterTagKey),
+				Value: aws.String(e.clusterName),
+			}},
 		})
 		if err != nil {
 			return fmt.Errorf("creating hybrid nodes cfn stack: %w", err)
@@ -164,6 +168,10 @@ func (s *e2eCfnStack) createInstanceProfile(ctx context.Context, logger logr.Log
 		instanceProfileArnOut, err := s.iam.CreateInstanceProfileWithContext(ctx, &iam.CreateInstanceProfileInput{
 			InstanceProfileName: aws.String(instanceProfileName),
 			Path:                aws.String("/"),
+			Tags: []*iam.Tag{{
+				Key:   aws.String(TestClusterTagKey),
+				Value: aws.String(s.clusterName),
+			}},
 		})
 		if err != nil {
 			return "", err

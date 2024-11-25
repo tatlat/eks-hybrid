@@ -9,6 +9,7 @@ import (
 
 	awsv2 "github.com/aws/aws-sdk-go-v2/aws"
 	ssmv2 "github.com/aws/aws-sdk-go-v2/service/ssm"
+	ssmv2Types "github.com/aws/aws-sdk-go-v2/service/ssm/types"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/request"
@@ -16,12 +17,18 @@ import (
 	"github.com/go-logr/logr"
 )
 
-func createSSMActivation(ctx context.Context, client *ssmv2.Client, iamRole string, ssmActivationName string) (*ssmv2.CreateActivationOutput, error) {
+func createSSMActivation(ctx context.Context, client *ssmv2.Client, iamRole string, ssmActivationName string, clusterName string) (*ssmv2.CreateActivationOutput, error) {
 	// Define the input for the CreateActivation API
 	input := &ssmv2.CreateActivationInput{
 		IamRole:             aws.String(iamRole),
 		RegistrationLimit:   aws.Int32(2),
 		DefaultInstanceName: aws.String(ssmActivationName),
+		Tags: []ssmv2Types.Tag{
+			{
+				Key:   aws.String(TestClusterTagKey),
+				Value: aws.String(clusterName),
+			},
+		},
 	}
 
 	// Call CreateActivation to create the SSM activation
