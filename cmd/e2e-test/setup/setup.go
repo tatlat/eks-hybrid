@@ -48,12 +48,14 @@ func (s *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return fmt.Errorf("failed to unmarshal configuration from YAML: %v", err)
 	}
 
+	ctx := context.Background()
+
 	// Create AWS session
 	testRunner.Session, err = testRunner.NewAWSSession()
+	testRunner.Config, err = testRunner.NewAWSConfig(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to create AWS session: %v", err)
 	}
-	ctx := context.Background()
 
 	// Create resources using TestRunner object
 	if err := testRunner.CreateResources(ctx); err != nil {
