@@ -1,5 +1,6 @@
 import codebuild = require('aws-cdk-lib/aws-codebuild');
 import cdk = require('aws-cdk-lib');
+import { Duration } from 'aws-cdk-lib';
 import secretsmanager = require('aws-cdk-lib/aws-secretsmanager');
 import codepipeline = require('aws-cdk-lib/aws-codepipeline');
 import s3 = require('aws-cdk-lib/aws-s3');
@@ -90,6 +91,18 @@ export class NodeadmBuildStack extends cdk.Stack {
       encryption: s3.BucketEncryption.S3_MANAGED,
     });
 
+    const nodeadmLogsBucket = new s3.Bucket(this, `nodeadm-logs-${this.account}`, {
+      bucketName: `nodeadm-logs-${this.account}`,
+      enforceSSL: true,
+      versioned: true,
+      encryption: s3.BucketEncryption.S3_MANAGED,
+    });
+
+    nodeadmLogsBucket.addLifecycleRule({
+      enabled: true,
+      expiration: Duration.days(30),
+    });
+
     const sourceOutput = new codepipeline.Artifact();
     const sourceAction = new codepipeline_actions.GitHubSourceAction({
       actionName: 'GitHubSource',
@@ -168,6 +181,10 @@ export class NodeadmBuildStack extends cdk.Stack {
             type: codebuild.BuildEnvironmentVariableType.PLAINTEXT,
             value: nodeadmBinaryBucket.bucketName,
           },
+          LOGS_BUCKET: {
+            type: codebuild.BuildEnvironmentVariableType.PLAINTEXT,
+            value: nodeadmLogsBucket.bucketName,
+          },
           GOPROXY: {
             type: codebuild.BuildEnvironmentVariableType.SECRETS_MANAGER,
             value: `${goproxySecret.secretArn}:endpoint`,
@@ -175,7 +192,13 @@ export class NodeadmBuildStack extends cdk.Stack {
         },
       },
     });
-    
+    integrationTestProject.role!.addToPrincipalPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['s3:PutObject*'],
+        resources: [nodeadmLogsBucket.bucketArn, `${nodeadmLogsBucket.bucketArn}/*`],
+      }),
+    );
     const testCreationCleanupPolicy = new iam.Policy(this, 'nodeadm-e2e-tests-runner-policy', {
       statements: [
         new iam.PolicyStatement({

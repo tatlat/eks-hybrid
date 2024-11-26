@@ -41,6 +41,12 @@ type UserDataInput struct {
 	Provider          string
 	RootPasswordHash  string
 	Files             []File
+	LogsUploadUrls    []LogsUploadUrl
+}
+
+type LogsUploadUrl struct {
+	Name string
+	Url  string
 }
 
 // HybridEC2dNode represents a Hybrid Node backed by an EC2 instance.
@@ -51,8 +57,9 @@ type HybridEC2dNode struct {
 
 // File represents a file in disk.
 type File struct {
-	Content string
-	Path    string
+	Content     string
+	Path        string
+	Permissions string
 }
 
 // NodeadmOS defines an interface for operating system-specific behavior.
@@ -223,6 +230,19 @@ func generatePreSignedURL(client *s3.S3, bucket, key string, expiration time.Dur
 	return url, nil
 }
 
+func generatePutLogsPreSignedURL(client *s3.S3, bucket, key string, expiration time.Duration) (string, error) {
+	req, _ := client.PutObjectRequest(&s3.PutObjectInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(key),
+	})
+
+	url, err := req.Presign(expiration)
+	if err != nil {
+		return "", fmt.Errorf("generating pre-signed logs upload URL: %v", err)
+	}
+	return url, nil
+}
+
 func getNodeadmURL(client *s3.S3, nodeadmUrl string) (string, error) {
 	s3Bucket, s3BucketKey, err := parseS3URL(nodeadmUrl)
 	if err != nil {
@@ -240,6 +260,7 @@ func runNodeadmUninstall(ctx context.Context, client *ssm.SSM, instanceID string
 	commands := []string{
 		// TODO: @pjshah run uninstall without node-validation and pod-validation flags after adding cordon and drain node functionality
 		"set -eux",
+		"trap \"/tmp/log-collector.sh 'post-uninstall'\" EXIT",
 		"sudo /tmp/nodeadm uninstall -skip node-validation,pod-validation",
 		"sudo cloud-init clean --logs",
 		"sudo rm -rf /var/lib/cloud/instances",

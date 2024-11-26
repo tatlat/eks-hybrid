@@ -23,13 +23,16 @@ var ubuntu2204CloudInit []byte
 //go:embed testdata/ubuntu/2404/cloud-init.txt
 var ubuntu2404CloudInit []byte
 
+//go:embed testdata/nodeadm-init.sh
+var nodeAdmInitScript []byte
+
+//go:embed testdata/log-collector.sh
+var logCollectorScript []byte
+
 type ubuntuCloudInitData struct {
-	NodeadmConfig     string
+	UserDataInput
 	NodeadmUrl        string
-	KubernetesVersion string
-	Provider          string
-	RootPasswordHash  string
-	Files             []File
+	NodeadmInitScript string
 }
 
 func templateFuncMap() map[string]interface{} {
@@ -73,18 +76,18 @@ func (u Ubuntu2004) AMIName(ctx context.Context, awsSession *session.Session) (s
 	return *amiId, err
 }
 
-func (u Ubuntu2004) BuildUserData(UserDataInput UserDataInput) ([]byte, error) {
+func (u Ubuntu2004) BuildUserData(userDataInput UserDataInput) ([]byte, error) {
+	if err := populateBaseScripts(&userDataInput); err != nil {
+		return nil, err
+	}
+
 	data := ubuntuCloudInitData{
-		KubernetesVersion: UserDataInput.KubernetesVersion,
-		NodeadmConfig:     UserDataInput.NodeadmConfigYaml,
-		NodeadmUrl:        UserDataInput.NodeadmUrls.AMD,
-		Provider:          UserDataInput.Provider,
-		RootPasswordHash:  UserDataInput.RootPasswordHash,
-		Files:             UserDataInput.Files,
+		UserDataInput: userDataInput,
+		NodeadmUrl:    userDataInput.NodeadmUrls.AMD,
 	}
 
 	if u.Architecture == arm64Arch {
-		data.NodeadmUrl = UserDataInput.NodeadmUrls.ARM
+		data.NodeadmUrl = userDataInput.NodeadmUrls.ARM
 	}
 
 	return executeTemplate(ubuntu2004CloudInit, data)
@@ -122,18 +125,18 @@ func (u Ubuntu2204) AMIName(ctx context.Context, awsSession *session.Session) (s
 	return *amiId, err
 }
 
-func (u Ubuntu2204) BuildUserData(UserDataInput UserDataInput) ([]byte, error) {
+func (u Ubuntu2204) BuildUserData(userDataInput UserDataInput) ([]byte, error) {
+	if err := populateBaseScripts(&userDataInput); err != nil {
+		return nil, err
+	}
+
 	data := ubuntuCloudInitData{
-		KubernetesVersion: UserDataInput.KubernetesVersion,
-		NodeadmConfig:     UserDataInput.NodeadmConfigYaml,
-		NodeadmUrl:        UserDataInput.NodeadmUrls.AMD,
-		Provider:          UserDataInput.Provider,
-		RootPasswordHash:  UserDataInput.RootPasswordHash,
-		Files:             UserDataInput.Files,
+		UserDataInput: userDataInput,
+		NodeadmUrl:    userDataInput.NodeadmUrls.AMD,
 	}
 
 	if u.Architecture == arm64Arch {
-		data.NodeadmUrl = UserDataInput.NodeadmUrls.ARM
+		data.NodeadmUrl = userDataInput.NodeadmUrls.ARM
 	}
 
 	return executeTemplate(ubuntu2204CloudInit, data)
@@ -171,21 +174,34 @@ func (u Ubuntu2404) AMIName(ctx context.Context, awsSession *session.Session) (s
 	return *amiId, err
 }
 
-func (u Ubuntu2404) BuildUserData(UserDataInput UserDataInput) ([]byte, error) {
+func (u Ubuntu2404) BuildUserData(userDataInput UserDataInput) ([]byte, error) {
+	if err := populateBaseScripts(&userDataInput); err != nil {
+		return nil, err
+	}
+
 	data := ubuntuCloudInitData{
-		KubernetesVersion: UserDataInput.KubernetesVersion,
-		NodeadmConfig:     UserDataInput.NodeadmConfigYaml,
-		NodeadmUrl:        UserDataInput.NodeadmUrls.AMD,
-		Provider:          UserDataInput.Provider,
-		RootPasswordHash:  UserDataInput.RootPasswordHash,
-		Files:             UserDataInput.Files,
+		UserDataInput: userDataInput,
+		NodeadmUrl:    userDataInput.NodeadmUrls.AMD,
 	}
 
 	if u.Architecture == arm64Arch {
-		data.NodeadmUrl = UserDataInput.NodeadmUrls.ARM
+		data.NodeadmUrl = userDataInput.NodeadmUrls.ARM
 	}
 
 	return executeTemplate(ubuntu2404CloudInit, data)
+}
+
+func populateBaseScripts(userDataInput *UserDataInput) error {
+	logCollector, err := executeTemplate(logCollectorScript, userDataInput)
+	if err != nil {
+		return err
+	}
+
+	userDataInput.Files = append(userDataInput.Files,
+		File{Content: string(nodeAdmInitScript), Path: "/tmp/nodeadm-init.sh", Permissions: "0755"},
+		File{Content: string(logCollector), Path: "/tmp/log-collector.sh", Permissions: "0755"},
+	)
+	return nil
 }
 
 func executeTemplate(templateData []byte, values any) ([]byte, error) {
@@ -193,6 +209,7 @@ func executeTemplate(templateData []byte, values any) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	// Execute the template and write the result to a buffer
 	var buf bytes.Buffer
 	if err := tmpl.Execute(&buf, values); err != nil {

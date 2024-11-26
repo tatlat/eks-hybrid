@@ -15,12 +15,8 @@ import (
 var al23CloudInit []byte
 
 type amazonLinuxCloudInitData struct {
-	NodeadmConfig     string
-	NodeadmUrl        string
-	KubernetesVersion string
-	Provider          string
-	RootPasswordHash  string
-	Files             []File
+	UserDataInput
+	NodeadmUrl string
 }
 
 type AmazonLinux2023 struct {
@@ -58,18 +54,18 @@ func (a AmazonLinux2023) AMIName(ctx context.Context, awsSession *session.Sessio
 	return *amiId, err
 }
 
-func (a AmazonLinux2023) BuildUserData(UserDataInput UserDataInput) ([]byte, error) {
+func (a AmazonLinux2023) BuildUserData(userDataInput UserDataInput) ([]byte, error) {
+	if err := populateBaseScripts(&userDataInput); err != nil {
+		return nil, err
+	}
+
 	data := amazonLinuxCloudInitData{
-		KubernetesVersion: UserDataInput.KubernetesVersion,
-		NodeadmConfig:     UserDataInput.NodeadmConfigYaml,
-		NodeadmUrl:        UserDataInput.NodeadmUrls.AMD,
-		Provider:          UserDataInput.Provider,
-		RootPasswordHash:  UserDataInput.RootPasswordHash,
-		Files:             UserDataInput.Files,
+		UserDataInput: userDataInput,
+		NodeadmUrl:    userDataInput.NodeadmUrls.AMD,
 	}
 
 	if a.Architecture == arm64Arch {
-		data.NodeadmUrl = UserDataInput.NodeadmUrls.ARM
+		data.NodeadmUrl = userDataInput.NodeadmUrls.ARM
 	}
 
 	return executeTemplate(al23CloudInit, data)
