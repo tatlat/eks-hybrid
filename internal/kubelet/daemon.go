@@ -31,11 +31,6 @@ func NewKubeletDaemon(daemonManager daemon.DaemonManager, cfg *api.NodeConfig, a
 }
 
 func (k *kubelet) Configure() error {
-	if k.nodeConfig.IsHybridNode() {
-		if err := k.ensureClusterDetails(); err != nil {
-			return err
-		}
-	}
 	if err := k.writeKubeletConfig(); err != nil {
 		return err
 	}
