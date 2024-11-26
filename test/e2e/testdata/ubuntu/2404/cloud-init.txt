@@ -57,21 +57,19 @@ write_files:
       }
     path: /etc/apparmor.d/cri-containerd.apparmor.d
   - content: |
-{{ .NodeadmConfig | indent 6 }}
+{{ .NodeadmConfigYaml | indent 6 }}
     path: nodeadm-config.yaml
 {{ range $file := .Files }}
   - content: |
 {{ $file.Content | indent 6 }}
     path: {{ $file.Path }}
+{{if $file.Permissions}}
+    permissions: '{{ $file.Permissions }}'
 {{- end }}
+{{- end }}
+
 runcmd:
   - systemctl restart apparmor.service
-  - echo "Downloading nodeadm binary"
-  - curl -s --retry 5 -L "{{ .NodeadmUrl }}" -o /tmp/nodeadm
-  - chmod +x /tmp/nodeadm
-  - echo "Installing kubernetes components"
-  - /tmp/nodeadm install {{ .KubernetesVersion }} --credential-provider {{ .Provider }}
-  - echo "Initializing the node"
-  - /tmp/nodeadm init -c file:///nodeadm-config.yaml
+  - /tmp/nodeadm-init.sh "{{ .NodeadmUrl }}" "{{ .KubernetesVersion }}" "{{ .Provider }}"
 
 final_message: "The system is prepped, after $UPTIME seconds"

@@ -22,14 +22,11 @@ var rhel8CloudInit []byte
 var rhel9CloudInit []byte
 
 type rhelCloudInitData struct {
-	NodeadmConfig     string
+	UserDataInput
 	NodeadmUrl        string
-	KubernetesVersion string
-	Provider          string
+	NodeadmInitScript string
 	RhelUsername      string
 	RhelPassword      string
-	RootPasswordHash  string
-	Files             []File
 	SSMAgentURL       string
 }
 
@@ -80,20 +77,20 @@ func (r RedHat8) AMIName(ctx context.Context, awsSession *session.Session) (stri
 	return findLatestImage(ec2.New(awsSession), "RHEL-8*", r.Architecture)
 }
 
-func (r RedHat8) BuildUserData(UserDataInput UserDataInput) ([]byte, error) {
+func (r RedHat8) BuildUserData(userDataInput UserDataInput) ([]byte, error) {
+	if err := populateBaseScripts(&userDataInput); err != nil {
+		return nil, err
+	}
+
 	data := rhelCloudInitData{
-		KubernetesVersion: UserDataInput.KubernetesVersion,
-		NodeadmConfig:     UserDataInput.NodeadmConfigYaml,
-		NodeadmUrl:        UserDataInput.NodeadmUrls.AMD,
-		Provider:          UserDataInput.Provider,
-		RhelUsername:      r.RhelUsername,
-		RhelPassword:      r.RhelPassword,
-		RootPasswordHash:  UserDataInput.RootPasswordHash,
-		Files:             UserDataInput.Files,
+		UserDataInput: userDataInput,
+		NodeadmUrl:    userDataInput.NodeadmUrls.AMD,
+		RhelUsername:  r.RhelUsername,
+		RhelPassword:  r.RhelPassword,
 	}
 
 	if r.Architecture == arm64Arch {
-		data.NodeadmUrl = UserDataInput.NodeadmUrls.ARM
+		data.NodeadmUrl = userDataInput.NodeadmUrls.ARM
 	}
 
 	return executeTemplate(rhel8CloudInit, data)
@@ -141,21 +138,21 @@ func (r RedHat9) AMIName(ctx context.Context, awsSession *session.Session) (stri
 	return findLatestImage(ec2.New(awsSession), "RHEL-9*", r.Architecture)
 }
 
-func (r RedHat9) BuildUserData(UserDataInput UserDataInput) ([]byte, error) {
+func (r RedHat9) BuildUserData(userDataInput UserDataInput) ([]byte, error) {
+	if err := populateBaseScripts(&userDataInput); err != nil {
+		return nil, err
+	}
+
 	data := rhelCloudInitData{
-		KubernetesVersion: UserDataInput.KubernetesVersion,
-		NodeadmConfig:     UserDataInput.NodeadmConfigYaml,
-		NodeadmUrl:        UserDataInput.NodeadmUrls.AMD,
-		Provider:          UserDataInput.Provider,
-		RhelUsername:      r.RhelUsername,
-		RhelPassword:      r.RhelPassword,
-		RootPasswordHash:  UserDataInput.RootPasswordHash,
-		Files:             UserDataInput.Files,
-		SSMAgentURL:       rhelSsmAgentAMD,
+		UserDataInput: userDataInput,
+		NodeadmUrl:    userDataInput.NodeadmUrls.AMD,
+		RhelUsername:  r.RhelUsername,
+		RhelPassword:  r.RhelPassword,
+		SSMAgentURL:   rhelSsmAgentAMD,
 	}
 
 	if r.Architecture == arm64Arch {
-		data.NodeadmUrl = UserDataInput.NodeadmUrls.ARM
+		data.NodeadmUrl = userDataInput.NodeadmUrls.ARM
 		data.SSMAgentURL = rhelSsmAgentARM
 	}
 

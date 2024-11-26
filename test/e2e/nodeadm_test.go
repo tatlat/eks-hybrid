@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	ec2v2 "github.com/aws/aws-sdk-go-v2/service/ec2"
@@ -51,6 +52,7 @@ type TestConfig struct {
 	NodeadmUrlARM   string `yaml:"nodeadmUrlARM"`
 	SetRootPassword bool   `yaml:"setRootPassword"`
 	NodeK8sVersion  string `yaml:"nodeK8SVersion"`
+	LogsBucket      string `yaml:"logsBucket"`
 }
 
 type suiteConfiguration struct {
@@ -351,6 +353,18 @@ var _ = Describe("Hybrid Nodes", func() {
 								k8sVersion = suite.TestConfig.NodeK8sVersion
 							}
 
+							var logsUploadUrls []LogsUploadUrl
+							if suite.TestConfig.LogsBucket != "" {
+								logsS3Prefix := fmt.Sprintf("logs/%s/%s", test.cluster.clusterName, instanceName)
+								for _, name := range []string{"post-install", "post-uninstall", "post-uninstall-install"} {
+									url, err := generatePutLogsPreSignedURL(test.s3Client, suite.TestConfig.LogsBucket, fmt.Sprintf("%s/%s.tar.gz", logsS3Prefix, name), 30*time.Minute)
+									logsUploadUrls = append(logsUploadUrls, LogsUploadUrl{Name: name, Url: url})
+									Expect(err).NotTo(HaveOccurred(), "expected to successfully sign logs upload path")
+								}
+								test.logger.Info(fmt.Sprintf("Logs bucket: https://%s.console.aws.amazon.com/s3/buckets/%s?prefix=%s/", suite.TestConfig.ClusterRegion, suite.TestConfig.LogsBucket, logsS3Prefix))
+
+							}
+
 							userdata, err := os.BuildUserData(UserDataInput{
 								KubernetesVersion: k8sVersion,
 								NodeadmUrls:       test.nodeadmURLs,
@@ -358,6 +372,7 @@ var _ = Describe("Hybrid Nodes", func() {
 								Provider:          string(provider.Name()),
 								RootPasswordHash:  rootPasswordHash,
 								Files:             files,
+								LogsUploadUrls:    logsUploadUrls,
 							})
 							Expect(err).NotTo(HaveOccurred(), "expected to successfully build user data")
 
