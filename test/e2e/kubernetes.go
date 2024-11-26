@@ -30,17 +30,16 @@ func waitForNode(ctx context.Context, k8s *kubernetes.Clientset, internalIP stri
 	foundNode := &corev1.Node{}
 	consecutiveErrors := 0
 	err := wait.PollUntilContextTimeout(ctx, hybridNodeDelayInterval, hybridNodeWaitTimeout, true, func(ctx context.Context) (done bool, err error) {
-		nodes, err := k8s.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+		node, err := getNodeByInternalIP(ctx, k8s, internalIP)
 		if err != nil {
 			consecutiveErrors += 1
 			if consecutiveErrors > 3 {
-				return false, fmt.Errorf("listing nodes when looking for node with IP %s: %w", internalIP, err)
+				return false, err
 			}
 			logger.Info("Retryable error listing nodes when looking for node with IP. Continuing to poll", "internalIP", internalIP, "error", err)
 			return false, nil // continue polling
 		}
 		consecutiveErrors = 0
-		node := nodeByInternalIP(nodes, internalIP)
 		if node != nil {
 			foundNode = node
 			return true, nil // node found, stop polling
@@ -53,6 +52,14 @@ func waitForNode(ctx context.Context, k8s *kubernetes.Clientset, internalIP stri
 		return nil, err
 	}
 	return foundNode, nil
+}
+
+func getNodeByInternalIP(ctx context.Context, k8s *kubernetes.Clientset, internalIP string) (*corev1.Node, error) {
+	nodes, err := k8s.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("listing nodes when looking for node with IP %s: %w", internalIP, err)
+	}
+	return nodeByInternalIP(nodes, internalIP), nil
 }
 
 func nodeByInternalIP(nodes *corev1.NodeList, nodeIP string) *corev1.Node {
@@ -229,6 +236,22 @@ func deleteNode(ctx context.Context, k8s *kubernetes.Clientset, name string) err
 	err := k8s.CoreV1().Nodes().Delete(ctx, name, metav1.DeleteOptions{})
 	if err != nil {
 		return fmt.Errorf("deleting node: %w", err)
+	}
+	return nil
+}
+
+func ensureNodeWithIPIsDeleted(ctx context.Context, k8s *kubernetes.Clientset, internalIP string) error {
+	node, err := getNodeByInternalIP(ctx, k8s, internalIP)
+	if err != nil {
+		return fmt.Errorf("getting node by internal IP: %w", err)
+	}
+	if node == nil {
+		return nil
+	}
+
+	err = deleteNode(ctx, k8s, node.Name)
+	if err != nil {
+		return fmt.Errorf("deleting node %s: %w", node.Name, err)
 	}
 	return nil
 }
