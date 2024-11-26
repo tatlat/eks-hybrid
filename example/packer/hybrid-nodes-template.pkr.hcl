@@ -31,8 +31,13 @@ variable "credential_provider" {
 
 variable "nodeadm_arch" {
   type        = string
-  default     = "amd"
-  description = "Architecture for nodeadm install. Choose 'amd' or 'arm'. Default is 'amd'."
+  default     = env("NODEADM_ARCH")
+  description = "Architecture for nodeadm install. Choose 'amd' or 'arm'."
+
+  validation {
+    condition     = length(var.nodeadm_arch) > 0
+    error_message = "ERROR - NODEADM_ARCH environment variable is not set. Choose 'amd' or 'arm'."
+  }
 }
 
 variable "aws_profile" {
@@ -112,11 +117,11 @@ variable "rhel_version" {
 variable "k8s_version" {
   type        = string
   default     = env("K8S_VERSION")
-  description = "Kubernetes version to use. Must be 1.26 - 1.30"
+  description = "Kubernetes version to use. Must be 1.26 - 1.31"
 
   validation {
-    condition     = contains(["", "1.26", "1.27", "1.28", "1.29", "1.30"], var.k8s_version)
-    error_message = "The 'K8S_VERSION' environment variable must be set. Set any major version between 1.26 - 1.30."
+    condition     = contains(["", "1.26", "1.27", "1.28", "1.29", "1.30", "1.31"], var.k8s_version)
+    error_message = "The 'K8S_VERSION' environment variable must be set. Set any major version between 1.26 - 1.31."
   }
 }
 
@@ -127,11 +132,6 @@ variable "rhsm_username" {
   type        = string
   description = "RHEL Subscription Manager username"
   default     = env("RH_USERNAME")
-
-  validation {
-    condition     = length(var.rhsm_username) > 0
-    error_message = "RHEL Subscription Manager username is required. Set it as environment variable RH_USERNAME."
-  }
 }
 
 variable "rhsm_password" {
@@ -139,11 +139,6 @@ variable "rhsm_password" {
   description = "RHEL Subscription Manager password"
   default     = env("RH_PASSWORD")
   sensitive   = true
-
-  validation {
-    condition     = length(var.rhsm_password) > 0
-    error_message = "RHEL Subscription Manager password is required. Set it as environment variable RH_PASSWORD."
-  }
 }
 
 ####################
@@ -153,20 +148,12 @@ variable "vsphere_server" {
   type    = string
   default = env("VSPHERE_SERVER")
 
-  validation {
-    condition     = length(var.vsphere_server) > 0
-    error_message = "ERROR - vSphere server address is required. Set it as environment variable VSPHERE_SERVER."
-  }
 }
 
 variable "vsphere_user" {
   type    = string
   default = env("VSPHERE_USER")
 
-  validation {
-    condition     = length(var.vsphere_user) > 0
-    error_message = "ERROR - vSphere username is required. Set it as environment variable VSPHERE_USER."
-  }
 }
 
 variable "vsphere_password" {
@@ -174,60 +161,36 @@ variable "vsphere_password" {
   sensitive = true
   default   = env("VSPHERE_PASSWORD")
 
-  validation {
-    condition     = length(var.vsphere_password) > 0
-    error_message = "ERROR - vSphere password is required. Set it as environment variable VSPHERE_PASSWORD."
-  }
 }
 
 variable "vsphere_datacenter" {
   type    = string
   default = env("VSPHERE_DATACENTER")
 
-  validation {
-    condition     = length(var.vsphere_datacenter) > 0
-    error_message = "ERROR - vSphere datacenter is required. Set it as environment variable VSPHERE_DATACENTER."
-  }
 }
 
 variable "vsphere_cluster" {
   type    = string
   default = env("VSPHERE_CLUSTER")
 
-  validation {
-    condition     = length(var.vsphere_cluster) > 0
-    error_message = "ERROR - vSphere cluster is required. Set it as environment variable VSPHERE_CLUSTER."
-  }
 }
 
 variable "vsphere_datastore" {
   type    = string
   default = env("VSPHERE_DATASTORE")
 
-  validation {
-    condition     = length(var.vsphere_datastore) > 0
-    error_message = "ERROR - vSphere datastore is required. Set it as environment variable VSPHERE_DATASTORE."
-  }
 }
 
 variable "vsphere_network" {
   type    = string
   default = env("VSPHERE_NETWORK")
 
-  validation {
-    condition     = length(var.vsphere_network) > 0
-    error_message = "ERROR - vSphere network is required. Set it as environment variable VSPHERE_NETWORK."
-  }
 }
 
 variable "vsphere_folder" {
   type    = string
   default = env("VSPHERE_OUTPUT_FOLDER")
 
-  validation {
-    condition     = length(var.vsphere_folder) > 0
-    error_message = "ERROR - vSphere output folder is required. Set it as environment variable VSPHERE_OUTPUT_FOLDER."
-  }
 }
 
 locals {
@@ -328,13 +291,13 @@ source "amazon-ebs" "rhel9" {
 # Ubuntu vSphere ISO sources
 ######################
 source "vsphere-iso" "ubuntu22" {
-  vcenter_server      = var.vsphere_server
-  username            = var.vsphere_user
-  password            = var.vsphere_password
+  vcenter_server      = var.vsphere_server != "" ? var.vsphere_server : " "
+  username            = var.vsphere_user != "" ? var.vsphere_user : " "
+  password            = var.vsphere_password != "" ? var.vsphere_password : " "
   insecure_connection = true
 
   datacenter = var.vsphere_datacenter
-  cluster    = var.vsphere_cluster
+  cluster    = var.vsphere_cluster != "" ? var.vsphere_cluster : " "
   datastore  = var.vsphere_datastore
   folder     = var.vsphere_folder
 
@@ -360,7 +323,7 @@ source "vsphere-iso" "ubuntu22" {
 
     "./http/meta-data",
 
-  "./http/user-data"]
+    "./http/user-data"]
 
   cd_label = "cidata"
 
@@ -381,17 +344,16 @@ source "vsphere-iso" "ubuntu22" {
   ssh_timeout  = "60m"
 
   convert_to_template = true
-
 }
 
 source "vsphere-iso" "ubuntu24" {
-  vcenter_server      = var.vsphere_server
-  username            = var.vsphere_user
-  password            = var.vsphere_password
+  vcenter_server      = var.vsphere_server != "" ? var.vsphere_server : " "
+  username            = var.vsphere_user != "" ? var.vsphere_user : " "
+  password            = var.vsphere_password != "" ? var.vsphere_password : " "
   insecure_connection = true
 
   datacenter = var.vsphere_datacenter
-  cluster    = var.vsphere_cluster
+  cluster    = var.vsphere_cluster != "" ? var.vsphere_cluster : " "
   datastore  = var.vsphere_datastore
   folder     = var.vsphere_folder
 
@@ -416,7 +378,7 @@ source "vsphere-iso" "ubuntu24" {
 
     "./http/meta-data",
 
-  "./http/user-data"]
+    "./http/user-data"]
 
   cd_label = "cidata"
 
@@ -446,13 +408,13 @@ source "vsphere-iso" "ubuntu24" {
 ######################
 
 source "vsphere-iso" "rhel8" {
-  vcenter_server      = var.vsphere_server
-  username            = var.vsphere_user
-  password            = var.vsphere_password
+  vcenter_server      = var.vsphere_server != "" ? var.vsphere_server : " "
+  username            = var.vsphere_user != "" ? var.vsphere_user : " "
+  password            = var.vsphere_password != "" ? var.vsphere_password : " "
   insecure_connection = true
 
   datacenter = var.vsphere_datacenter
-  cluster    = var.vsphere_cluster
+  cluster    = var.vsphere_cluster != "" ? var.vsphere_cluster : " "
   datastore  = var.vsphere_datastore
   folder     = var.vsphere_folder
   
@@ -496,13 +458,13 @@ source "vsphere-iso" "rhel8" {
 }
 
 source "vsphere-iso" "rhel9" {
-  vcenter_server      = var.vsphere_server
-  username            = var.vsphere_user
-  password            = var.vsphere_password
+  vcenter_server      = var.vsphere_server != "" ? var.vsphere_server : " "
+  username            = var.vsphere_user != "" ? var.vsphere_user : " "
+  password            = var.vsphere_password != "" ? var.vsphere_password : " "
   insecure_connection = true
 
   datacenter = var.vsphere_datacenter
-  cluster    = var.vsphere_cluster
+  cluster    = var.vsphere_cluster != "" ? var.vsphere_cluster : " "
   datastore  = var.vsphere_datastore
   folder     = var.vsphere_folder
 
@@ -733,19 +695,18 @@ build {
 
 
   provisioner "shell" {
-    inline = [
-      "sudo apt-get update -y",
-      "sudo apt-get install -y curl",
-      "sudo apt update",
-      "curl '${local.nodeadm_link}' -o nodeadm",
-      "chmod +x nodeadm",
-      "sudo ./nodeadm install ${local.k8s_release} --credential-provider ${local.auth_value}",
+    script = "./provisioner_ubuntu.sh"
+    environment_vars = [
+      "nodeadm_link=${local.nodeadm_link}",
+      "auth_value=${local.auth_value}",
+      "k8s_version=${var.k8s_version}"
     ]
+    
     only = ["amazon-ebs.ubuntu22", "amazon-ebs.ubuntu24", "vsphere-iso.ubuntu22", "vsphere-iso.ubuntu24", "qemu.ubuntu22", "qemu.ubuntu24"]
   }
 
     provisioner "shell" {
-    script = "./provisioner.sh"
+    script = "./provisioner_rhel.sh"
     environment_vars = [
       "rhsm_username=${var.rhsm_username}",
       "rhsm_password=${var.rhsm_password}",

@@ -51,7 +51,7 @@ Set the following environment variables before running the Packer build:
  - RHEL_VERSION: String. Rhel iso version being used. Can be 8 or 9.
 
 ## Kubernetes Version
- - K8S_VERSION: String. Kubernetes version to use. Must be major versions from 1.26 - 1.30.
+ - K8S_VERSION: String. Kubernetes version for hybrid nodes (for example `1.31`). For supported Kubernetes versions, see [Amazon EKS Kubernetes versions](https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html).
 
 ## vSphere Configuration
 - VSPHERE_SERVER: String. vSphere server address.
@@ -88,9 +88,12 @@ export VSPHERE_NETWORK="your-network"
 export VSPHERE_OUTPUT_FOLDER="your-output-folder"
 export PACKER_OUTPUT_FORMAT="qcow2"  # or "raw"
 export RHEL_VERSION="8" # 8 or 9
-export K8S_VERSION="1.26" # Major version from 1.26 - 1.30
+export K8S_VERSION="1.26" # Major version from 1.26 - 1.31
+export PKR_SSH_PASSWORD:"ubuntu" # Change the ks.cfg or user-data file to match. Defaults are ubuntu or builder depending on OS.
+export ISO_URL="" # URL of the ISO to use. Can be a web link to download from a server, or an absolute path to a local file
+export ISO_CHECKSUM="" # Associated checksum for the supplied ISO.
 ```
-3. Validate the packer template
+3. Validate the packer template. Replace `template` with the name of you template file.
 ```
 packer validate template.pkr.hcl
 ```

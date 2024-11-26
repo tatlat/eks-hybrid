@@ -15,11 +15,14 @@ sudo subscription-manager repos --enable=rhel-"$rhel_version"-for-x86_64-baseos-
 sudo subscription-manager repos --enable=rhel-"$rhel_version"-for-x86_64-appstream-rpms
 
 # install curl
-sudo dnf install -y curl
+sudo dnf update -y
+sudo dnf install -y curl cloud-init
 
 # download nodeadm
-curl -o /tmp/nodeadm "$nodeadm_link"
+sudo curl -o /usr/local/bin/nodeadm "$nodeadm_link"
 
-chmod +x /tmp/nodeadm
+sudo chmod +x /usr/local/bin/nodeadm
 
-sudo /tmp/nodeadm install "$k8s_version" --credential-provider "$auth_value" --containerd-source docker
+sudo /usr/local/bin/nodeadm install "$k8s_version" --credential-provider "$auth_value" --containerd-source docker
+
+
