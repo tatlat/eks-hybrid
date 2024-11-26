@@ -16,16 +16,32 @@ type HybridInstanceRegistration struct {
 	Region            string `json:"Region"`
 }
 
-func (s *ssm) registerMachine(cfg *api.NodeConfig, force bool) error {
-	registerCmd := exec.Command(installerPath, "-register", "-activation-code", cfg.Spec.Hybrid.SSM.ActivationCode,
-		"-activation-id", cfg.Spec.Hybrid.SSM.ActivationID, "-region", cfg.Spec.Cluster.Region)
-	if force {
-		registerCmd.Args = append(registerCmd.Args, "-override")
+func (s *ssm) registerMachine(cfg *api.NodeConfig) error {
+	registered, err := isRegistered()
+	if err != nil {
+		return err
 	}
 
-	out, err := registerCmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("running register machine command: %s, error: %v", out, err)
+	if registered {
+		s.logger.Info("SSM agent already registered, skipping registration")
+	} else {
+		agentPath, err := agentBinaryPath()
+		if err != nil {
+			return fmt.Errorf("can't register without ssm agent installed: %w", err)
+		}
+
+		s.logger.Info("Registering machine with SSM agent")
+		registerCmd := exec.Command(agentPath,
+			"-register", "-y",
+			"-region", cfg.Spec.Cluster.Region,
+			"-code", cfg.Spec.Hybrid.SSM.ActivationCode,
+			"-id", cfg.Spec.Hybrid.SSM.ActivationID,
+		)
+
+		out, err := registerCmd.CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("running register machine command: %s, error: %v", out, err)
+		}
 	}
 
 	// Set the nodename on nodeconfig post registration
@@ -51,6 +67,17 @@ func GetManagedHybridInstanceId() (string, error) {
 	return registration.ManagedInstanceID, nil
 }
 
+func isRegistered() (bool, error) {
+	_, err := GetManagedHybridInstanceId()
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, fmt.Errorf("reading ssm registration file: %w", err)
+	}
+	return true, nil
+}
+
 func GetManagedHybridInstanceIdAndRegion() (string, string, error) {
 	data, err := os.ReadFile(registrationFilePath)
 	if err != nil {
@@ -63,4 +90,23 @@ func GetManagedHybridInstanceIdAndRegion() (string, string, error) {
 		return "", "", err
 	}
 	return registration.ManagedInstanceID, registration.Region, nil
+}
+
+var possibleAgentPaths = []string{
+	"/usr/bin/amazon-ssm-agent",
+	"/snap/amazon-ssm-agent/current/amazon-ssm-agent",
+}
+
+func agentBinaryPath() (string, error) {
+	for _, path := range possibleAgentPaths {
+		if fileExists(path) {
+			return path, nil
+		}
+	}
+	return "", fmt.Errorf("ssm agent binary not found in any of the well known paths [%s]", possibleAgentPaths)
+}
+
+func fileExists(filePath string) bool {
+	_, err := os.Stat(filePath)
+	return !os.IsNotExist(err)
 }

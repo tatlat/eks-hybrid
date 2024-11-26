@@ -62,6 +62,7 @@ func (m *systemdDaemonManager) RestartDaemon(name string) error {
 }
 
 func (m *systemdDaemonManager) GetDaemonStatus(name string) (DaemonStatus, error) {
+	// TODO(g-gaston): this should take a context to it can be cancelled from the caller
 	unitName := getServiceUnitName(name)
 	status, err := m.conn.GetUnitPropertyContext(context.TODO(), unitName, "ActiveState")
 	if err != nil {
