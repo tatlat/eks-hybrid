@@ -2,6 +2,7 @@ package flows
 
 import (
 	"context"
+	"fmt"
 	"os"
 
 	"go.uber.org/zap"
@@ -22,10 +23,13 @@ import (
 
 const eksConfigDir = "/etc/eks"
 
+type SSMUninstall func(ctx context.Context, logger *zap.Logger, pm ssm.PkgSource) error
+
 type Uninstaller struct {
 	Artifacts      *tracker.InstalledArtifacts
 	DaemonManager  daemon.DaemonManager
 	PackageManager *packagemanager.DistroPackageManager
+	SSMUninstall   SSMUninstall
 	Logger         *zap.Logger
 }
 
@@ -58,12 +62,13 @@ func (u *Uninstaller) uninstallDaemons(ctx context.Context) error {
 		}
 	}
 	if u.Artifacts.Ssm {
-		u.Logger.Info("Uninstalling and de-registering SSM agent...")
+		u.Logger.Info("Stopping SSM daemon...")
 		if err := u.DaemonManager.StopDaemon(ssm.SsmDaemonName); err != nil {
 			return err
 		}
-		if err := ssm.Uninstall(ctx, u.PackageManager); err != nil {
-			return err
+
+		if err := u.SSMUninstall(ctx, u.Logger, u.PackageManager); err != nil {
+			return fmt.Errorf("uninstalling SSM: %w", err)
 		}
 	}
 	if u.Artifacts.IamRolesAnywhere {

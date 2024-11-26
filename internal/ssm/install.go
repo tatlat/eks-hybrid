@@ -8,6 +8,7 @@ import (
 	"path"
 
 	"github.com/pkg/errors"
+	"go.uber.org/zap"
 
 	"github.com/aws/aws-sdk-go-v2/config"
 	awsSsm "github.com/aws/aws-sdk-go-v2/service/ssm"
@@ -37,7 +38,7 @@ func Install(ctx context.Context, tracker *tracker.Tracker, source Source) error
 	}
 	defer installer.Close()
 
-	if err := artifact.InstallFile(installerPath, installer, 0755); err != nil {
+	if err := artifact.InstallFile(installerPath, installer, 0o755); err != nil {
 		return errors.Wrap(err, "failed to install ssm installer")
 	}
 
@@ -50,9 +51,10 @@ func Install(ctx context.Context, tracker *tracker.Tracker, source Source) error
 	return tracker.Add(artifact.Ssm)
 }
 
-// Uninstall de-registers the managed instance and removes all files and components that
+// DeregisterAndUninstall de-registers the managed instance and removes all files and components that
 // make up the ssm agent component.
-func Uninstall(ctx context.Context, pkgSource PkgSource) error {
+func DeregisterAndUninstall(ctx context.Context, logger *zap.Logger, pkgSource PkgSource) error {
+	logger.Info("Uninstalling and de-registering SSM agent...")
 	instanceId, region, err := GetManagedHybridInstanceIdAndRegion()
 
 	// If uninstall is being run just after running install and before running init
@@ -65,7 +67,7 @@ func Uninstall(ctx context.Context, pkgSource PkgSource) error {
 	}
 
 	// Create SSM client
-	awsConfig, err := config.LoadDefaultConfig(context.Background(), config.WithRegion(region))
+	awsConfig, err := config.LoadDefaultConfig(ctx, config.WithRegion(region))
 	if err != nil {
 		return err
 	}
@@ -96,6 +98,14 @@ func Uninstall(ctx context.Context, pkgSource PkgSource) error {
 	}
 
 	return os.RemoveAll(symlinkedAWSConfigPath)
+}
+
+// Uninstall uninstall the ssm agent package and removes the setup-cli binary.
+// It does not de-register the managed instance and it leaves the registration and
+// credentials file.
+func Uninstall(ctx context.Context, logger *zap.Logger, pkgSource PkgSource) error {
+	logger.Info("Uninstalling SSM agent...")
+	return uninstallPreRegisterComponents(ctx, pkgSource)
 }
 
 func uninstallPreRegisterComponents(ctx context.Context, pkgSource PkgSource) error {
