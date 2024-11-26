@@ -30,6 +30,7 @@ type rhelCloudInitData struct {
 	RhelPassword      string
 	RootPasswordHash  string
 	Files             []File
+	SSMAgentURL       string
 }
 
 type RedHat8 struct {
@@ -37,6 +38,11 @@ type RedHat8 struct {
 	RhelPassword string
 	Architecture string
 }
+
+const (
+	rhelSsmAgentAMD = "https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/linux_amd64/amazon-ssm-agent.rpm"
+	rhelSsmAgentARM = "https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/linux_arm64/amazon-ssm-agent.rpm"
+)
 
 func NewRedHat8AMD(rhelUsername string, rhelPassword string) *RedHat8 {
 	rh8 := new(RedHat8)
@@ -145,10 +151,12 @@ func (r RedHat9) BuildUserData(UserDataInput UserDataInput) ([]byte, error) {
 		RhelPassword:      r.RhelPassword,
 		RootPasswordHash:  UserDataInput.RootPasswordHash,
 		Files:             UserDataInput.Files,
+		SSMAgentURL:       rhelSsmAgentAMD,
 	}
 
 	if r.Architecture == arm64Arch {
 		data.NodeadmUrl = UserDataInput.NodeadmUrls.ARM
+		data.SSMAgentURL = rhelSsmAgentARM
 	}
 
 	return executeTemplate(rhel9CloudInit, data)
