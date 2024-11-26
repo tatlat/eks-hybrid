@@ -404,6 +404,7 @@ var _ = Describe("Hybrid Nodes", func() {
 								test.logger.Info("Deleting EC2 Instance", "instanceID", ec2.instanceID)
 								Expect(deleteEC2Instance(ctx, test.ec2ClientV2, ec2.instanceID)).NotTo(HaveOccurred(), "EC2 Instance should have been deleted successfully")
 								test.logger.Info("Successfully deleted EC2 Instance", "instanceID", ec2.instanceID)
+								Expect(ensureNodeWithIPIsDeleted(ctx, test.k8sClient, ec2.ipAddress)).To(Succeed(), "node should have been deleted from the cluster")
 							})
 
 							joinNodeTest := joinNodeTest{
