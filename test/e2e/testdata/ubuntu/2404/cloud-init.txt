@@ -6,6 +6,8 @@ users:
     hashed_passwd: {{ .RootPasswordHash }}
 {{- end }}
 package_update: true
+packages:
+  - [containerd,1.7.12-0ubuntu4]
 write_files:
   - content: |
       #include <tunables/global>
