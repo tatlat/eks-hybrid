@@ -1,17 +1,19 @@
 package artifact
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"io/fs"
 	"os"
 	"os/exec"
 	"path"
+	"time"
 )
 
 // DefaultDirPerms are the permissions assigned to a directory when an Install* func is called
 // and it has to create the parent directories for the destination.
-const DefaultDirPerms = fs.ModeDir | 0755
+const DefaultDirPerms = fs.ModeDir | 0o755
 
 // InstallFile installs src to dst with perms permissions. It ensures any base paths exist
 // before installing.
@@ -54,8 +56,8 @@ func InstallTarGz(dst string, src string) error {
 	return nil
 }
 
-func InstallPackage(pkgSource Package) error {
-	installCmd := pkgSource.InstallCmd()
+func InstallPackage(ctx context.Context, pkgSource Package) error {
+	installCmd := pkgSource.InstallCmd(ctx)
 	out, err := installCmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("running install command using package manager: %s, err: %v", out, err)
@@ -63,11 +65,40 @@ func InstallPackage(pkgSource Package) error {
 	return nil
 }
 
-func UninstallPackage(pkgSource Package) error {
-	uninstallCmd := pkgSource.UninstallCmd()
+// InstallPackageWithRetries installs a package and retries errors until the context is
+// cancelled. The backoff duration is the time to wait between retries.
+func InstallPackageWithRetries(ctx context.Context, pkgSource Package, backoff time.Duration) error {
+	return retryCmd(ctx, pkgSource.InstallCmd, backoff)
+}
+
+func UninstallPackage(ctx context.Context, pkgSource Package) error {
+	uninstallCmd := pkgSource.UninstallCmd(ctx)
 	out, err := uninstallCmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("running uninstall command using package manager: %s, err: %v", out, err)
 	}
 	return nil
+}
+
+type cmdBuilder func(context.Context) *exec.Cmd
+
+func retryCmd(ctx context.Context, newCmd cmdBuilder, backoff time.Duration) error {
+	var err error
+	for {
+		var out []byte
+		cmd := newCmd(ctx)
+		out, err = cmd.CombinedOutput()
+		if err == nil {
+			return nil
+		}
+		err = fmt.Errorf("running command %s: %s [Err %s]", cmd.Args, out, err)
+		select {
+		case <-ctx.Done():
+			if err == nil {
+				return ctx.Err()
+			}
+			return fmt.Errorf("%s: %w", ctx.Err(), err)
+		case <-time.After(backoff):
+		}
+	}
 }
