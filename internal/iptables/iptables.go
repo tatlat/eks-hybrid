@@ -2,8 +2,10 @@ package iptables
 
 import (
 	"context"
-	"github.com/pkg/errors"
 	"os/exec"
+	"time"
+
+	"github.com/pkg/errors"
 
 	"github.com/aws/eks-hybrid/internal/artifact"
 	"github.com/aws/eks-hybrid/internal/tracker"
@@ -13,14 +15,19 @@ const iptablesBinName = "iptables"
 
 // Source interface for iptables package
 type Source interface {
-	GetIptables(ctx context.Context) artifact.Package
+	GetIptables() artifact.Package
 }
 
-// Install iptables package required for kubelet
+// Install iptables package required for kubelet.
 func Install(ctx context.Context, tracker *tracker.Tracker, source Source) error {
 	if !isIptablesInstalled() {
-		iptablesSrc := source.GetIptables(ctx)
-		if err := artifact.InstallPackage(iptablesSrc); err != nil {
+		iptablesSrc := source.GetIptables()
+		// Sometimes install fails due to conflicts with other processes
+		// updating packages, specially when automating at machine startup.
+		// We assume errors are transient and just retry for a bit.
+		ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+		defer cancel()
+		if err := artifact.InstallPackageWithRetries(ctx, iptablesSrc, 5*time.Second); err != nil {
 			return errors.Wrap(err, "failed to install iptables")
 		}
 		return tracker.Add(artifact.Iptables)
@@ -31,8 +38,8 @@ func Install(ctx context.Context, tracker *tracker.Tracker, source Source) error
 // Uninstall iptables package
 func Uninstall(ctx context.Context, source Source) error {
 	if isIptablesInstalled() {
-		iptablesSrc := source.GetIptables(ctx)
-		if err := artifact.UninstallPackage(iptablesSrc); err != nil {
+		iptablesSrc := source.GetIptables()
+		if err := artifact.UninstallPackage(ctx, iptablesSrc); err != nil {
 			return errors.Wrap(err, "failed to uninstall iptables")
 		}
 	}

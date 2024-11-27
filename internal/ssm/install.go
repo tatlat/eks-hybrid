@@ -28,7 +28,7 @@ type Source interface {
 
 // PkgSource serves and defines the package for target platform
 type PkgSource interface {
-	GetSSMPackage(ctx context.Context) artifact.Package
+	GetSSMPackage() artifact.Package
 }
 
 func Install(ctx context.Context, tracker *tracker.Tracker, source Source) error {
@@ -109,8 +109,8 @@ func Uninstall(ctx context.Context, logger *zap.Logger, pkgSource PkgSource) err
 }
 
 func uninstallPreRegisterComponents(ctx context.Context, pkgSource PkgSource) error {
-	ssmPkg := pkgSource.GetSSMPackage(ctx)
-	if err := artifact.UninstallPackage(ssmPkg); err != nil {
+	ssmPkg := pkgSource.GetSSMPackage()
+	if err := artifact.UninstallPackage(ctx, ssmPkg); err != nil {
 		return errors.Wrapf(err, "failed to uninstall ssm")
 	}
 	return os.RemoveAll(installerPath)

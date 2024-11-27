@@ -29,7 +29,7 @@ const (
 	ubuntuDockerRepo            = "https://download.docker.com/linux/ubuntu"
 	ubuntuDockerGpgKey          = "https://download.docker.com/linux/ubuntu/gpg"
 	ubuntuDockerGpgKeyPath      = "/etc/apt/keyrings/docker.asc"
-	ubuntuDockerGpgKeyFilePerms = 0755
+	ubuntuDockerGpgKeyFilePerms = 0o755
 	aptDockerRepoSourceFilePath = "/etc/apt/sources.list.d/docker.list"
 
 	containerdDistroPkgName = "containerd"
@@ -190,38 +190,38 @@ func (pm *DistroPackageManager) removePackage(ctx context.Context, packageName s
 
 // GetContainerd gets the Package
 // Satisfies the containerd source interface
-func (pm *DistroPackageManager) GetContainerd(ctx context.Context) artifact.Package {
+func (pm *DistroPackageManager) GetContainerd() artifact.Package {
 	packageName := containerdDistroPkgName
 	if pm.dockerRepo != "" {
 		packageName = containerdDockerPkgName
 	}
 	return artifact.NewPackageSource(
-		exec.CommandContext(ctx, pm.manager, pm.installVerb, packageName, "-y"),
-		exec.CommandContext(ctx, pm.manager, pm.deleteVerb, packageName, "-y"),
+		artifact.NewCmd(pm.manager, pm.installVerb, packageName, "-y"),
+		artifact.NewCmd(pm.manager, pm.deleteVerb, packageName, "-y"),
 	)
 }
 
 // GetIptables satisfies the getiptables source interface
-func (pm *DistroPackageManager) GetIptables(ctx context.Context) artifact.Package {
+func (pm *DistroPackageManager) GetIptables() artifact.Package {
 	return artifact.NewPackageSource(
-		exec.CommandContext(ctx, pm.manager, pm.installVerb, "iptables", "-y"),
-		exec.CommandContext(ctx, pm.manager, pm.deleteVerb, "iptables", "-y"),
+		artifact.NewCmd(pm.manager, pm.installVerb, "iptables", "-y"),
+		artifact.NewCmd(pm.manager, pm.deleteVerb, "iptables", "-y"),
 	)
 }
 
 // GetSSMPackage satisfies the getssmpackage source interface
-func (pm *DistroPackageManager) GetSSMPackage(ctx context.Context) artifact.Package {
+func (pm *DistroPackageManager) GetSSMPackage() artifact.Package {
 	// SSM is installed using snap package manager. If apt package manager
 	// is detected, use snap to install/uninstall SSM.
 	if pm.manager == aptPackageManager {
 		return artifact.NewPackageSource(
-			exec.CommandContext(ctx, snapPackageManager, snapRemoveVerb, "amazon-ssm-agent"),
-			exec.CommandContext(ctx, snapPackageManager, snapRemoveVerb, "amazon-ssm-agent"),
+			artifact.NewCmd(snapPackageManager, snapRemoveVerb, "amazon-ssm-agent"),
+			artifact.NewCmd(snapPackageManager, snapRemoveVerb, "amazon-ssm-agent"),
 		)
 	}
 	return artifact.NewPackageSource(
-		exec.CommandContext(ctx, pm.manager, pm.installVerb, "amazon-ssm-agent", "-y"),
-		exec.CommandContext(ctx, pm.manager, pm.deleteVerb, "amazon-ssm-agent", "-y"),
+		artifact.NewCmd(pm.manager, pm.installVerb, "amazon-ssm-agent", "-y"),
+		artifact.NewCmd(pm.manager, pm.deleteVerb, "amazon-ssm-agent", "-y"),
 	)
 }
 
@@ -244,6 +244,7 @@ var packageManagerUpdateCmd = map[string]string{
 	aptPackageManager: "update",
 	yumPackageManager: "update",
 }
+
 var packageManagerDeleteCmd = map[string]string{
 	aptPackageManager: "autoremove",
 	yumPackageManager: "remove",

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"time"
 
 	"github.com/pkg/errors"
 
@@ -27,7 +28,7 @@ const (
 
 // Source represents a source that serves a containerd binary.
 type Source interface {
-	GetContainerd(ctx context.Context) artifact.Package
+	GetContainerd() artifact.Package
 }
 
 func Install(ctx context.Context, tracker *tracker.Tracker, source Source, containerdSource SourceName) error {
@@ -35,8 +36,13 @@ func Install(ctx context.Context, tracker *tracker.Tracker, source Source, conta
 		return nil
 	}
 	if isContainerdNotInstalled() {
-		containerd := source.GetContainerd(ctx)
-		if err := artifact.InstallPackage(containerd); err != nil {
+		containerd := source.GetContainerd()
+		// Sometimes install fails due to conflicts with other processes
+		// updating packages, specially when automating at machine startup.
+		// We assume errors are transient and just retry for a bit.
+		ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+		defer cancel()
+		if err := artifact.InstallPackageWithRetries(ctx, containerd, 5*time.Second); err != nil {
 			return errors.Wrap(err, "failed to install containerd")
 		}
 		tracker.MarkContainerd(string(containerdSource))
@@ -46,8 +52,8 @@ func Install(ctx context.Context, tracker *tracker.Tracker, source Source, conta
 
 func Uninstall(ctx context.Context, source Source) error {
 	if isContainerdInstalled() {
-		containerd := source.GetContainerd(ctx)
-		if err := artifact.UninstallPackage(containerd); err != nil {
+		containerd := source.GetContainerd()
+		if err := artifact.UninstallPackage(ctx, containerd); err != nil {
 			return errors.Wrap(err, "failed to uninstall containerd")
 		}
 
