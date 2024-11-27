@@ -115,11 +115,16 @@ func generateKubeconfig(cfg *api.NodeConfig) ([]byte, error) {
 }
 
 // GetKubeClientFromKubeConfig gets kubernetes client from kubeconfig on the disk
-func GetKubeClientFromKubeConfig() (*kubernetes.Clientset, error) {
+func GetKubeClientFromKubeConfig() (kubernetes.Interface, error) {
 	// Use the current context in the kubeconfig file
-	config, err := clientcmd.BuildConfigFromFlags("", kubeconfigPath)
+	config, err := clientcmd.BuildConfigFromFlags("", KubeconfigPath())
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to build config from kubeconfig")
 	}
 	return kubernetes.NewForConfig(config)
+}
+
+// KubeconfigPath returns the path to the kubeconfig file used by the kubelet.
+func KubeconfigPath() string {
+	return kubeconfigPath
 }
