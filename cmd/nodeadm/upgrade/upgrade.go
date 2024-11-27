@@ -31,7 +31,7 @@ const (
 
 func NewUpgradeCommand() cli.Command {
 	cmd := command{
-		timeout: 10 * time.Minute,
+		timeout: 20 * time.Minute,
 	}
 
 	fc := flaggy.NewSubcommand("upgrade")

@@ -25,8 +25,6 @@ func Install(ctx context.Context, tracker *tracker.Tracker, source Source) error
 		// Sometimes install fails due to conflicts with other processes
 		// updating packages, specially when automating at machine startup.
 		// We assume errors are transient and just retry for a bit.
-		ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
-		defer cancel()
 		if err := artifact.InstallPackageWithRetries(ctx, iptablesSrc, 5*time.Second); err != nil {
 			return errors.Wrap(err, "failed to install iptables")
 		}

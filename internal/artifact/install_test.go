@@ -5,7 +5,9 @@ import (
 	"context"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -124,4 +126,53 @@ func TestInstallPackageWithRetries(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestInstallPackageWithRetriesSuccessAfterFailure(t *testing.T) {
+	g := NewWithT(t)
+	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
+	defer cancel()
+
+	source := &dynamicSource{}
+	source.SetInstallCmd(artifact.NewCmd("fake-command"))
+
+	go func() {
+		time.Sleep(60 * time.Millisecond)
+		source.SetInstallCmd(artifact.NewCmd("echo", "hello"))
+	}()
+
+	g.Expect(artifact.InstallPackageWithRetries(ctx, source, 1*time.Millisecond)).To(Succeed())
+}
+
+type dynamicSource struct {
+	sync.RWMutex
+	installCmd   artifact.Cmd
+	uninstallCmd artifact.Cmd
+}
+
+var _ artifact.Package = &dynamicSource{}
+
+func (f *dynamicSource) InstallCmd(ctx context.Context) *exec.Cmd {
+	f.RLock()
+	defer f.RUnlock()
+	return f.installCmd.Command(ctx)
+}
+
+func (f *dynamicSource) UninstallCmd(ctx context.Context) *exec.Cmd {
+	f.RLock()
+	defer f.RUnlock()
+	return f.uninstallCmd.Command(ctx)
+}
+
+func (f *dynamicSource) SetInstallCmd(cmd artifact.Cmd) {
+	f.Lock()
+	defer f.Unlock()
+	f.installCmd = cmd
+}
+
+func (f *dynamicSource) SetUninstallCmd(cmd artifact.Cmd) {
+	f.Lock()
+	defer f.Unlock()
+	f.uninstallCmd = cmd
 }
