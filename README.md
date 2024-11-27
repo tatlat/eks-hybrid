@@ -41,9 +41,9 @@ Install Kubernetes version 1.31 with AWS Systems Manager (SSM) as the credential
 ```sh
 nodeadm install 1.31 --credential-provider ssm 
 ```
-Install Kubernetes version 1.31 with AWS Systems Manager (SSM) as the credential provider with a download timeout of 20 minutes.
+Install Kubernetes version 1.31 with AWS Systems Manager (SSM) as the credential provider with a download timeout of 30 minutes.
 ```sh
-nodeadm install 1.31 --credential-provider ssm --download-timeout 20m
+nodeadm install 1.31 --credential-provider ssm --timeout 30m
 ```
 Install Kubernetes version 1.31 with AWS IAM Roles Anywhere as the credential provider
 ```sh
@@ -66,9 +66,9 @@ Upgrade to Kubernetes version 1.31
 ```sh
 nodeadm upgrade 1.31 --config-source file:///root/nodeConfig.yaml
 ```
-Upgrade to Kubernetes version `1.31` with a download timeout of 20 minutes.
+Upgrade to Kubernetes version `1.31` with a download timeout of 30 minutes.
 ```sh
-nodeadm upgrade 1.31 --config-source file:///root/nodeConfig.yaml --download-timeout 20m
+nodeadm upgrade 1.31 --config-source file:///root/nodeConfig.yaml --timeout 30m
 ```
 
 #### nodeadm uninstall

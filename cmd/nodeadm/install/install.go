@@ -17,15 +17,15 @@ import (
 
 func NewCommand() cli.Command {
 	cmd := command{
-		downloadTimeout: 5 * time.Minute,
+		timeout: 5 * time.Minute,
 	}
 
 	fc := flaggy.NewSubcommand("install")
 	fc.Description = "Install components required to join an EKS cluster"
 	fc.AddPositionalValue(&cmd.kubernetesVersion, "KUBERNETES_VERSION", 1, true, "The major[.minor[.patch]] version of Kubernetes to install")
 	fc.String(&cmd.credentialProvider, "p", "credential-provider", "Credential process to install. Allowed values are ssm & iam-ra")
-	fc.String(&cmd.containerdSource, "cs", "containerd-source", "Source for containerd artifact. Allowed values are none, distro & docker")
-	fc.Duration(&cmd.downloadTimeout, "dt", "download-timeout", "Timeout for downloading artifacts. Input follows duration format. Example: 1h23s")
+	fc.String(&cmd.containerdSource, "s", "containerd-source", "Source for containerd artifact. Allowed values are none, distro & docker")
+	fc.Duration(&cmd.timeout, "t", "timeout", "Maximum install command duration. Input follows duration format. Example: 1h23s")
 	cmd.flaggy = fc
 
 	return &cmd
@@ -36,7 +36,7 @@ type command struct {
 	kubernetesVersion  string
 	credentialProvider string
 	containerdSource   string
-	downloadTimeout    time.Duration
+	timeout    time.Duration
 }
 
 type Config struct {
@@ -83,7 +83,7 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), c.downloadTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
 	defer cancel()
 
 	log.Info("Setting package manager config", zap.Reflect("containerd source", string(containerdSource)))
