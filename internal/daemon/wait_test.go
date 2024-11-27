@@ -14,7 +14,7 @@ import (
 func TestWaitForStatusSuccess(t *testing.T) {
 	ctx := context.Background()
 	g := NewWithT(t)
-	manager := &fakeManager{}
+	manager := newFakeManager()
 
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
@@ -32,7 +32,7 @@ func TestWaitForStatusSuccess(t *testing.T) {
 func TestWaitForStatusTimeout(t *testing.T) {
 	ctx := context.Background()
 	g := NewWithT(t)
-	manager := &fakeManager{}
+	manager := newFakeManager()
 
 	ctx, cancel := context.WithTimeout(ctx, 1*time.Millisecond)
 	defer cancel()
@@ -42,14 +42,112 @@ func TestWaitForStatusTimeout(t *testing.T) {
 	).NotTo(MatchError((ContainSubstring("daemon my-daemon still has status unknown: context deadline exceeded"))))
 }
 
+func TestWaitForOperationTimeout(t *testing.T) {
+	ctx := context.Background()
+	g := NewWithT(t)
+	manager := newFakeManager()
+
+	ctx, cancel := context.WithTimeout(ctx, 1*time.Millisecond)
+	defer cancel()
+
+	g.Expect(
+		daemon.WaitForOperation(ctx, manager.RestartDaemon, "my-daemon"),
+	).To(MatchError(ContainSubstring("operation for daemon my-daemon did not complete in time, result is unknown")))
+}
+
+func TestWaitForOperationErrors(t *testing.T) {
+	testCases := []struct {
+		name    string
+		result  daemon.OperationResult
+		wantErr string
+	}{
+		{
+			name:   "happy path",
+			result: daemon.Done,
+		},
+		{
+			name:   "cancelled",
+			result: daemon.Canceled,
+		},
+		{
+			name:   "dependency",
+			result: daemon.Dependency,
+		},
+		{
+			name:   "skipped",
+			result: daemon.Skipped,
+		},
+		{
+			name:    "failed",
+			result:  daemon.Failed,
+			wantErr: "operation for daemon my-daemon failed with result [failed]",
+		},
+		{
+			name:    "timeout",
+			result:  daemon.Timeout,
+			wantErr: "operation for daemon my-daemon failed with result [timeout]",
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			g := NewWithT(t)
+			ctx := context.Background()
+			manager := newFakeManager()
+
+			ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			defer cancel()
+
+			go func() {
+				time.Sleep(5 * time.Millisecond)
+				manager.SetOperationResult("restart", "my-daemon", tc.result)
+			}()
+
+			err := daemon.WaitForOperation(ctx, manager.RestartDaemon, "my-daemon")
+			if tc.wantErr != "" {
+				g.Expect(err).To(MatchError(ContainSubstring(tc.wantErr)))
+			} else {
+				g.Expect(err).To(Succeed())
+			}
+		})
+	}
+}
+
+func newFakeManager() *fakeManager {
+	return &fakeManager{
+		operationResults: make(map[string]daemon.OperationResult),
+	}
+}
+
 type fakeManager struct {
 	sync.RWMutex
-	status daemon.DaemonStatus
+	status           daemon.DaemonStatus
+	operationResults map[string]daemon.OperationResult
 }
 
 var _ daemon.DaemonManager = &fakeManager{}
 
-func (f *fakeManager) RestartDaemon(name string) error {
+func (f *fakeManager) RestartDaemon(ctx context.Context, name string, opts ...daemon.OperationOption) error {
+	resultKey := "restart-" + name
+	o := &daemon.OperationOptions{}
+	for _, opt := range opts {
+		opt(o)
+	}
+
+	if o.Result != nil {
+		go func() {
+			for {
+				time.Sleep(1 * time.Millisecond)
+				f.RLock()
+				result, ok := f.operationResults[resultKey]
+				f.RUnlock()
+				if ok {
+					o.Result <- result
+					return
+				}
+			}
+		}()
+	}
+
 	return nil
 }
 
@@ -86,4 +184,10 @@ func (f *fakeManager) SetStatus(s daemon.DaemonStatus) {
 	f.Lock()
 	defer f.Unlock()
 	f.status = s
+}
+
+func (f *fakeManager) SetOperationResult(op, name string, r daemon.OperationResult) {
+	f.Lock()
+	defer f.Unlock()
+	f.operationResults[op+"-"+name] = r
 }

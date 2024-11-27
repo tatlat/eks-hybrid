@@ -2,6 +2,7 @@ package iamrolesanywhere
 
 import (
 	"bytes"
+	"context"
 	_ "embed"
 	"fmt"
 	"text/template"
@@ -50,19 +51,19 @@ func (s *SigningHelperDaemon) Configure() error {
 		return fmt.Errorf("executing aws_signing_helper_update service template: %v", err)
 	}
 
-	if err := util.WriteFileWithDir(SigningHelperServiceFilePath, buf.Bytes(), 0644); err != nil {
+	if err := util.WriteFileWithDir(SigningHelperServiceFilePath, buf.Bytes(), 0o644); err != nil {
 		return fmt.Errorf("writing aws_signing_helper_update service file %s: %v", EksHybridAwsCredentialsPath, err)
 	}
 	return nil
 }
 
 // EnsureRunning enables and starts the aws_signing_helper unit.
-func (s *SigningHelperDaemon) EnsureRunning() error {
+func (s *SigningHelperDaemon) EnsureRunning(ctx context.Context) error {
 	err := s.daemonManager.EnableDaemon(s.Name())
 	if err != nil {
 		return err
 	}
-	return s.daemonManager.RestartDaemon(s.Name())
+	return s.daemonManager.RestartDaemon(ctx, s.Name())
 }
 
 // PostLaunch runs any additional step that needs to occur after the service

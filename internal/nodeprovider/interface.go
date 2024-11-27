@@ -1,6 +1,8 @@
 package nodeprovider
 
 import (
+	"context"
+
 	"github.com/aws/eks-hybrid/internal/api"
 	"github.com/aws/eks-hybrid/internal/aws"
 	"github.com/aws/eks-hybrid/internal/configenricher"
@@ -24,7 +26,7 @@ type NodeProvider interface {
 
 	// PreProcessDaemon runs a pre-init hook function if required by node provider. This could be SSM registration
 	// for hybrid nodes
-	PreProcessDaemon() error
+	PreProcessDaemon(ctx context.Context) error
 
 	// GetDaemons returns daemons to be run for the node provider
 	GetDaemons() ([]daemon.Daemon, error)

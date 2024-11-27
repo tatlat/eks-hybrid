@@ -3,15 +3,16 @@ package hybrid
 import (
 	"context"
 	"fmt"
+	"time"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"go.uber.org/zap"
 
 	"github.com/aws/eks-hybrid/internal/api"
 	"github.com/aws/eks-hybrid/internal/daemon"
 	"github.com/aws/eks-hybrid/internal/iamrolesanywhere"
 	"github.com/aws/eks-hybrid/internal/ssm"
-	"go.uber.org/zap"
-
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/config"
 )
 
 const iamRoleAnywhereProfileName = "hybrid"
@@ -26,9 +27,13 @@ func (hnp *HybridNodeProvider) ConfigureAws(ctx context.Context) error {
 			return fmt.Errorf("configuring aws credentials with SSM: %w", err)
 		}
 
-		awsConfig, err := generateAWSConfigForSSM(ctx, hnp.nodeConfig)
+		configCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+		defer cancel()
+
+		hnp.logger.Info("Waiting for AWS config to be available")
+		awsConfig, err := ssm.WaitForAWSConfig(configCtx, hnp.nodeConfig, 2*time.Second)
 		if err != nil {
-			return fmt.Errorf("generating aws config for SSM: %w", err)
+			return fmt.Errorf("reading aws config for SSM: %w", err)
 		}
 
 		hnp.awsConfig = &awsConfig
@@ -57,12 +62,12 @@ type SSMAWSConfigurator struct {
 	Logger  *zap.Logger
 }
 
-func (c SSMAWSConfigurator) Configure(_ context.Context, nodeConfig *api.NodeConfig) error {
+func (c SSMAWSConfigurator) Configure(ctx context.Context, nodeConfig *api.NodeConfig) error {
 	ssmDaemon := ssm.NewSsmDaemon(c.Manager, nodeConfig, c.Logger)
 	if err := ssmDaemon.Configure(); err != nil {
 		return err
 	}
-	if err := ssmDaemon.EnsureRunning(); err != nil {
+	if err := ssmDaemon.EnsureRunning(ctx); err != nil {
 		return err
 	}
 	if err := ssmDaemon.PostLaunch(); err != nil {
@@ -70,10 +75,6 @@ func (c SSMAWSConfigurator) Configure(_ context.Context, nodeConfig *api.NodeCon
 	}
 
 	return nil
-}
-
-func generateAWSConfigForSSM(ctx context.Context, nodeConfig *api.NodeConfig) (aws.Config, error) {
-	return config.LoadDefaultConfig(ctx, config.WithRegion(nodeConfig.Spec.Cluster.Region))
 }
 
 type RolesAnywhereAWSConfigurator struct{}

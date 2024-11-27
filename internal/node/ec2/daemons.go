@@ -1,6 +1,8 @@
 package ec2
 
 import (
+	"context"
+
 	"github.com/pkg/errors"
 
 	"github.com/aws/eks-hybrid/internal/containerd"
@@ -27,6 +29,6 @@ func (enp *ec2NodeProvider) GetDaemons() ([]daemon.Daemon, error) {
 	}, nil
 }
 
-func (enp *ec2NodeProvider) PreProcessDaemon() error {
+func (enp *ec2NodeProvider) PreProcessDaemon(_ context.Context) error {
 	return nil
 }
