@@ -10,7 +10,7 @@ PROVDER="$3"
 NODEADM_ADDITIONAL_ARGS="${4-}"
 
 function gather_logs(){
-    /tmp/nodeadm debug -c file:///nodeadm-config.yaml
+    /tmp/nodeadm debug -c file:///nodeadm-config.yaml || true
     # Arbitrary wait to give enough time for logs to populated with potential errors
     # if the node successfully joins and reboots in this, we wont get the logs
     sleep 15
