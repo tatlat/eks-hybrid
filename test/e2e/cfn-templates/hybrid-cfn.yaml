@@ -2,16 +2,6 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: CloudFormation template to create IAM roles and an EC2 instance with customizable volume size.
 
 Parameters:
-  ssm:
-    Type: String
-    Description: Specify whether to use the SSM provider.
-    AllowedValues: ['true', 'false']
-    Default: 'false'
-  iamra:
-    Type: String
-    Description: Specify whether to use the IAM RA provider.
-    AllowedValues: ['true', 'false']
-    Default: 'false'
   caBundleCert:
     Type: String
   clusterArn:
@@ -21,13 +11,8 @@ Parameters:
     Type: String
     Description: The name of the EKS cluster.
 
-Conditions:
-  CreateSSMRole: !Equals [!Ref ssm, 'true']
-  CreateIRAResource: !Equals [!Ref 'iamra', 'true']
-
 Resources:
   SSMRole:
-    Condition: CreateSSMRole
     Type: AWS::IAM::Role
     Properties: 
       RoleName: !Sub "${AWS::StackName}-ssm"
@@ -75,7 +60,6 @@ Resources:
           Value: !Sub '${AWS::StackName}'
 
   SSMClusterAccessEntry:
-    Condition: CreateSSMRole
     Type: AWS::EKS::AccessEntry
     Properties:
       ClusterName: !Ref clusterName
@@ -84,7 +68,6 @@ Resources:
 
 
   TrustAnchor:
-    Condition: CreateIRAResource
     Type: AWS::RolesAnywhere::TrustAnchor
     Properties:
       Enabled: true
@@ -95,7 +78,6 @@ Resources:
           X509CertificateData: !Ref caBundleCert
   
   AnywhereProfile:
-    Condition: CreateIRAResource
     Type: AWS::RolesAnywhere::Profile
     Properties:
       Enabled: true
@@ -107,7 +89,6 @@ Resources:
       - IRARole
 
   IRARole:
-    Condition: CreateIRAResource
     Type: AWS::IAM::Role
     Properties:
       RoleName: !Sub '${AWS::StackName}-ira'
@@ -150,7 +131,6 @@ Resources:
     - TrustAnchor
   
   IRAClusterAccessEntry:
-    Condition: CreateIRAResource
     Type: AWS::EKS::AccessEntry
     Properties:
       ClusterName: !Ref clusterName
@@ -179,31 +159,25 @@ Outputs:
     Value: !Ref EC2Role
 
   SSMNodeRoleName:
-    Condition: CreateSSMRole
     Description: The name of the IAM Role for SSM.
     Value: !Ref SSMRole
 
   SSMNodeRoleARN:
-    Condition: CreateSSMRole
     Description: The ARN of the IAM Role for SSM.
     Value: !GetAtt SSMRole.Arn
   
   IRANodeRoleName:
-    Condition: CreateIRAResource
     Description: IAM Role for IAM Roles Anywhere
     Value: !Ref IRARole
   
   IRANodeRoleARN:
-    Condition: CreateIRAResource
     Description: ARN of the EKS Hybrid IRA Role
     Value: !GetAtt IRARole.Arn
 
   IRATrustAnchorARN:
-    Condition: CreateIRAResource
     Description: ARN of the EKS Hybrid IRA Trust Anchor
     Value: !GetAtt TrustAnchor.TrustAnchorArn
 
   IRAProfileARN:
-    Condition: CreateIRAResource
     Description: ARN of the EKS Hybrid IRA Profile
     Value: !GetAtt AnywhereProfile.ProfileArn
