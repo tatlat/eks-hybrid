@@ -1,14 +1,6 @@
 ---
 # Source: tigera-operator/templates/crs/custom-resources.yaml
 apiVersion: operator.tigera.io/v1
-kind: APIServer
-metadata:
-  name: default
-spec:
-  {}
----
-# Source: tigera-operator/templates/crs/custom-resources.yaml
-apiVersion: operator.tigera.io/v1
 kind: Installation
 metadata:
   name: default
