@@ -31,7 +31,7 @@ const (
 
 func NewUpgradeCommand() cli.Command {
 	cmd := command{
-		downloadTimeout: 10 * time.Minute,
+		timeout: 10 * time.Minute,
 	}
 
 	fc := flaggy.NewSubcommand("upgrade")
@@ -39,7 +39,7 @@ func NewUpgradeCommand() cli.Command {
 	fc.AddPositionalValue(&cmd.kubernetesVersion, "KUBERNETES_VERSION", 1, true, "The major[.minor[.patch]] version of Kubernetes to install")
 	fc.String(&cmd.configSource, "c", "config-source", "Source of node configuration. The format is a URI with supported schemes: [file, imds].")
 	fc.StringSlice(&cmd.skipPhases, "s", "skip", "phases of the upgrade you want to skip")
-	fc.Duration(&cmd.downloadTimeout, "dt", "download-timeout", "Timeout for downloading artifacts. Input follows duration format. Example: 1h23s")
+	fc.Duration(&cmd.timeout, "t", "timeout", "Maximum upgrade command duration. Input follows duration format. Example: 1h23s")
 	cmd.flaggy = fc
 	return &cmd
 }
@@ -49,7 +49,7 @@ type command struct {
 	configSource      string
 	skipPhases        []string
 	kubernetesVersion string
-	downloadTimeout   time.Duration
+	timeout   time.Duration
 }
 
 func (c *command) Flaggy() *flaggy.Subcommand {
@@ -79,7 +79,7 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), c.downloadTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
 	defer cancel()
 
 	if !slices.Contains(c.skipPhases, initNodePreflightCheck) {
