@@ -17,7 +17,7 @@ import (
 
 func NewCommand() cli.Command {
 	cmd := command{
-		timeout: 5 * time.Minute,
+		timeout: 20 * time.Minute,
 	}
 
 	fc := flaggy.NewSubcommand("install")

@@ -27,6 +27,11 @@ type Cmd struct {
 	Args []string
 }
 
+// Command returns a new exec.Cmd.
+func (c Cmd) Command(ctx context.Context) *exec.Cmd {
+	return exec.CommandContext(ctx, c.Path, c.Args...)
+}
+
 // NewCmd returns a new Cmd.
 func NewCmd(path string, args ...string) Cmd {
 	return Cmd{
@@ -43,9 +48,9 @@ func NewPackageSource(installCmd, uninstallCmd Cmd) Package {
 }
 
 func (ps *packageSource) InstallCmd(ctx context.Context) *exec.Cmd {
-	return exec.CommandContext(ctx, ps.installCmd.Path, ps.installCmd.Args...)
+	return ps.installCmd.Command(ctx)
 }
 
 func (ps *packageSource) UninstallCmd(ctx context.Context) *exec.Cmd {
-	return exec.CommandContext(ctx, ps.uninstallCmd.Path, ps.uninstallCmd.Args...)
+	return ps.uninstallCmd.Command(ctx)
 }
