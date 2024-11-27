@@ -1,6 +1,8 @@
 package containerd
 
 import (
+	"context"
+
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/eks-hybrid/internal/api"
 	"github.com/aws/eks-hybrid/internal/daemon"
@@ -37,15 +39,15 @@ func (cd *containerd) Configure() error {
 // EnsureRunning ensures containerd is running with the written configuration
 // With some installations, containerd daemon is already in an running state
 // This enables the daemon and restarts or starts depending on the state of daemon
-func (cd *containerd) EnsureRunning() error {
-	if err := cd.daemonManager.RestartDaemon(kernelModulesSystemdUnit); err != nil {
+func (cd *containerd) EnsureRunning(ctx context.Context) error {
+	if err := cd.daemonManager.RestartDaemon(ctx, kernelModulesSystemdUnit); err != nil {
 		return err
 	}
 	err := cd.daemonManager.EnableDaemon(ContainerdDaemonName)
 	if err != nil {
 		return err
 	}
-	return cd.daemonManager.RestartDaemon(ContainerdDaemonName)
+	return cd.daemonManager.RestartDaemon(ctx, ContainerdDaemonName)
 }
 
 func (cd *containerd) PostLaunch() error {

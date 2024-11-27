@@ -57,12 +57,12 @@ type SSMAWSConfigurator struct {
 	Logger  *zap.Logger
 }
 
-func (c SSMAWSConfigurator) Configure(_ context.Context, nodeConfig *api.NodeConfig) error {
+func (c SSMAWSConfigurator) Configure(ctx context.Context, nodeConfig *api.NodeConfig) error {
 	ssmDaemon := ssm.NewSsmDaemon(c.Manager, nodeConfig, c.Logger)
 	if err := ssmDaemon.Configure(); err != nil {
 		return err
 	}
-	if err := ssmDaemon.EnsureRunning(); err != nil {
+	if err := ssmDaemon.EnsureRunning(ctx); err != nil {
 		return err
 	}
 	if err := ssmDaemon.PostLaunch(); err != nil {

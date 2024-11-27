@@ -54,24 +54,28 @@ func (s *ssm) Configure() error {
 	return nil
 }
 
-func (s *ssm) EnsureRunning() error {
+func (s *ssm) EnsureRunning(ctx context.Context) error {
 	err := s.daemonManager.EnableDaemon(SsmDaemonName)
 	if err != nil {
 		return err
 	}
-	if err := s.daemonManager.RestartDaemon(SsmDaemonName); err != nil {
-		return err
-	}
 
-	// TODO(g-gaston): this method should take a context
-	ctx := context.Background()
-	ctx, cancel := context.WithTimeout(ctx, 1*time.Minute)
+	restartCancel, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
 
-	s.logger.Info("Waiting for SSM agent to be running")
-	if err := daemon.WaitForStatus(ctx, s.logger, s.daemonManager, SsmDaemonName, daemon.DaemonStatusRunning, 5*time.Second); err != nil {
+	s.logger.Info("Restarting SSM agent...")
+	if err := daemon.WaitForOperation(restartCancel, s.daemonManager.RestartDaemon, SsmDaemonName); err != nil {
+		return fmt.Errorf("restarting SSM agent: %w", err)
+	}
+
+	runningCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	defer cancel()
+
+	s.logger.Info("Waiting for SSM agent to be running...")
+	if err := daemon.WaitForStatus(runningCtx, s.logger, s.daemonManager, SsmDaemonName, daemon.DaemonStatusRunning, 5*time.Second); err != nil {
 		return fmt.Errorf("waiting for SSM agent to be running: %w", err)
 	}
+	s.logger.Info("SSM agent is running")
 
 	return nil
 }

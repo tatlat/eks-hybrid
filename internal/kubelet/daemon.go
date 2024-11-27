@@ -1,6 +1,8 @@
 package kubelet
 
 import (
+	"context"
+
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/eks-hybrid/internal/api"
 	"github.com/aws/eks-hybrid/internal/daemon"
@@ -49,7 +51,7 @@ func (k *kubelet) Configure() error {
 	return nil
 }
 
-func (k *kubelet) EnsureRunning() error {
+func (k *kubelet) EnsureRunning(_ context.Context) error {
 	if err := k.daemonManager.DaemonReload(); err != nil {
 		return err
 	}

@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -30,4 +31,42 @@ func WaitForStatus(ctx context.Context, logger *zap.Logger, manager DaemonManage
 		case <-time.After(backoff):
 		}
 	}
+}
+
+// AsyncOperation is a daemon operation that performs an action in the background.
+type AsyncOperation func(ctx context.Context, daemonName string, opts ...OperationOption) error
+
+// WaitForOperation waits for an asynchronous operation to complete. If the operation returns a Failed or Timeout
+// result, an error is returned. If the context is cancelled, an error is returned. If the operation completes
+// with any other result (Done, Cancelled, Dependency, Skipped), nil is returned.
+func WaitForOperation(ctx context.Context, op AsyncOperation, name string, opts ...OperationOption) error {
+	o := &OperationOptions{}
+	for _, opt := range opts {
+		opt(o)
+	}
+
+	if o.Result != nil {
+		return errors.New("cannot specify a result channel when waiting for an operation")
+	}
+
+	result := make(chan OperationResult)
+	o.Result = result
+
+	if err := op(ctx, name, o.ApplyAll); err != nil {
+		return err
+	}
+
+	select {
+	case <-ctx.Done():
+		return fmt.Errorf("operation for daemon %s did not complete in time, result is unknown: %w", name, ctx.Err())
+	case res := <-result:
+		switch res {
+		case Failed, Timeout:
+			return fmt.Errorf("operation for daemon %s failed with result [%s]", name, res)
+		case Done, Canceled, Dependency, Skipped:
+			return nil
+		}
+	}
+
+	return nil
 }

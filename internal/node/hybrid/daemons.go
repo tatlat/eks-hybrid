@@ -1,6 +1,8 @@
 package hybrid
 
 import (
+	"context"
+
 	"github.com/pkg/errors"
 
 	"github.com/aws/eks-hybrid/internal/containerd"
@@ -28,7 +30,7 @@ func (hnp *HybridNodeProvider) GetDaemons() ([]daemon.Daemon, error) {
 	}, nil
 }
 
-func (hnp *HybridNodeProvider) PreProcessDaemon() error {
+func (hnp *HybridNodeProvider) PreProcessDaemon(ctx context.Context) error {
 	if hnp.nodeConfig.IsIAMRolesAnywhere() {
 		if hnp.nodeConfig.Spec.Hybrid.EnableCredentialsFile {
 			hnp.logger.Info("Configuring aws_signing_helper_update daemon")
@@ -36,7 +38,7 @@ func (hnp *HybridNodeProvider) PreProcessDaemon() error {
 			if err := signingHelper.Configure(); err != nil {
 				return err
 			}
-			if err := signingHelper.EnsureRunning(); err != nil {
+			if err := signingHelper.EnsureRunning(ctx); err != nil {
 				return err
 			}
 		}

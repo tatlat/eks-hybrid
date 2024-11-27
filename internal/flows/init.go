@@ -50,7 +50,7 @@ func (i *Initer) Run(ctx context.Context) error {
 
 	if !slices.Contains(i.SkipPhases, preprocessPhase) {
 		i.Logger.Info("Configuring Pre-process daemons...")
-		if err := i.NodeProvider.PreProcessDaemon(); err != nil {
+		if err := i.NodeProvider.PreProcessDaemon(ctx); err != nil {
 			return err
 		}
 	}
@@ -77,7 +77,7 @@ func (i *Initer) Run(ctx context.Context) error {
 			nameField := zap.String("name", daemon.Name())
 
 			i.Logger.Info("Ensuring daemon is running..", nameField)
-			if err := daemon.EnsureRunning(); err != nil {
+			if err := daemon.EnsureRunning(ctx); err != nil {
 				return err
 			}
 			i.Logger.Info("Daemon is running", nameField)

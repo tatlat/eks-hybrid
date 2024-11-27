@@ -55,9 +55,18 @@ func (m *systemdDaemonManager) StopDaemon(name string) error {
 	return nil
 }
 
-func (m *systemdDaemonManager) RestartDaemon(name string) error {
+func (m *systemdDaemonManager) RestartDaemon(ctx context.Context, name string, opts ...OperationOption) error {
+	o := &OperationOptions{
+		Mode: ModeReplace,
+	}
+	for _, opt := range opts {
+		opt(o)
+	}
+
+	resultChan := prepareResultChan(o)
+
 	unitName := getServiceUnitName(name)
-	_, err := m.conn.RestartUnitContext(context.TODO(), unitName, ModeReplace, nil)
+	_, err := m.conn.RestartUnitContext(ctx, unitName, o.Mode, resultChan)
 	return err
 }
 
@@ -113,4 +122,19 @@ func (m *systemdDaemonManager) Close() {
 
 func getServiceUnitName(name string) string {
 	return fmt.Sprintf("%s.service", name)
+}
+
+func prepareResultChan(o *OperationOptions) chan string {
+	var resultChan chan string
+
+	if o.Result != nil {
+		resultChan = make(chan string)
+		go func() {
+			r := <-resultChan
+			o.Result <- OperationResult(r)
+			close(resultChan)
+		}()
+	}
+
+	return resultChan
 }
