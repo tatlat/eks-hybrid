@@ -77,7 +77,7 @@ logsBucket: "$LOGS_BUCKET"
 EOF
 
 
-SKIP_FILE=SKIPPED_TESTS.yaml
+SKIP_FILE=$REPO_ROOT/hack/SKIPPED_TESTS.yaml
 # Extract skipped_tests field from SKIP_FILE file and join entries with ' || '
 skip=$(yq '.skipped_tests | join(" || ")' ${SKIP_FILE})
 
