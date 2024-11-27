@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 	"regexp"
 	"time"
 
@@ -22,9 +21,13 @@ var (
 	checksumMismatchErrorRegex = regexp.MustCompile(`.*checksum mismatch with latest ssm-setup-cli*`)
 	activationExpiredRegex     = regexp.MustCompile(`.*ActivationExpired*`)
 	invalidActivationRegex     = regexp.MustCompile(`.*InvalidActivation*`)
-	defaultAWSConfigPath       = "/root/.aws"
-	eksHybridPath              = "/eks-hybrid"
-	symlinkedAWSConfigPath     = filepath.Join(eksHybridPath, ".aws")
+)
+
+const (
+	defaultAWSConfigPath   = "/root/.aws"
+	awsCredentialsFilePath = defaultAWSConfigPath + "/credentials"
+	eksHybridPath          = "/eks-hybrid"
+	symlinkedAWSConfigPath = eksHybridPath + "/.aws"
 )
 
 type ssm struct {
