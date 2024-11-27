@@ -76,26 +76,47 @@ function is_eks_cluster_deleted(){
     fi
 }
 
+function get_cluster_name_from_tags(){
+    json="$1"
+
+    if [ "null" == "$(echo $json | jq ".Tags")" ]; then
+        echo ""
+        return
+    fi
+    
+    cluster_name=$(echo $json | jq -r ".Tags | map(select(.Key == \"$TEST_CLUSTER_TAG_KEY\"))[0].Value")
+    if [ -z "$cluster_name" ] || [ "$cluster_name" == "null" ]; then
+        echo ""
+        return
+    fi
+    
+    echo $cluster_name
+}
+
 # Some resources like tags require a second api call to retrieve tags, or other data
 # for these cases, we do not retry the request because if the cleanup is potentially running twice
 # or tests are finishing up and deleting resources, we have seen cases where the tag will be deleted
 # before we try to make the get tags call
 function role_cluster_name_tag(){
     role="$1"
-    cluster_name="$(command aws iam list-role-tags --query "Tags[*]" --role-name $role --output json 2>/dev/null | jq -r "map(select(.Key == \"$TEST_CLUSTER_TAG_KEY\"))[0].Value")"
+    role_tags="$(command aws iam list-role-tags --query "{Tags:Tags}" --role-name $role --output json 2>/dev/null)"
     if [ $? != 0 ]; then
-        cluster_name=""
+        echo ""
+        return        
     fi
+    cluster_name="$(get_cluster_name_from_tags "$role_tags")"
     echo "$cluster_name"
 }
 
 # See above note about tags
 function instance_profile_cluster_name_tag(){
     instance_profile="$1"
-    cluster_name="$(command aws iam get-instance-profile --query "InstanceProfile.Tags[*]" --instance-profile-name=$instance_profile --output json 2>/dev/null | jq -r "map(select(.Key == \"$TEST_CLUSTER_TAG_KEY\"))[0].Value")"
+    instance_profile_tags="$(command aws iam get-instance-profile --query "InstanceProfile.{Tags:Tags}" --instance-profile-name=$instance_profile --output json 2>/dev/null)"
     if [ $? != 0 ]; then
-        cluster_name=""
+        echo ""
+        return        
     fi
+    cluster_name="$(get_cluster_name_from_tags "$instance_profile_tags")"
     echo "$cluster_name"
 }
 
@@ -203,6 +224,7 @@ else
         if older_than_one_day "$(echo $describe | jq -r ".createdAt")"; then
             if [ "true" == $(echo $describe | jq ".tags | has(\"$TEST_CLUSTER_TAG_KEY\")") ]; then
                 delete_cluster $eks_cluster
+                CLUSTER_STATUSES[$CLUSTER_NAME]="DELETING"
             fi
         fi
     done
@@ -252,10 +274,7 @@ for stack in $(aws cloudformation describe-stacks --query "Stacks[*].{StackId:St
         if [[ $stack_name != EKSHybridCI-* ]]; then
             break
         fi
-        if [ "false" == "$(echo $stack | jq ".Tags | map(has(\"$TEST_CLUSTER_TAG_KEY\"))")" ]; then
-            break
-        fi
-        cluster_name=$(echo $stack | jq -r ".Tags | map(select(.Key == \"$TEST_CLUSTER_TAG_KEY\"))[0].Value")
+        cluster_name="$(get_cluster_name_from_tags "$stack")"
         if [ -n "$CLUSTER_NAME" ] && [ "$cluster_name" != "$CLUSTER_NAME" ]; then
             break
         fi
@@ -290,7 +309,7 @@ for reservations in $(aws ec2 describe-instances --filters $TEST_CLUSTER_TAG_KEY
         if [ "terminated" == "$(echo "$ec2" | jq -r '.State')" ]; then
             continue
         fi
-        cluster_name=$(echo $ec2 | jq -r ".Tags | map(select(.Key == \"$TEST_CLUSTER_TAG_KEY\"))[0].Value")
+        cluster_name="$(get_cluster_name_from_tags "$ec2")"
         instance_id=$(echo $ec2 | jq -r ".InstanceId")
         if ! is_eks_cluster_deleted $cluster_name; then
             continue
@@ -304,7 +323,7 @@ for peering_connection in $(aws ec2 describe-vpc-peering-connections --filters $
     if [ "deleted" == "$(echo "$peering_connection" | jq -r '.StatusCode')" ]; then
         continue
     fi
-    cluster_name=$(echo "$peering_connection" | jq -r ".Tags | map(select(.Key == \"$TEST_CLUSTER_TAG_KEY\"))[0].Value")
+    cluster_name="$(get_cluster_name_from_tags "$peering_connection")"
     peering_connection_id=$(echo "$peering_connection" | jq -r ".VpcPeeringConnectionId")
     if ! is_eks_cluster_deleted $cluster_name; then
         continue
@@ -314,7 +333,7 @@ done
 
 # # See above note about vpcs
 for vpc in $(aws ec2 describe-vpcs --filters $TEST_CLUSTER_TAG_KEY_FILTER --query "Vpcs[*].{VpcId:VpcId,Tags:Tags}"| jq -c '.[]'); do
-    cluster_name=$(echo $vpc | jq -r ".Tags | map(select(.Key == \"$TEST_CLUSTER_TAG_KEY\"))[0].Value")
+    cluster_name="$(get_cluster_name_from_tags "$vpc")"
     vpc=$(echo $vpc | jq -r ".VpcId")
     if ! is_eks_cluster_deleted $cluster_name; then
         continue
@@ -327,7 +346,7 @@ done
 # # are deleted
 # # Before deleting the activation, the associated managed instances are also deleted
 for activation in $(aws ssm describe-activations --query "ActivationList[*].{ActivationId:ActivationId,Tags:Tags}" --output json | jq -c '.[]'); do
-    cluster_name=$(echo $activation | jq -r ".Tags | select( . != null ) | map(select(.Key == \"$TEST_CLUSTER_TAG_KEY\"))[0].Value")
+    cluster_name="$(get_cluster_name_from_tags "$activation")"
     if [ -z "$cluster_name" ]; then
         continue
     fi
