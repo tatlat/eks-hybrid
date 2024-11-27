@@ -7,7 +7,6 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -24,7 +23,6 @@ var cfnTemplateBody []byte
 type e2eCfnStack struct {
 	clusterName            string
 	stackName              string
-	credentialProviders    []NodeadmCredentialsProvider
 	clusterArn             string
 	cfn                    *cloudformation.CloudFormation
 	iam                    *iam.IAM
@@ -90,14 +88,6 @@ func (e *e2eCfnStack) deployStack(ctx context.Context, logger logr.Logger) error
 			ParameterKey:   aws.String("caBundleCert"),
 			ParameterValue: aws.String(string(e.iamRolesAnywhereCACert)),
 		},
-	}
-
-	for _, credProvider := range e.credentialProviders {
-		params = append(params, &cloudformation.Parameter{
-			// assume that the name of the param is the same as the name of the provider minus the dashes
-			ParameterKey:   aws.String(strings.ReplaceAll(string(credProvider.Name()), "-", "")),
-			ParameterValue: aws.String("true"),
-		})
 	}
 
 	if len(resp.Stacks) == 0 {

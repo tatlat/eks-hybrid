@@ -160,20 +160,13 @@ var _ = SynchronizedBeforeSuite(
 		cluster, err := getHybridClusterDetails(ctx, eksClient, ec2Client, config.ClusterName, config.ClusterRegion, config.HybridVpcID)
 		Expect(err).NotTo(HaveOccurred(), "expected to get cluster details")
 
-		providerFilter := enabledCredentialsProviders(credentialProviders)
-		// if there is no credential provider filter provided, then create resources for all the credential providers
-		if len(providerFilter) == 0 {
-			providerFilter = credentialProviders
-		}
-
 		rolesAnywhereCA, err := createCA()
 		Expect(err).NotTo(HaveOccurred())
 
-		stackName := fmt.Sprintf("EKSHybridCI-%s-%s", removeSpecialChars(config.ClusterName), getCredentialProviderNames(providerFilter))
+		stackName := fmt.Sprintf("EKSHybridCI-%s", removeSpecialChars(config.ClusterName))
 		stack := &e2eCfnStack{
 			clusterName:            cluster.clusterName,
 			clusterArn:             cluster.clusterArn,
-			credentialProviders:    providerFilter,
 			stackName:              GetTruncatedName(stackName, 60),
 			iamRolesAnywhereCACert: rolesAnywhereCA.CertPEM,
 			cfn:                    cfnClient,
