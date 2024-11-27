@@ -161,7 +161,6 @@ func (as Source) getEksSource(ctx context.Context, artifactName string) (artifac
 		if releaseArtifact.Name == artifactName && releaseArtifact.Arch == runtime.GOARCH && releaseArtifact.OS == runtime.GOOS {
 			obj, err := util.GetHttpFileReader(ctx, releaseArtifact.URI)
 			if err != nil {
-				obj.Close()
 				return nil, err
 			}
 
@@ -170,8 +169,10 @@ func (as Source) getEksSource(ctx context.Context, artifactName string) (artifac
 				obj.Close()
 				return nil, err
 			}
+
 			source, err := artifact.WithChecksum(obj, sha256.New(), artifactChecksum)
 			if err != nil {
+				obj.Close()
 				return nil, err
 			}
 			return source, nil
