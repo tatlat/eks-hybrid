@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os/exec"
 	"runtime"
+	"time"
 
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
@@ -14,6 +15,7 @@ import (
 	"github.com/aws/eks-hybrid/internal/containerd"
 	"github.com/aws/eks-hybrid/internal/system"
 	"github.com/aws/eks-hybrid/internal/util"
+	"github.com/aws/eks-hybrid/internal/util/cmd"
 )
 
 const (
@@ -85,12 +87,6 @@ func (pm *DistroPackageManager) Configure(ctx context.Context) error {
 
 // configureYumPackageManagerWithDockerRepo configures yum package manager with docker repos
 func (pm *DistroPackageManager) configureYumPackageManagerWithDockerRepo(ctx context.Context) error {
-	// Run update to update all package repo metadata for newly provisioned OS
-	pm.logger.Info("Updating packages to refresh repo metadata...")
-	if resp, err := pm.updateAllPackages(ctx); err != nil {
-		return errors.Wrapf(err, "failed to run update using package manager: %s", resp)
-	}
-
 	// Check and remove runc if installed, as it conflicts with docker repo
 	if _, errNotFound := exec.LookPath(runcPkgName); errNotFound == nil {
 		pm.logger.Info("Removing runc to avoid package conflicts from docker repos...")
@@ -115,20 +111,12 @@ func (pm *DistroPackageManager) configureYumPackageManagerWithDockerRepo(ctx con
 		return errors.Wrapf(err, "failed adding docker repo to package manager: %s", out)
 	}
 
-	pm.logger.Info("Updating packages to refresh docker repo metadata...")
-	if resp, err := pm.updateAllPackages(ctx); err != nil {
-		return errors.Wrapf(err, "failed to run update using package manager: %s", resp)
-	}
 	return nil
 }
 
 // configureAptPackageManagerWithDockerRepo configures apt package manager with docker repos
 func (pm *DistroPackageManager) configureAptPackageManagerWithDockerRepo(ctx context.Context) error {
-	out, err := pm.updateAllPackages(ctx)
-	if err != nil {
-		return errors.Wrapf(err, "failed running commands to configure package manager: %s", out)
-	}
-	out, err = pm.installPackage(ctx, "ca-certificates")
+	out, err := pm.installPackage(ctx, "ca-certificates")
 	if err != nil {
 		return errors.Wrapf(err, "failed running commands to configure package manager: %s", out)
 	}
@@ -150,10 +138,10 @@ func (pm *DistroPackageManager) configureAptPackageManagerWithDockerRepo(ctx con
 	}
 
 	// Run update to pull docker repo's metadata
-	// Commands cant be re-used to run again, hence re-declaring update command
-	out, err = pm.updateAllPackages(ctx)
+	pm.logger.Info("Updating packages to refresh docker repo metadata...")
+	err = pm.updateDockerAptPackagesWithRetries(ctx)
 	if err != nil {
-		return errors.Wrapf(err, "failed running commands to configure package manager: %s", out)
+		return errors.Wrapf(err, "failed running commands to configure package manager")
 	}
 	return nil
 }
@@ -169,13 +157,12 @@ func (pm *DistroPackageManager) installPackage(ctx context.Context, packageName 
 }
 
 // updateAllPackages updates all packages and repo metadata on the system
-func (pm *DistroPackageManager) updateAllPackages(ctx context.Context) (string, error) {
-	updateCmd := exec.CommandContext(ctx, pm.manager, pm.updateVerb, "-y")
-	out, err := updateCmd.CombinedOutput()
-	if err != nil {
-		return string(out), err
-	}
-	return string(out), nil
+func (pm *DistroPackageManager) updateDockerAptPackagesCommand(ctx context.Context) *exec.Cmd {
+	return exec.CommandContext(ctx, pm.manager, pm.updateVerb, "-y", "-o", fmt.Sprintf("Dir::Etc::sourcelist=\"%s\"", aptDockerRepoSourceFilePath))
+
+}
+func (pm *DistroPackageManager) updateDockerAptPackagesWithRetries(ctx context.Context) error {
+	return cmd.Retry(ctx, pm.updateDockerAptPackagesCommand, 5*time.Second)
 }
 
 // removePackage deletes a package using package manager

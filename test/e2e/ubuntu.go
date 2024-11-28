@@ -31,8 +31,9 @@ var logCollectorScript []byte
 
 type ubuntuCloudInitData struct {
 	UserDataInput
-	NodeadmUrl        string
-	NodeadmInitScript string
+	NodeadmUrl            string
+	NodeadmInitScript     string
+	NodeadmAdditionalArgs string
 }
 
 func templateFuncMap() map[string]interface{} {
@@ -45,23 +46,37 @@ func templateFuncMap() map[string]interface{} {
 }
 
 type Ubuntu2004 struct {
-	Architecture string
+	Architecture     string
+	ContainerdSource string
 }
 
 func NewUbuntu2004AMD() *Ubuntu2004 {
 	u := new(Ubuntu2004)
 	u.Architecture = "amd64"
+	u.ContainerdSource = "distro"
+	return u
+}
+
+func NewUbuntu2004DockerSource() *Ubuntu2004 {
+	u := new(Ubuntu2004)
+	u.Architecture = "amd64"
+	u.ContainerdSource = "docker"
 	return u
 }
 
 func NewUbuntu2004ARM() *Ubuntu2004 {
 	u := new(Ubuntu2004)
 	u.Architecture = arm64Arch
+	u.ContainerdSource = "distro"
 	return u
 }
 
 func (u Ubuntu2004) Name() string {
-	return "ubuntu2004-" + u.Architecture
+	name := "ubuntu2004-" + u.Architecture
+	if u.ContainerdSource == "docker" {
+		name += "-docker"
+	}
+	return name
 }
 
 func (u Ubuntu2004) InstanceType() string {
@@ -90,27 +105,44 @@ func (u Ubuntu2004) BuildUserData(userDataInput UserDataInput) ([]byte, error) {
 		data.NodeadmUrl = userDataInput.NodeadmUrls.ARM
 	}
 
+	if u.ContainerdSource == "docker" {
+		data.NodeadmAdditionalArgs = "--containerd-source docker"
+	}
+
 	return executeTemplate(ubuntu2004CloudInit, data)
 }
 
 type Ubuntu2204 struct {
-	Architecture string
+	Architecture     string
+	ContainerdSource string
 }
 
 func NewUbuntu2204AMD() *Ubuntu2204 {
 	u := new(Ubuntu2204)
 	u.Architecture = "amd64"
+	u.ContainerdSource = "distro"
+	return u
+}
+func NewUbuntu2204DockerSource() *Ubuntu2204 {
+	u := new(Ubuntu2204)
+	u.Architecture = "amd64"
+	u.ContainerdSource = "docker"
 	return u
 }
 
 func NewUbuntu2204ARM() *Ubuntu2204 {
 	u := new(Ubuntu2204)
 	u.Architecture = arm64Arch
+	u.ContainerdSource = "distro"
 	return u
 }
 
 func (u Ubuntu2204) Name() string {
-	return "ubuntu2204-" + u.Architecture
+	name := "ubuntu2204-" + u.Architecture
+	if u.ContainerdSource == "docker" {
+		name += "-docker"
+	}
+	return name
 }
 
 func (u Ubuntu2204) InstanceType() string {
@@ -139,27 +171,45 @@ func (u Ubuntu2204) BuildUserData(userDataInput UserDataInput) ([]byte, error) {
 		data.NodeadmUrl = userDataInput.NodeadmUrls.ARM
 	}
 
+	if u.ContainerdSource == "docker" {
+		data.NodeadmAdditionalArgs = "--containerd-source docker"
+	}
+
 	return executeTemplate(ubuntu2204CloudInit, data)
 }
 
 type Ubuntu2404 struct {
-	Architecture string
+	Architecture     string
+	ContainerdSource string
 }
 
 func NewUbuntu2404AMD() *Ubuntu2404 {
 	u := new(Ubuntu2404)
 	u.Architecture = "amd64"
+	u.ContainerdSource = "distro"
+	return u
+}
+
+func NewUbuntu2404DockerSource() *Ubuntu2404 {
+	u := new(Ubuntu2404)
+	u.Architecture = "amd64"
+	u.ContainerdSource = "docker"
 	return u
 }
 
 func NewUbuntu2404ARM() *Ubuntu2404 {
 	u := new(Ubuntu2404)
 	u.Architecture = arm64Arch
+	u.ContainerdSource = "distro"
 	return u
 }
 
 func (u Ubuntu2404) Name() string {
-	return "ubuntu2404-" + u.Architecture
+	name := "ubuntu2404-" + u.Architecture
+	if u.ContainerdSource == "docker" {
+		name += "-docker"
+	}
+	return name
 }
 
 func (u Ubuntu2404) InstanceType() string {
@@ -186,6 +236,10 @@ func (u Ubuntu2404) BuildUserData(userDataInput UserDataInput) ([]byte, error) {
 
 	if u.Architecture == arm64Arch {
 		data.NodeadmUrl = userDataInput.NodeadmUrls.ARM
+	}
+
+	if u.ContainerdSource == "docker" {
+		data.NodeadmAdditionalArgs = "--containerd-source docker"
 	}
 
 	return executeTemplate(ubuntu2404CloudInit, data)
