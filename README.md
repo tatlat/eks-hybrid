@@ -109,14 +109,16 @@ apiVersion: node.eks.aws/v1alpha1
 kind: NodeConfig
 spec:
   cluster:
-    name:             # Name of the EKS cluster
-    region:           # AWS Region where the EKS cluster resides
+    name:              # Name of the EKS cluster
+    region:            # AWS Region where the EKS cluster resides
   hybrid:
-    nodeName:         # Name of the node
+    nodeName:          # Name of the node
     iamRolesAnywhere:
-      trustAnchorArn: # ARN of the IAM Roles Anywhere trust anchor
-      profileArn:     # ARN of the IAM Roles Anywhere profile
-      roleArn:        # ARN of the Hybrid Nodes IAM role
+      trustAnchorArn:  # ARN of the IAM Roles Anywhere trust anchor
+      profileArn:      # ARN of the IAM Roles Anywhere profile
+      roleArn:         # ARN of the Hybrid Nodes IAM role
+      certificatePath: # Path to the certificate file to authenticate with the IAM Roles Anywhere trust anchor
+      privateKeyPath:  # Path to the private key file for the certificate
 ```
 
 **Kubelet configuration**: You can pass kubelet configuration and flags in your nodeadm configuration. See the example below for how to add an additional node label `abc.amazonaws.com/test-label` and config for setting `shutdownGracePeriod` to 30 seconds.
