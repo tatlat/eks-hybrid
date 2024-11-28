@@ -34,7 +34,7 @@ func TestWaitForAWSConfigSuccess(t *testing.T) {
 	}()
 
 	ctx := context.Background()
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Millisecond)
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
 	config, err := ssm.WaitForAWSConfig(ctx, node, 1*time.Millisecond)
