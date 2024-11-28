@@ -216,6 +216,8 @@ func autoConvert_v1alpha1_IAMRolesAnywhere_To_api_IAMRolesAnywhere(in *v1alpha1.
 	out.ProfileARN = in.ProfileARN
 	out.RoleARN = in.RoleARN
 	out.AwsConfigPath = in.AwsConfigPath
+	out.CertificatePath = in.CertificatePath
+	out.PrivateKeyPath = in.PrivateKeyPath
 	return nil
 }
 
@@ -230,6 +232,8 @@ func autoConvert_api_IAMRolesAnywhere_To_v1alpha1_IAMRolesAnywhere(in *api.IAMRo
 	out.ProfileARN = in.ProfileARN
 	out.RoleARN = in.RoleARN
 	out.AwsConfigPath = in.AwsConfigPath
+	out.CertificatePath = in.CertificatePath
+	out.PrivateKeyPath = in.PrivateKeyPath
 	return nil
 }
 

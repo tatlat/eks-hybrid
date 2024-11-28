@@ -156,11 +156,13 @@ func (nc NodeConfig) GetNodeType() NodeType {
 }
 
 type IAMRolesAnywhere struct {
-	NodeName       string `json:"nodeName,omitempty"`
-	TrustAnchorARN string `json:"trustAnchorArn,omitempty"`
-	ProfileARN     string `json:"profileArn,omitempty"`
-	RoleARN        string `json:"roleArn,omitempty"`
-	AwsConfigPath  string `json:"awsConfigPath,omitempty"`
+	NodeName        string `json:"nodeName,omitempty"`
+	TrustAnchorARN  string `json:"trustAnchorArn,omitempty"`
+	ProfileARN      string `json:"profileArn,omitempty"`
+	RoleARN         string `json:"roleArn,omitempty"`
+	AwsConfigPath   string `json:"awsConfigPath,omitempty"`
+	CertificatePath string `json:"certificatePath,omitempty"`
+	PrivateKeyPath  string `json:"privateKeyPath,omitempty"`
 }
 
 type SSM struct {
