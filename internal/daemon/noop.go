@@ -2,6 +2,8 @@
 
 package daemon
 
+import "context"
+
 var _ DaemonManager = &noopDaemonManager{}
 
 type noopDaemonManager struct{}
@@ -18,7 +20,7 @@ func (m *noopDaemonManager) StopDaemon(name string) error {
 	return nil
 }
 
-func (m *noopDaemonManager) RestartDaemon(name string) error {
+func (m *noopDaemonManager) RestartDaemon(ctx context.Context, name string, opts ...OperationOption) error {
 	return nil
 }
 
