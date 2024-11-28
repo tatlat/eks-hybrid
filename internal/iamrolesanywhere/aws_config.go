@@ -47,6 +47,12 @@ type AWSConfig struct {
 
 	// SigningHelperBinPath is a pth to the aws iam roles anywhere signer helper. Defaults to /usr/local/bin/aws_signing_helper
 	SigningHelperBinPath string
+
+	// CertificatePath is the location on disk for the certificate used to authenticate with AWS.
+	CertificatePath string `json:"certificatePath,omitempty"`
+
+	// PrivateKeyPath is the location on disk for the certificate's private key.
+	PrivateKeyPath string `json:"privateKeyPath,omitempty"`
 }
 
 // WriteAWSConfig writes an AWS configuration file with contents appropriate for node config
@@ -87,6 +93,14 @@ func validateAWSConfig(cfg AWSConfig) error {
 
 	if cfg.SigningHelperBinPath == "" {
 		errs = append(errs, errors.New("Signing helper path cannot be empty"))
+	}
+
+	if cfg.CertificatePath == "" {
+		errs = append(errs, errors.New("CertificatePath cannot be empty"))
+	}
+
+	if cfg.PrivateKeyPath == "" {
+		errs = append(errs, errors.New("PrivateKeyPath cannot be empty"))
 	}
 
 	return errors.Join(errs...)
