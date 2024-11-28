@@ -27,31 +27,23 @@ var (
 
 type SigningHelperDaemon struct {
 	daemonManager daemon.DaemonManager
-	spec          *api.NodeConfigSpec
+	node          *api.NodeConfig
 }
 
-func NewSigningHelperDaemon(daemonManager daemon.DaemonManager, spec *api.NodeConfigSpec) daemon.Daemon {
+func NewSigningHelperDaemon(daemonManager daemon.DaemonManager, node *api.NodeConfig) daemon.Daemon {
 	return &SigningHelperDaemon{
 		daemonManager: daemonManager,
-		spec:          spec,
+		node:          node,
 	}
 }
 
 func (s *SigningHelperDaemon) Configure() error {
-	var buf bytes.Buffer
-	if err := signingHelperServiceTemplate.Execute(&buf, map[string]string{
-		"SharedCredentialsFilePath": EksHybridAwsCredentialsPath,
-		"SigningHelperBinPath":      SigningHelperBinPath,
-		"TrustAnchorARN":            s.spec.Hybrid.IAMRolesAnywhere.TrustAnchorARN,
-		"ProfileARN":                s.spec.Hybrid.IAMRolesAnywhere.ProfileARN,
-		"RoleARN":                   s.spec.Hybrid.IAMRolesAnywhere.RoleARN,
-		"Region":                    s.spec.Cluster.Region,
-		"NodeName":                  s.spec.Hybrid.IAMRolesAnywhere.NodeName,
-	}); err != nil {
-		return fmt.Errorf("executing aws_signing_helper_update service template: %v", err)
+	service, err := GenerateUpdateSystemdService(s.node)
+	if err != nil {
+		return err
 	}
 
-	if err := util.WriteFileWithDir(SigningHelperServiceFilePath, buf.Bytes(), 0o644); err != nil {
+	if err := util.WriteFileWithDir(SigningHelperServiceFilePath, service, 0o644); err != nil {
 		return fmt.Errorf("writing aws_signing_helper_update service file %s: %v", EksHybridAwsCredentialsPath, err)
 	}
 	return nil
@@ -80,4 +72,24 @@ func (s *SigningHelperDaemon) Stop() error {
 // Name returns the name of the daemon.
 func (s *SigningHelperDaemon) Name() string {
 	return DaemonName
+}
+
+// GenerateUpdateSystemdService generates the systemd service config.
+func GenerateUpdateSystemdService(node *api.NodeConfig) ([]byte, error) {
+	var buf bytes.Buffer
+	if err := signingHelperServiceTemplate.Execute(&buf, map[string]string{
+		"SharedCredentialsFilePath": EksHybridAwsCredentialsPath,
+		"SigningHelperBinPath":      SigningHelperBinPath,
+		"TrustAnchorARN":            node.Spec.Hybrid.IAMRolesAnywhere.TrustAnchorARN,
+		"ProfileARN":                node.Spec.Hybrid.IAMRolesAnywhere.ProfileARN,
+		"RoleARN":                   node.Spec.Hybrid.IAMRolesAnywhere.RoleARN,
+		"Region":                    node.Spec.Cluster.Region,
+		"NodeName":                  node.Spec.Hybrid.IAMRolesAnywhere.NodeName,
+		"CertificatePath":           node.Spec.Hybrid.IAMRolesAnywhere.CertificatePath,
+		"PrivateKeyPath":            node.Spec.Hybrid.IAMRolesAnywhere.PrivateKeyPath,
+	}); err != nil {
+		return nil, fmt.Errorf("executing aws_signing_helper_update service template: %w", err)
+	}
+
+	return buf.Bytes(), nil
 }
