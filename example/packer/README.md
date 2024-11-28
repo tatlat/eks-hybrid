@@ -28,10 +28,15 @@ These images have `nodeadm` installed and configured to the specifiec credential
 
 Set the following environment variables before running the Packer build:
 
+## Nodeadm Architecture Type
+- NODEADM_ARCH: String. Architecture of your system to install the proper nodeadm. Supports both x86_64 and ARM. Enter 'amd' or 'arm'. 
+
 ## Packer SSH Password
 - PKR_SSH_PASSWORD: String. Packer uses the ssh_username and ssh_password variables to SSH into the created machine when provisioning. This needs to match the passwords used to create the initial user within the respective OS's `kickstart` or `user-data` files. The default is set as "builder" or "ubuntu" depending on the OS. When setting your password, make sure to change it within the corresponding `ks.cfg` or `user-data` file as well.  
 
 ## ISO Image and Checksum
+Used primarily when building non-AMI images.
+
 - ISO_URL: String. URL of the ISO to use. Can be a web link to download from a server, or an absolute path to a local file
 - ISO_CHECKSUM: String. Associated checksum for the supplied ISO. 
 
@@ -75,6 +80,7 @@ Set the following environment variables before running the Packer build:
 
 ```
 export AWS_PROFILE="your-aws-profile"
+export NODEADM_ARCH="amd" # Select 'amd' or 'arm'
 export CREDENTIAL_PROVIDER="ssm"  # or "iam"
 export RH_USERNAME="your-rhsm-username"
 export RH_PASSWORD="your-rhsm-password"
@@ -177,25 +183,7 @@ packer build -only=general-build.vsphere-iso.rhel9 template.pkr.hcl
 
 ### QEMU Images
 
-Note on RHEL 9 and QEMU - If building a VM using QEMU, you will need to provide the `-cpu` flag along with a supported CPU model. The 
-
-| Intel x86     |   AMD x86     |
-| ------------- | ------------- |
-| Cascadelake-Server  | EPYC  |
-| Skylake-Server  | Opteron_G5 |
-| Skylake-Client  | Opteron_G4 |
-| Broadwell  | Opteron_G3 |
-| Haswell  | Opteron_G2 |
-| IvyBridge  | Opteron_G1 |
-| SandyBridge  |  |
-| Westmere  |  |
-| Nehalem  |  |
-| Penryn  |  |
-| Conroe  |  |
-
-The supported models can be seen here. This has been tested to work with `-cpu "Broadwell"`.
-
-This is not required for RHEL 8. 
+Note: If you are building an image for a specific host CPU that does not match your builder host, see the [QEMU documentation](https://www.qemu.org/docs/master/system/qemu-cpu-models.html) for the name that matches your host CPU and use the -cpu flag with the name of the host CPU when you run the following commands.
 
 
 #### Ubuntu 22.04 Qcow2 / Raw
@@ -213,4 +201,86 @@ packer build -only=general-build.qemu.rhel8 template.pkr.hcl
 #### RHEL 9 Qcow2 / Raw
 ```
 packer build -only=general-build.qemu.rhel9 template.pkr.hcl
+```
+
+## Pass nodeadm configuration through user-data 
+You can pass configuration for nodeadm in your user-data through cloud-init to configure and automatically connect hybrid nodes to your EKS cluster at host startup. Below is an example for how to accomplish this when using VMware vSphere as the infrastructure for your hybrid nodes. 
+
+1. Install the the `govc CLI` following the instructions in the govc [readme on GitHub](https://github.com/vmware/govmomi/blob/main/govc/README.md).
+2. After running the Packer build in the previous section and provisioning your template, you can clone your template to create multiple different nodes using the following. You must clone the template for each new VM you are creating that will be used for hybrid nodes. Replace the variables in the command below with the values for your environment. The VM_NAME in the command below is used as your NODE_NAME when you inject the names for your VMs via your metadata.yaml file.
+
+```
+govc vm.clone -vm "/PATH/TO/TEMPLATE" -ds="YOUR_DATASTORE" \
+-on=false -template=false -folder=/FOLDER/TO/SAVE/VM "VM_NAME"
+```
+
+3. After cloning the template for each of your new VMs, create a `userdata.yaml` and `metadata.yaml`  for your VMs. Your VMs can share the same `userdata.yaml` and `metadata.yaml` and you will populate these on a per VM basis in the steps below. The nodeadm configuration is created and defined in the write_files section of your userdata.yaml. The example below uses AWS `SSM` hybrid activations as the on-premises credential provider for hybrid nodes. 
+
+**userdata.yaml**:
+
+```
+#cloud-config
+users:
+  - name: # username for login. Use 'builder' for RHEL or 'ubuntu' for Ubuntu.
+    passwd: # password to login. Default is 'builder' for RHEL.
+    groups: [adm, cdrom, dip, plugdev, lxd, sudo]
+    lock-passwd: false
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    shell: /bin/bash
+
+write_files:
+  - path: /usr/local/bin/nodeConfig.yaml
+    permissions: '0644'
+    content: |
+      apiVersion: node.eks.aws/v1alpha1
+      kind: NodeConfig
+      spec:
+          cluster:
+              name: # Cluster Name
+              region: # AWS region
+          hybrid:
+              ssm: 
+                  activationCode: # Your ssm activation code
+                  activationId: # Your ssm activation id
+
+runcmd:
+  - /usr/local/bin/nodeadm init -c file:///usr/local/bin/nodeConfig.yaml >> /var/log/nodeadm-init.log 2>&1
+```
+
+**metadata.yaml**
+
+Create a metadata.yaml for your environment. Keep the "$NODE_NAME" variable format in the file as this will be populated with values in a subsequent step.
+
+```
+instance-id: "$NODE_NAME"
+local-hostname: "$NODE_NAME"
+network:
+  version: 2
+  ethernets:
+    nics:
+      match:
+        name: ens*
+      dhcp4: yes
+```
+
+4. Add the `userdata.yaml` and `metadata.yaml` files as `gzip+base64` strings with the following commands. The following commands should be run for each of the VMs you are creating. Replace VM_NAME with the name of the VM you are updating.
+
+```
+export NODE_NAME="VM_NAME"
+export USER_DATA=$(gzip -c9 <userdata.yaml | base64)
+
+govc vm.change -dc="YOUR_DATASTORE" -vm "$NODE_NAME" -e guestinfo.userdata="${USER_DATA}"
+govc vm.change -dc="YOUR_DATASTORE" -vm "$NODE_NAME" -e guestinfo.userdata.encoding=gzip+base64
+
+envsubst '$NODE_NAME' < metadata.yaml > metadata.yaml.tmp
+export METADATA=$(gzip -c9 <metadata.yaml.tmp | base64)
+
+govc vm.change -dc="YOUR_DATASTORE" -vm "$NODE_NAME" -e guestinfo.metadata="${METADATA}"
+govc vm.change -dc="YOUR_DATASTORE" -vm "$NODE_NAME" -e guestinfo.metadata.encoding=gzip+base64
+```
+
+5. Power on your new VMs, which should automatically connect to the EKS cluster you configured.
+
+```
+govc vm.power -on "${NODE_NAME}"
 ```
