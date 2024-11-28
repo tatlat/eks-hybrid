@@ -12,6 +12,7 @@ import (
 
 	"github.com/aws/eks-hybrid/internal/aws"
 	"github.com/aws/eks-hybrid/internal/cli"
+	"github.com/aws/eks-hybrid/internal/cni"
 	"github.com/aws/eks-hybrid/internal/containerd"
 	"github.com/aws/eks-hybrid/internal/creds"
 	"github.com/aws/eks-hybrid/internal/daemon"
@@ -166,6 +167,7 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		PackageManager: packageManager,
 		SSMUninstall:   ssm.Uninstall,
 		Logger:         log,
+		CNIUninstall:   cni.NoOp,
 	}
 
 	installer := &flows.Installer{

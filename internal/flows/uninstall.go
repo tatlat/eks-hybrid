@@ -7,7 +7,6 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/aws/eks-hybrid/internal/cni"
 	"github.com/aws/eks-hybrid/internal/containerd"
 	"github.com/aws/eks-hybrid/internal/daemon"
 	"github.com/aws/eks-hybrid/internal/iamauthenticator"
@@ -24,6 +23,7 @@ import (
 const eksConfigDir = "/etc/eks"
 
 type SSMUninstall func(ctx context.Context, logger *zap.Logger, pm ssm.PkgSource) error
+type CNIUninstall func() error
 
 type Uninstaller struct {
 	Artifacts      *tracker.InstalledArtifacts
@@ -31,6 +31,7 @@ type Uninstaller struct {
 	PackageManager *packagemanager.DistroPackageManager
 	SSMUninstall   SSMUninstall
 	Logger         *zap.Logger
+	CNIUninstall   CNIUninstall
 }
 
 func (u *Uninstaller) Run(ctx context.Context) error {
@@ -101,7 +102,7 @@ func (u *Uninstaller) uninstallBinaries(ctx context.Context) error {
 	}
 	if u.Artifacts.CniPlugins {
 		u.Logger.Info("Uninstalling cni-plugins...")
-		if err := cni.Uninstall(); err != nil {
+		if err := u.CNIUninstall(); err != nil {
 			return err
 		}
 	}

@@ -24,6 +24,10 @@ type Source interface {
 	GetCniPlugins(context.Context) (artifact.Source, error)
 }
 
+func NoOp() error {
+	return nil
+}
+
 func Install(ctx context.Context, tracker *tracker.Tracker, src Source) error {
 	cniPlugins, err := src.GetCniPlugins(ctx)
 	if err != nil {

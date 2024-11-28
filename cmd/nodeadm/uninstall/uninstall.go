@@ -10,6 +10,7 @@ import (
 	"k8s.io/utils/strings/slices"
 
 	"github.com/aws/eks-hybrid/internal/cli"
+	"github.com/aws/eks-hybrid/internal/cni"
 	"github.com/aws/eks-hybrid/internal/containerd"
 	"github.com/aws/eks-hybrid/internal/daemon"
 	"github.com/aws/eks-hybrid/internal/flows"
@@ -107,6 +108,7 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		PackageManager: packageManager,
 		SSMUninstall:   ssm.DeregisterAndUninstall,
 		Logger:         log,
+		CNIUninstall:   cni.Uninstall,
 	}
 
 	return uninstaller.Run(ctx)
