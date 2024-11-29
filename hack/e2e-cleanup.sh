@@ -224,7 +224,7 @@ else
         if older_than_one_day "$(echo $describe | jq -r ".createdAt")"; then
             if [ "true" == $(echo $describe | jq ".tags | has(\"$TEST_CLUSTER_TAG_KEY\")") ]; then
                 delete_cluster $eks_cluster
-                CLUSTER_STATUSES[$CLUSTER_NAME]="DELETING"
+                CLUSTER_STATUSES[$eks_cluster]="DELETING"
             fi
         fi
     done

@@ -349,7 +349,7 @@ var _ = Describe("Hybrid Nodes", func() {
 							var logsUploadUrls []LogsUploadUrl
 							if suite.TestConfig.LogsBucket != "" {
 								logsS3Prefix := fmt.Sprintf("logs/%s/%s", test.cluster.clusterName, instanceName)
-								for _, name := range []string{"post-install", "post-uninstall", "post-uninstall-install"} {
+								for _, name := range []string{"post-install", "post-uninstall", "post-uninstall-install", "post-final-uninstall"} {
 									url, err := generatePutLogsPreSignedURL(test.s3Client, suite.TestConfig.LogsBucket, fmt.Sprintf("%s/%s.tar.gz", logsS3Prefix, name), 30*time.Minute)
 									logsUploadUrls = append(logsUploadUrls, LogsUploadUrl{Name: name, Url: url})
 									Expect(err).NotTo(HaveOccurred(), "expected to successfully sign logs upload path")

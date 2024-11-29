@@ -260,7 +260,7 @@ func runNodeadmUninstall(ctx context.Context, client *ssm.SSM, instanceID string
 	commands := []string{
 		// TODO: @pjshah run uninstall without node-validation and pod-validation flags after adding cordon and drain node functionality
 		"set -eux",
-		"trap \"/tmp/log-collector.sh 'post-uninstall'\" EXIT",
+		"trap \"/tmp/log-collector.sh 'post-uninstall' 'post-final-uninstall'\" EXIT",
 		"sudo /tmp/nodeadm uninstall -skip node-validation,pod-validation",
 		"sudo cloud-init clean --logs",
 		"sudo rm -rf /var/lib/cloud/instances",
