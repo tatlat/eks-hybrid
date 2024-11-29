@@ -18,13 +18,13 @@ To install nodeadm on each on-premises host, you can run the following command f
 For x86 hosts:
 
 ```sh
-curl -OL 'https://hybrid-assets.eks.amazonaws.com/latest/bin/linux/amd64/nodeadm'
+curl -OL 'https://hybrid-assets.eks.amazonaws.com/releases/latest/bin/linux/amd64/nodeadm'
 ```
 
 For ARM hosts
 
 ```sh
-curl -OL 'https://hybrid-assets.eks.amazonaws.com/latest/bin/linux/arm64/nodeadm'
+curl -OL 'https://hybrid-assets.eks.amazonaws.com/releases/latest/bin/linux/arm64/nodeadm'
 ```
 
 Add executable file permission to the downloaded binary on each host. You must run nodeadm with a user that has root/sudo privileges.
@@ -54,7 +54,7 @@ nodeadm install 1.31 --credential-provider iam-ra
 The `nodeadm init` command starts and connects hybrid nodes with the configured Amazon EKS cluster.
 
 ```
-nodeadm init --config-source file:///root/nodeConfig.yaml
+nodeadm init --config-source file://nodeConfig.yaml
 ```
 
 #### nodeadm upgrade
@@ -64,11 +64,11 @@ See [Upgrade hybrid nodes](https://docs.aws.amazon.com/eks/latest/userguide/hybr
 
 Upgrade to Kubernetes version 1.31
 ```sh
-nodeadm upgrade 1.31 --config-source file:///root/nodeConfig.yaml
+nodeadm upgrade 1.31 --config-source file://nodeConfig.yaml
 ```
 Upgrade to Kubernetes version `1.31` with a download timeout of 30 minutes.
 ```sh
-nodeadm upgrade 1.31 --config-source file:///root/nodeConfig.yaml --timeout 30m
+nodeadm upgrade 1.31 --config-source file://nodeConfig.yaml --timeout 30m
 ```
 
 #### nodeadm uninstall

@@ -52,7 +52,7 @@ func (c *initCmd) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 
 	if c.configSource == "" {
 		flaggy.ShowHelpAndExit("--config-source is a required flag. The format is a URI with supported schemes: [file, imds]." +
-			" For example on hybrid nodes --config-source file:///root/nodeConfig.yaml")
+			" For example on hybrid nodes --config-source file://nodeConfig.yaml")
 	}
 
 	if !slices.Contains(c.skipPhases, installValidation) {
