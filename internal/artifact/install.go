@@ -9,6 +9,8 @@ import (
 	"os/exec"
 	"path"
 	"time"
+
+	"github.com/aws/eks-hybrid/internal/util/cmd"
 )
 
 // DefaultDirPerms are the permissions assigned to a directory when an Install* func is called
@@ -65,7 +67,7 @@ func InstallPackage(ctx context.Context, pkgSource Package) error {
 // InstallPackageWithRetries installs a package and retries errors until the context is
 // cancelled. The backoff duration is the time to wait between retries.
 func InstallPackageWithRetries(ctx context.Context, pkgSource Package, backoff time.Duration) error {
-	return retryCmd(ctx, pkgSource.InstallCmd, backoff)
+	return cmd.Retry(ctx, pkgSource.InstallCmd, backoff)
 }
 
 func UninstallPackage(ctx context.Context, pkgSource Package) error {
@@ -75,27 +77,4 @@ func UninstallPackage(ctx context.Context, pkgSource Package) error {
 		return fmt.Errorf("running uninstall command using package manager: %s, err: %v", out, err)
 	}
 	return nil
-}
-
-type cmdBuilder func(context.Context) *exec.Cmd
-
-func retryCmd(ctx context.Context, newCmd cmdBuilder, backoff time.Duration) error {
-	var err error
-	for {
-		var out []byte
-		cmd := newCmd(ctx)
-		out, err = cmd.CombinedOutput()
-		if err == nil {
-			return nil
-		}
-		err = fmt.Errorf("running command %s: %s [Err %s]", cmd.Args, out, err)
-		select {
-		case <-ctx.Done():
-			if err == nil {
-				return ctx.Err()
-			}
-			return fmt.Errorf("%s: %w", ctx.Err(), err)
-		case <-time.After(backoff):
-		}
-	}
 }
