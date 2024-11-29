@@ -45,7 +45,7 @@ func (c *debug) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 
 	if c.nodeConfigSource == "" {
 		flaggy.ShowHelpAndExit("--config-source is a required flag. The format is a URI with supported schemes: [file, imds]." +
-			" For example on hybrid nodes --config-source file:///root/nodeConfig.yaml")
+			" For example on hybrid nodes --config-source file://nodeConfig.yaml")
 	}
 
 	provider, err := configprovider.BuildConfigProvider(c.nodeConfigSource)
