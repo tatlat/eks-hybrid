@@ -622,14 +622,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ** github.com/aws/aws-sdk-go/internal/sync/singleflight; version v1.55.5 --
 https://github.com/aws/aws-sdk-go
 
-** golang.org/go; version go1.23.2 --
+** golang.org/go; version go1.23.3 --
 https://github.com/golang/go
-
-** golang.org/x/mod/semver; version v0.18.0 --
-https://golang.org/x/mod
-
-** golang.org/x/net; version v0.26.0 --
-https://golang.org/x/net
 
 ** golang.org/x/oauth2; version v0.16.0 --
 https://golang.org/x/oauth2
@@ -918,13 +912,19 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ------
 
-** golang.org/x/sys/unix; version v0.23.0 --
+** golang.org/x/mod/semver; version v0.22.0 --
+https://golang.org/x/mod
+
+** golang.org/x/net; version v0.31.0 --
+https://golang.org/x/net
+
+** golang.org/x/sys/unix; version v0.27.0 --
 https://golang.org/x/sys
 
-** golang.org/x/term; version v0.23.0 --
+** golang.org/x/term; version v0.26.0 --
 https://golang.org/x/term
 
-** golang.org/x/text; version v0.17.0 --
+** golang.org/x/text; version v0.20.0 --
 https://golang.org/x/text
 
 Copyright 2009 The Go Authors.
