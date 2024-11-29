@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"os/exec"
 	"time"
+
+	"github.com/aws/eks-hybrid/internal/logger"
+	"go.uber.org/zap"
 )
 
 // Builder builds a exec.Cmd. Each invocation should return a new instance
@@ -14,6 +17,7 @@ type Builder func(context.Context) *exec.Cmd
 // Retry runs the command until it succeeds or the context is cancelled.
 // The backoff duration is the time to wait between retries.
 func Retry(ctx context.Context, newCmd Builder, backoff time.Duration) error {
+	log := logger.FromContext(ctx)
 	var err error
 	for {
 		var out []byte
@@ -23,6 +27,7 @@ func Retry(ctx context.Context, newCmd Builder, backoff time.Duration) error {
 			return nil
 		}
 		err = fmt.Errorf("running command %s: %s [Err %s]", cmd.Args, out, err)
+		log.Debug("Command failed, retrying", zap.Duration("backoff", backoff), zap.Error(err))
 		select {
 		case <-ctx.Done():
 			return fmt.Errorf("%s: %w", ctx.Err(), err)
