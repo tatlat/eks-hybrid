@@ -30,10 +30,12 @@ func TestRolesAnywhereAWSConfigurator_Configure(t *testing.T) {
 					},
 					Hybrid: &api.HybridOptions{
 						IAMRolesAnywhere: &api.IAMRolesAnywhere{
-							NodeName:       "my-node",
-							TrustAnchorARN: "trust-anchor-arn",
-							ProfileARN:     "profile-arn",
-							RoleARN:        "role-arn",
+							NodeName:        "my-node",
+							TrustAnchorARN:  "trust-anchor-arn",
+							ProfileARN:      "profile-arn",
+							RoleARN:         "role-arn",
+							CertificatePath: "node.crt",
+							PrivateKeyPath:  "node.key",
 						},
 					},
 				},
@@ -56,10 +58,12 @@ func TestRolesAnywhereAWSConfigurator_Configure(t *testing.T) {
 					},
 					Hybrid: &api.HybridOptions{
 						IAMRolesAnywhere: &api.IAMRolesAnywhere{
-							NodeName:       "my-node",
-							TrustAnchorARN: "trust-anchor-arn",
-							ProfileARN:     "profile-arn",
-							RoleARN:        "role-arn",
+							NodeName:        "my-node",
+							TrustAnchorARN:  "trust-anchor-arn",
+							ProfileARN:      "profile-arn",
+							RoleARN:         "role-arn",
+							CertificatePath: "node.crt",
+							PrivateKeyPath:  "node.key",
 						},
 					},
 				},
@@ -103,11 +107,13 @@ func TestLoadAWSConfigForRolesAnywhere(t *testing.T) {
 			},
 			Hybrid: &api.HybridOptions{
 				IAMRolesAnywhere: &api.IAMRolesAnywhere{
-					AwsConfigPath:  configFile,
-					NodeName:       "my-node",
-					TrustAnchorARN: "trust-anchor-arn",
-					ProfileARN:     "profile-arn",
-					RoleARN:        "role-arn",
+					AwsConfigPath:   configFile,
+					NodeName:        "my-node",
+					TrustAnchorARN:  "trust-anchor-arn",
+					ProfileARN:      "profile-arn",
+					RoleARN:         "role-arn",
+					CertificatePath: "node.crt",
+					PrivateKeyPath:  "node.key",
 				},
 			},
 		},
@@ -140,11 +146,13 @@ func Test_HybridNodeProvider_ConfigureAws_RolesAnywhere(t *testing.T) {
 			},
 			Hybrid: &api.HybridOptions{
 				IAMRolesAnywhere: &api.IAMRolesAnywhere{
-					AwsConfigPath:  configFile,
-					NodeName:       "my-node",
-					TrustAnchorARN: "trust-anchor-arn",
-					ProfileARN:     "profile-arn",
-					RoleARN:        "role-arn",
+					AwsConfigPath:   configFile,
+					NodeName:        "my-node",
+					TrustAnchorARN:  "trust-anchor-arn",
+					ProfileARN:      "profile-arn",
+					RoleARN:         "role-arn",
+					CertificatePath: "node.crt",
+					PrivateKeyPath:  "node.key",
 				},
 			},
 		},
@@ -154,7 +162,6 @@ func Test_HybridNodeProvider_ConfigureAws_RolesAnywhere(t *testing.T) {
 			},
 		},
 	}
-	
 
 	p, err := hybrid.NewHybridNodeProvider(node, zap.NewNop())
 	g.Expect(err).To(Succeed())

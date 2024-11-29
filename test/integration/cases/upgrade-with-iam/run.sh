@@ -12,6 +12,10 @@ wait::dbus-ready
 declare INITIAL_VERSION=1.26
 declare TARGET_VERSION=1.30
 
+mkdir -p /etc/iam/pki
+touch /etc/iam/pki/server.pem
+touch /etc/iam/pki/server.key
+
 # remove previously installed containerd to test installation via nodeadm
 dnf remove -y containerd
 

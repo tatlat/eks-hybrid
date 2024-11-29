@@ -149,6 +149,14 @@ type IAMRolesAnywhere struct {
 	// This field is only used to init phase
 	// +optional
 	AwsConfigPath string `json:"awsConfigPath,omitempty"`
+
+	// CertificatePath is the location on disk for the certificate used to authenticate with AWS.
+	// +optional
+	CertificatePath string `json:"certificatePath,omitempty"`
+
+	// PrivateKeyPath is the location on disk for the certificate's private key.
+	// +optional
+	PrivateKeyPath string `json:"privateKeyPath,omitempty"`
 }
 
 // SSM defines Systems Manager specific configuration.

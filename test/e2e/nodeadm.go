@@ -31,6 +31,9 @@ const (
 	ssmActivationName = "eks-hybrid-ssm-provider"
 	amd64Arch         = "x86_64"
 	arm64Arch         = "arm64"
+
+	rolesAnywhereCertPath = "/etc/roles-anywhere/pki/node.crt"
+	rolesAnywhereKeyPath  = "/etc/roles-anywhere/pki/node.key"
 )
 
 type UserDataInput struct {
@@ -170,10 +173,12 @@ func (i *IamRolesAnywhereProvider) NodeadmConfig(ctx context.Context, spec NodeS
 			},
 			Hybrid: &api.HybridOptions{
 				IAMRolesAnywhere: &api.IAMRolesAnywhere{
-					NodeName:       i.nodeName(spec),
-					RoleARN:        i.roleARN,
-					TrustAnchorARN: i.trustAnchorARN,
-					ProfileARN:     i.profileARN,
+					NodeName:        i.nodeName(spec),
+					RoleARN:         i.roleARN,
+					TrustAnchorARN:  i.trustAnchorARN,
+					ProfileARN:      i.profileARN,
+					CertificatePath: rolesAnywhereCertPath,
+					PrivateKeyPath:  rolesAnywhereKeyPath,
 				},
 			},
 		},
@@ -196,11 +201,11 @@ func (i *IamRolesAnywhereProvider) FilesForNode(spec NodeSpec) ([]File, error) {
 	return []File{
 		{
 			Content: string(nodeCertificate.CertPEM),
-			Path:    "/etc/iam/pki/server.pem",
+			Path:    rolesAnywhereCertPath,
 		},
 		{
 			Content: string(nodeCertificate.KeyPEM),
-			Path:    "/etc/iam/pki/server.key",
+			Path:    rolesAnywhereKeyPath,
 		},
 	}, nil
 }

@@ -5,8 +5,8 @@ Description=Service that runs aws_signing_helper update to keep the AWS credenti
 User=root
 Environment=AWS_SHARED_CREDENTIALS_FILE={{ .SharedCredentialsFilePath }}
 ExecStart={{ .SigningHelperBinPath }} update \
-        --certificate /etc/iam/pki/server.pem \
-        --private-key /etc/iam/pki/server.key \
+        --certificate {{ .CertificatePath }} \
+        --private-key {{ .PrivateKeyPath }} \
         --trust-anchor-arn {{ .TrustAnchorARN }} \
         --profile-arn {{ .ProfileARN }} \
         --role-arn {{ .RoleARN }} \

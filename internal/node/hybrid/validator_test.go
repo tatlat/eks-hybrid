@@ -1,6 +1,7 @@
 package hybrid_test
 
 import (
+	"os"
 	"testing"
 
 	. "github.com/onsi/gomega"
@@ -11,6 +12,13 @@ import (
 )
 
 func Test_HybridNodeProviderValidateConfig(t *testing.T) {
+	g := NewWithT(t)
+	tmpDir := t.TempDir()
+	certPath := tmpDir + "/my-server.crt"
+	keyPath := tmpDir + "/my-server.key"
+	g.Expect(os.WriteFile(certPath, []byte("cert"), 0o644)).To(Succeed())
+	g.Expect(os.WriteFile(keyPath, []byte("key"), 0o644)).To(Succeed())
+
 	testCases := []struct {
 		name      string
 		node      *api.NodeConfig
@@ -26,10 +34,12 @@ func Test_HybridNodeProviderValidateConfig(t *testing.T) {
 					},
 					Hybrid: &api.HybridOptions{
 						IAMRolesAnywhere: &api.IAMRolesAnywhere{
-							NodeName:       "my-node",
-							TrustAnchorARN: "trust-anchor-arn",
-							ProfileARN:     "profile-arn",
-							RoleARN:        "role-arn",
+							NodeName:        "my-node",
+							TrustAnchorARN:  "trust-anchor-arn",
+							ProfileARN:      "profile-arn",
+							RoleARN:         "role-arn",
+							CertificatePath: certPath,
+							PrivateKeyPath:  keyPath,
 						},
 					},
 				},
@@ -73,6 +83,92 @@ func Test_HybridNodeProviderValidateConfig(t *testing.T) {
 				},
 			},
 			wantError: "NodeName can't be longer than 64 characters in hybrid iam roles anywhere configuration",
+		},
+		{
+			name: "no certificate path",
+			node: &api.NodeConfig{
+				Spec: api.NodeConfigSpec{
+					Cluster: api.ClusterDetails{
+						Region: "us-west-2",
+						Name:   "my-cluster",
+					},
+					Hybrid: &api.HybridOptions{
+						IAMRolesAnywhere: &api.IAMRolesAnywhere{
+							NodeName:       "my-node",
+							TrustAnchorARN: "trust-anchor-arn",
+							ProfileARN:     "profile-arn",
+							RoleARN:        "role-arn",
+							PrivateKeyPath: "/etc/certificates/iam/pki/my-server.key",
+						},
+					},
+				},
+			},
+			wantError: "CertificatePath is missing in hybrid iam roles anywhere configuration",
+		},
+		{
+			name: "no private key path",
+			node: &api.NodeConfig{
+				Spec: api.NodeConfigSpec{
+					Cluster: api.ClusterDetails{
+						Region: "us-west-2",
+						Name:   "my-cluster",
+					},
+					Hybrid: &api.HybridOptions{
+						IAMRolesAnywhere: &api.IAMRolesAnywhere{
+							NodeName:        "my-node",
+							TrustAnchorARN:  "trust-anchor-arn",
+							ProfileARN:      "profile-arn",
+							RoleARN:         "role-arn",
+							CertificatePath: "/etc/certificates/iam/pki/my-server.crt",
+						},
+					},
+				},
+			},
+			wantError: "PrivateKeyPath is missing in hybrid iam roles anywhere configuration",
+		},
+		{
+			name: "no certificate",
+			node: &api.NodeConfig{
+				Spec: api.NodeConfigSpec{
+					Cluster: api.ClusterDetails{
+						Region: "us-west-2",
+						Name:   "my-cluster",
+					},
+					Hybrid: &api.HybridOptions{
+						IAMRolesAnywhere: &api.IAMRolesAnywhere{
+							NodeName:        "my-node",
+							TrustAnchorARN:  "trust-anchor-arn",
+							ProfileARN:      "profile-arn",
+							RoleARN:         "role-arn",
+							PrivateKeyPath:  keyPath,
+							CertificatePath: tmpDir + "/missing.crt",
+						},
+					},
+				},
+			},
+			wantError: "IAM Roles Anywhere certificate " + tmpDir + "/missing.crt not found",
+		},
+		{
+			name: "no private key",
+			node: &api.NodeConfig{
+				Spec: api.NodeConfigSpec{
+					Cluster: api.ClusterDetails{
+						Region: "us-west-2",
+						Name:   "my-cluster",
+					},
+					Hybrid: &api.HybridOptions{
+						IAMRolesAnywhere: &api.IAMRolesAnywhere{
+							NodeName:        "my-node",
+							TrustAnchorARN:  "trust-anchor-arn",
+							ProfileARN:      "profile-arn",
+							RoleARN:         "role-arn",
+							CertificatePath: certPath,
+							PrivateKeyPath:  tmpDir + "/missing.key",
+						},
+					},
+				},
+			},
+			wantError: "IAM Roles Anywhere private key " + tmpDir + "/missing.key not found",
 		},
 	}
 	for _, tc := range testCases {
