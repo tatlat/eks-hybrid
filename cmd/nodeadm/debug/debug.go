@@ -16,6 +16,7 @@ import (
 	"github.com/aws/eks-hybrid/internal/creds"
 	"github.com/aws/eks-hybrid/internal/errors"
 	"github.com/aws/eks-hybrid/internal/kubernetes"
+	"github.com/aws/eks-hybrid/internal/logger"
 	"github.com/aws/eks-hybrid/internal/node"
 	"github.com/aws/eks-hybrid/internal/validation"
 	"github.com/aws/smithy-go/logging"
@@ -40,6 +41,7 @@ func (c *debug) Flaggy() *flaggy.Subcommand {
 
 func (c *debug) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	ctx := context.Background()
+	ctx = logger.NewContext(ctx, log)
 
 	if c.nodeConfigSource == "" {
 		flaggy.ShowHelpAndExit("--config-source is a required flag. The format is a URI with supported schemes: [file, imds]." +

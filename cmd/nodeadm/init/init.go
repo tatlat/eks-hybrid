@@ -6,6 +6,7 @@ import (
 
 	"github.com/aws/eks-hybrid/internal/cli"
 	"github.com/aws/eks-hybrid/internal/flows"
+	"github.com/aws/eks-hybrid/internal/logger"
 	"github.com/aws/eks-hybrid/internal/node"
 	"github.com/aws/eks-hybrid/internal/tracker"
 
@@ -39,6 +40,8 @@ func (c *initCmd) Flaggy() *flaggy.Subcommand {
 
 func (c *initCmd) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	ctx := context.Background()
+	ctx = logger.NewContext(ctx, log)
+
 	log.Info("Checking user is root..")
 	root, err := cli.IsRunningAsRoot()
 	if err != nil {
