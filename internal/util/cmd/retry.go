@@ -27,7 +27,7 @@ func Retry(ctx context.Context, newCmd Builder, backoff time.Duration) error {
 			return nil
 		}
 		err = fmt.Errorf("running command %s: %s [Err %s]", cmd.Args, out, err)
-		log.Debug("Command failed, retrying", zap.Duration("backoff", backoff), zap.Error(err))
+		log.Info("Command failed, retrying", zap.Duration("backoff", backoff), zap.Error(err))
 		select {
 		case <-ctx.Done():
 			return fmt.Errorf("%s: %w", ctx.Err(), err)
