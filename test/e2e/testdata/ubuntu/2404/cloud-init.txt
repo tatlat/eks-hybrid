@@ -68,6 +68,6 @@ write_files:
 
 runcmd:
   - systemctl restart apparmor.service
-  - /tmp/nodeadm-init.sh "{{ .NodeadmUrl }}" "{{ .KubernetesVersion }}" "{{ .Provider }}"
+  - /tmp/nodeadm-init.sh "{{ .NodeadmUrl }}" "{{ .KubernetesVersion }}" "{{ .Provider }}" "{{ .NodeadmAdditionalArgs }}"
 
 final_message: "The system is prepped, after $UPTIME seconds"

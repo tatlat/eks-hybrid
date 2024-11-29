@@ -3,3 +3,6 @@ skipped_tests:
   - "rhel8-amd64.*iam-ra"
   - "ubuntu2004-arm64.*iam-ra"
   - "rhel8-arm64.*iam-ra"
+  - "ubuntu2004-amd64-docker.*"
+  - "ubuntu2204-amd64-docker.*"
+  - "ubuntu2404-amd64-docker.*"

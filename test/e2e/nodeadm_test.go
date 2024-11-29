@@ -216,10 +216,13 @@ var _ = Describe("Hybrid Nodes", func() {
 	osList := []NodeadmOS{
 		NewUbuntu2004AMD(),
 		NewUbuntu2004ARM(),
+		NewUbuntu2004DockerSource(),
 		NewUbuntu2204AMD(),
 		NewUbuntu2204ARM(),
+		NewUbuntu2204DockerSource(),
 		NewUbuntu2404AMD(),
 		NewUbuntu2404ARM(),
+		NewUbuntu2404DockerSource(),
 		NewAmazonLinux2023AMD(),
 		NewAmazonLinux2023ARM(),
 		NewRedHat8AMD(os.Getenv("RHEL_USERNAME"), os.Getenv("RHEL_PASSWORD")),
