@@ -18,6 +18,7 @@ import (
 	"github.com/aws/eks-hybrid/internal/daemon"
 	"github.com/aws/eks-hybrid/internal/flows"
 	"github.com/aws/eks-hybrid/internal/kubelet"
+	"github.com/aws/eks-hybrid/internal/logger"
 	"github.com/aws/eks-hybrid/internal/node"
 	"github.com/aws/eks-hybrid/internal/packagemanager"
 	"github.com/aws/eks-hybrid/internal/ssm"
@@ -50,7 +51,7 @@ type command struct {
 	configSource      string
 	skipPhases        []string
 	kubernetesVersion string
-	timeout   time.Duration
+	timeout           time.Duration
 }
 
 func (c *command) Flaggy() *flaggy.Subcommand {
@@ -58,6 +59,9 @@ func (c *command) Flaggy() *flaggy.Subcommand {
 }
 
 func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
+	ctx := context.Background()
+	ctx = logger.NewContext(ctx, log)
+
 	root, err := cli.IsRunningAsRoot()
 	if err != nil {
 		return err
@@ -80,7 +84,7 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
+	ctx, cancel := context.WithTimeout(ctx, c.timeout)
 	defer cancel()
 
 	if !slices.Contains(c.skipPhases, initNodePreflightCheck) {

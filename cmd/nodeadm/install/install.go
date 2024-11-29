@@ -12,6 +12,7 @@ import (
 	"github.com/aws/eks-hybrid/internal/containerd"
 	"github.com/aws/eks-hybrid/internal/creds"
 	"github.com/aws/eks-hybrid/internal/flows"
+	"github.com/aws/eks-hybrid/internal/logger"
 	"github.com/aws/eks-hybrid/internal/packagemanager"
 )
 
@@ -36,7 +37,7 @@ type command struct {
 	kubernetesVersion  string
 	credentialProvider string
 	containerdSource   string
-	timeout    time.Duration
+	timeout            time.Duration
 }
 
 type Config struct {
@@ -52,6 +53,9 @@ func (c *command) Flaggy() *flaggy.Subcommand {
 }
 
 func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
+	ctx := context.Background()
+	ctx = logger.NewContext(ctx, log)
+
 	root, err := cli.IsRunningAsRoot()
 	if err != nil {
 		return err
@@ -83,7 +87,7 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
+	ctx, cancel := context.WithTimeout(ctx, c.timeout)
 	defer cancel()
 
 	log.Info("Setting package manager config", zap.Reflect("containerd source", string(containerdSource)))

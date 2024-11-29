@@ -15,6 +15,7 @@ import (
 	"github.com/aws/eks-hybrid/internal/daemon"
 	"github.com/aws/eks-hybrid/internal/flows"
 	"github.com/aws/eks-hybrid/internal/kubelet"
+	"github.com/aws/eks-hybrid/internal/logger"
 	"github.com/aws/eks-hybrid/internal/node"
 	"github.com/aws/eks-hybrid/internal/packagemanager"
 	"github.com/aws/eks-hybrid/internal/ssm"
@@ -47,6 +48,9 @@ func (c *command) Flaggy() *flaggy.Subcommand {
 }
 
 func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
+	ctx := context.Background()
+	ctx = logger.NewContext(ctx, log)
+
 	root, err := cli.IsRunningAsRoot()
 	if err != nil {
 		return err
@@ -71,7 +75,6 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	}
 	defer daemonManager.Close()
 
-	ctx := context.Background()
 	if installed.Artifacts.Kubelet {
 		kubeletStatus, err := daemonManager.GetDaemonStatus(kubelet.KubeletDaemonName)
 		if err != nil {
