@@ -15,7 +15,7 @@ You can run nodeadm on each on-premises host to simplify the installation, confi
 
 To install nodeadm on each on-premises host, you can run the following command from your on-premises hosts.
 
-For x86 hosts:
+For x86_64 hosts:
 
 ```sh
 curl -OL 'https://hybrid-assets.eks.amazonaws.com/releases/latest/bin/linux/amd64/nodeadm'
@@ -112,8 +112,8 @@ spec:
     name:              # Name of the EKS cluster
     region:            # AWS Region where the EKS cluster resides
   hybrid:
-    nodeName:          # Name of the node
     iamRolesAnywhere:
+      nodeName:          # Name of the node
       trustAnchorArn:  # ARN of the IAM Roles Anywhere trust anchor
       profileArn:      # ARN of the IAM Roles Anywhere profile
       roleArn:         # ARN of the Hybrid Nodes IAM role
