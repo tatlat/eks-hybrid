@@ -132,7 +132,7 @@ func createVPC(client *ec2.EC2, vpcParam vpcSubnetParams) (string, error) {
 	return vpcId, nil
 }
 
-func createSubnet(client *ec2.EC2, vpcID, subnetCidr, az, tagName string, clusterName string) (subnetID string, err error) {
+func createSubnet(client *ec2.EC2, vpcID, subnetCidr, az, tagName, clusterName string) (subnetID string, err error) {
 	subnet, err := client.CreateSubnet(&ec2.CreateSubnetInput{
 		VpcId:            aws.String(vpcID),
 		CidrBlock:        aws.String(subnetCidr),
@@ -163,7 +163,7 @@ func createSubnet(client *ec2.EC2, vpcID, subnetCidr, az, tagName string, cluste
 	return subnetId, nil
 }
 
-func createInternetGateway(client *ec2.EC2, vpcId string, clusterName string) (string, error) {
+func createInternetGateway(client *ec2.EC2, vpcId, clusterName string) (string, error) {
 	igwOutput, err := client.CreateInternetGateway(&ec2.CreateInternetGatewayInput{
 		TagSpecifications: []*ec2.TagSpecification{
 			{
@@ -303,7 +303,6 @@ func (t *TestRunner) createVPCPeering(ctx context.Context) (string, error) {
 		o.RetryMaxAttempts = 20
 		o.RetryMode = awsv2.RetryModeAdaptive
 	})
-
 	if err != nil {
 		return "", fmt.Errorf("failed to create VPC peering connection: %v", err)
 	}

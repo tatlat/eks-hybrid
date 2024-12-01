@@ -17,7 +17,7 @@ import (
 	"github.com/go-logr/logr"
 )
 
-func createSSMActivation(ctx context.Context, client *ssmv2.Client, iamRole string, ssmActivationName string, clusterName string) (*ssmv2.CreateActivationOutput, error) {
+func createSSMActivation(ctx context.Context, client *ssmv2.Client, iamRole, ssmActivationName, clusterName string) (*ssmv2.CreateActivationOutput, error) {
 	// Define the input for the CreateActivation API
 	input := &ssmv2.CreateActivationInput{
 		IamRole:             aws.String(iamRole),
@@ -36,7 +36,6 @@ func createSSMActivation(ctx context.Context, client *ssmv2.Client, iamRole stri
 		o.RetryMaxAttempts = 20
 		o.RetryMode = awsv2.RetryModeAdaptive
 	})
-
 	if err != nil {
 		return nil, fmt.Errorf("creating SSM activation: %v", err)
 	}
