@@ -123,6 +123,7 @@ func NewUbuntu2204AMD() *Ubuntu2204 {
 	u.ContainerdSource = "distro"
 	return u
 }
+
 func NewUbuntu2204DockerSource() *Ubuntu2204 {
 	u := new(Ubuntu2204)
 	u.Architecture = "amd64"

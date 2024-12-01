@@ -41,7 +41,7 @@ const (
 	rhelSsmAgentARM = "https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/linux_arm64/amazon-ssm-agent.rpm"
 )
 
-func NewRedHat8AMD(rhelUsername string, rhelPassword string) *RedHat8 {
+func NewRedHat8AMD(rhelUsername, rhelPassword string) *RedHat8 {
 	rh8 := new(RedHat8)
 	rh8.RhelUsername = rhelUsername
 	rh8.RhelPassword = rhelPassword
@@ -49,7 +49,7 @@ func NewRedHat8AMD(rhelUsername string, rhelPassword string) *RedHat8 {
 	return rh8
 }
 
-func NewRedHat8ARM(rhelUsername string, rhelPassword string) *RedHat8 {
+func NewRedHat8ARM(rhelUsername, rhelPassword string) *RedHat8 {
 	rh8 := new(RedHat8)
 	rh8.RhelUsername = rhelUsername
 	rh8.RhelPassword = rhelPassword
@@ -102,7 +102,7 @@ type RedHat9 struct {
 	Architecture string
 }
 
-func NewRedHat9AMD(rhelUsername string, rhelPassword string) *RedHat9 {
+func NewRedHat9AMD(rhelUsername, rhelPassword string) *RedHat9 {
 	rh9 := new(RedHat9)
 	rh9.RhelUsername = rhelUsername
 	rh9.RhelPassword = rhelPassword
@@ -110,7 +110,7 @@ func NewRedHat9AMD(rhelUsername string, rhelPassword string) *RedHat9 {
 	return rh9
 }
 
-func NewRedHat9ARM(rhelUsername string, rhelPassword string) *RedHat9 {
+func NewRedHat9ARM(rhelUsername, rhelPassword string) *RedHat9 {
 	rh9 := new(RedHat9)
 	rh9.RhelUsername = rhelUsername
 	rh9.RhelPassword = rhelPassword
@@ -166,7 +166,7 @@ type AMI struct {
 }
 
 // findLatestImage returns the most recent redhat image matching the amiPrefix and and arch
-func findLatestImage(client *ec2.EC2, amiPrefix string, arch string) (string, error) {
+func findLatestImage(client *ec2.EC2, amiPrefix, arch string) (string, error) {
 	var latestAMI AMI
 
 	in := &ec2.DescribeImagesInput{

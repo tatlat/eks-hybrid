@@ -34,6 +34,9 @@ const (
 
 	rolesAnywhereCertPath = "/etc/roles-anywhere/pki/node.crt"
 	rolesAnywhereKeyPath  = "/etc/roles-anywhere/pki/node.key"
+
+	httpsScheme = "https"
+	s3Scheme    = "s3"
 )
 
 type UserDataInput struct {
@@ -210,16 +213,11 @@ func (i *IamRolesAnywhereProvider) FilesForNode(spec NodeSpec) ([]File, error) {
 	}, nil
 }
 
-func parseS3URL(s3URL string) (bucket, key string, err error) {
-	parsedURL, err := url.Parse(s3URL)
-	if err != nil {
-		return "", "", err
-	}
-
-	parts := strings.SplitN(parsedURL.Host, ".", 2)
+func extractBucketAndKey(s3URL *url.URL) (bucket, key string) {
+	parts := strings.SplitN(s3URL.Host, ".", 2)
 	bucket = parts[0]
-	key = strings.TrimPrefix(parsedURL.Path, "/")
-	return bucket, key, nil
+	key = strings.TrimPrefix(s3URL.Path, "/")
+	return bucket, key
 }
 
 func generatePreSignedURL(client *s3.S3, bucket, key string, expiration time.Duration) (string, error) {
@@ -249,10 +247,20 @@ func generatePutLogsPreSignedURL(client *s3.S3, bucket, key string, expiration t
 }
 
 func getNodeadmURL(client *s3.S3, nodeadmUrl string) (string, error) {
-	s3Bucket, s3BucketKey, err := parseS3URL(nodeadmUrl)
+	parsedURL, err := url.Parse(nodeadmUrl)
 	if err != nil {
-		return "", fmt.Errorf("parsing S3 URL: %v", err)
+		return "", fmt.Errorf("parsing nodeadm URL: %v", err)
 	}
+
+	if parsedURL.Scheme != httpsScheme && parsedURL.Scheme != s3Scheme {
+		return "", fmt.Errorf("invalid scheme. %s is not one of %v", parsedURL.Scheme, []string{httpsScheme, s3Scheme})
+	}
+
+	if parsedURL.Scheme == httpsScheme {
+		return nodeadmUrl, nil
+	}
+
+	s3Bucket, s3BucketKey := extractBucketAndKey(parsedURL)
 
 	preSignedURL, err := generatePreSignedURL(client, s3Bucket, s3BucketKey, 30*time.Minute)
 	if err != nil {
