@@ -41,8 +41,8 @@ import (
 )
 
 const (
-	ec2VolumeSize   = int32(30)
-	podNamespace    = "default"
+	ec2VolumeSize = int32(30)
+	podNamespace  = "default"
 )
 
 var (

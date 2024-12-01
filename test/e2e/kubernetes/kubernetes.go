@@ -146,7 +146,7 @@ func GetNginxPodName(name string) string {
 	return "nginx-" + name
 }
 
-func CreateNginxPodInNode(ctx context.Context, k8s *kubernetes.Clientset, nodeName string, namespace string, logger logr.Logger) error {
+func CreateNginxPodInNode(ctx context.Context, k8s *kubernetes.Clientset, nodeName, namespace string, logger logr.Logger) error {
 	podName := GetNginxPodName(nodeName)
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
