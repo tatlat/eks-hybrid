@@ -167,7 +167,7 @@ func createSubnet(client *ec2.EC2, vpcID, subnetCidr, az, tagName, clusterName s
 		},
 	})
 	if err != nil {
-		return "", fmt.Errorf("failed to tag private subnet: %v", err)
+		return "", fmt.Errorf("failed to tag subnet: %v", err)
 	}
 	return subnetId, nil
 }

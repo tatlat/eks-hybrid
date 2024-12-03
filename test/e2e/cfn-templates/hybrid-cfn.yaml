@@ -66,7 +66,7 @@ Resources:
       PrincipalArn: !GetAtt SSMRole.Arn
       Type: HYBRID_LINUX
 
-
+{{- if .IncludeRolesAnywhere}}
   TrustAnchor:
     Type: AWS::RolesAnywhere::TrustAnchor
     Properties:
@@ -129,13 +129,14 @@ Resources:
                 'aws:SourceArn': !GetAtt TrustAnchor.TrustAnchorArn
     DependsOn:
     - TrustAnchor
-  
+
   IRAClusterAccessEntry:
     Type: AWS::EKS::AccessEntry
     Properties:
       ClusterName: !Ref clusterName
       PrincipalArn: !GetAtt IRARole.Arn
       Type: HYBRID_LINUX
+{{- end}}
 
 
   # Create IAM Role for EC2
@@ -165,7 +166,7 @@ Outputs:
   SSMNodeRoleARN:
     Description: The ARN of the IAM Role for SSM.
     Value: !GetAtt SSMRole.Arn
-  
+{{- if .IncludeRolesAnywhere}}
   IRANodeRoleName:
     Description: IAM Role for IAM Roles Anywhere
     Value: !Ref IRARole
@@ -181,3 +182,4 @@ Outputs:
   IRAProfileARN:
     Description: ARN of the EKS Hybrid IRA Profile
     Value: !GetAtt AnywhereProfile.ProfileArn
+{{- end}}
