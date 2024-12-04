@@ -4,9 +4,12 @@
 package e2e
 
 import (
+	"bytes"
 	"context"
 	_ "embed"
 	"fmt"
+	"slices"
+	"text/template"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -18,7 +21,9 @@ import (
 )
 
 //go:embed cfn-templates/hybrid-cfn.yaml
-var cfnTemplateBody []byte
+var cfnTemplateBody string
+
+var iraUnsupportedRegions = []string{"ap-southeast-5"}
 
 type e2eCfnStack struct {
 	clusterName            string
@@ -27,6 +32,10 @@ type e2eCfnStack struct {
 	cfn                    *cloudformation.CloudFormation
 	iam                    *iam.IAM
 	iamRolesAnywhereCACert []byte
+}
+
+type hybridCfnTemplateVars struct {
+	IncludeRolesAnywhere bool
 }
 
 type e2eCfnStackOutput struct {
@@ -90,11 +99,21 @@ func (e *e2eCfnStack) deployStack(ctx context.Context, logger logr.Logger) error
 		},
 	}
 
+	var buf bytes.Buffer
+	cfnTemplate, err := template.New("hybridCfnTemplate").Parse(cfnTemplateBody)
+	if err != nil {
+		return fmt.Errorf("parsing hybrid-cfn.yaml template: %w", err)
+	}
+	cfnTemplateConfig := &hybridCfnTemplateVars{IncludeRolesAnywhere: isIraSupported(*e.cfn.Config.Region)}
+	err = cfnTemplate.Execute(&buf, cfnTemplateConfig)
+	if err != nil {
+		return fmt.Errorf("applying data to hybrid-cfn.yaml template: %w", err)
+	}
 	if len(resp.Stacks) == 0 {
 		logger.Info("Creating hybrid nodes stack", "stackName", e.stackName)
 		_, err = e.cfn.CreateStackWithContext(ctx, &cloudformation.CreateStackInput{
 			StackName:    aws.String(e.stackName),
-			TemplateBody: aws.String(string(cfnTemplateBody)),
+			TemplateBody: aws.String(string(buf.Bytes())),
 			Parameters:   params,
 			Capabilities: []*string{
 				aws.String("CAPABILITY_NAMED_IAM"),
@@ -275,4 +294,8 @@ func (e *e2eCfnStack) delete(ctx context.Context, logger logr.Logger, output *e2
 func isNotFound(err error) bool {
 	aerr, ok := err.(awserr.Error)
 	return err != nil && ok && aerr.Code() == "NoSuchEntity"
+}
+
+func isIraSupported(region string) bool {
+	return !slices.Contains(iraUnsupportedRegions, region)
 }
