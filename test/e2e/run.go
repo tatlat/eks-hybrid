@@ -13,12 +13,8 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"gopkg.in/yaml.v2"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
-	sigyaml "sigs.k8s.io/yaml"
 )
 
 const TestClusterTagKey = "Nodeadm-E2E-Tests-Cluster"
@@ -56,36 +52,10 @@ type NetworkConfig struct {
 }
 
 const (
-	vpcCNIDaemonSetName = "aws-node"
-	vpcCNIDaemonSetNS   = "kube-system"
 	outputDir           = "/tmp"
 	ciliumCni           = "cilium"
 	calicoCni           = "calico"
 )
-
-var awsNodePatchContent = `
-spec:
-  template:
-    spec:
-      affinity:
-        nodeAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            nodeSelectorTerms:
-            - matchExpressions:
-              - key: kubernetes.io/os
-                operator: In
-                values:
-                - "linux"
-              - key: kubernetes.io/arch
-                operator: In
-                values:
-                - "amd64"
-                - "arm64"
-              - key: eks.amazonaws.com/compute-type
-                operator: NotIn
-                values:
-                - "hybrid"
-`
 
 func (t *TestRunner) NewAWSSession() (*session.Session, error) {
 	// Create a new session using shared credentials or environment variables
@@ -241,21 +211,9 @@ func (t *TestRunner) CreateResources(ctx context.Context) error {
 		return fmt.Errorf("loading kubeconfig: %v", err)
 	}
 
-	k8sClient, err := kubernetes.NewForConfig(clientConfig)
-	if err != nil {
-		return fmt.Errorf("creating Kubernetes client: %v", err)
-	}
-
 	dynamicK8s, err := dynamic.NewForConfig(clientConfig)
 	if err != nil {
 		return fmt.Errorf("creating dynamic Kubernetes client: %v", err)
-	}
-
-	// Patch aws-node DaemonSet to update the VPC CNI with anti-affinity for nodes labeled with the default hybrid nodes label eks.amazonaws.com/compute-type: hybrid
-	fmt.Println("Patching aws-node daemonset...")
-	err = patchAwsNode(ctx, k8sClient)
-	if err != nil {
-		return fmt.Errorf("patching aws-node daemonset for %s EKS cluster: %v", t.Spec.KubernetesVersion, err)
 	}
 
 	switch t.Spec.Cni {
@@ -295,27 +253,6 @@ func updateKubeconfig(clusterName, region string) error {
 
 func kubeconfigPath(clusterName string) string {
 	return fmt.Sprintf("/tmp/%s.kubeconfig", clusterName)
-}
-
-func patchAwsNode(ctx context.Context, k8s *kubernetes.Clientset) error {
-	patchJSON, err := sigyaml.YAMLToJSON([]byte(awsNodePatchContent))
-	if err != nil {
-		return fmt.Errorf("marshalling patch data: %v", err)
-	}
-
-	_, err = k8s.AppsV1().DaemonSets(vpcCNIDaemonSetNS).Patch(
-		ctx,
-		vpcCNIDaemonSetName,
-		types.StrategicMergePatchType,
-		patchJSON,
-		metav1.PatchOptions{},
-	)
-	if err != nil {
-		return fmt.Errorf("patching %s daemonSet: %v", vpcCNIDaemonSetName, err)
-	}
-
-	fmt.Println("Successfully patched aws-node daemonSet")
-	return nil
 }
 
 func (t *TestRunner) saveSetupConfigAsYAML(outputFile string) error {
