@@ -7,7 +7,7 @@ coverage.out
 .DS_Store
 vendor
 e2e-config
-test/e2e/ca.crt
-test/e2e/ca.key
+test/e2e/suite/ca.crt
+test/e2e/suite/ca.key
 test/e2e/e2e.test
 _output

@@ -1,7 +1,4 @@
-//go:build e2e
-// +build e2e
-
-package e2e
+package os
 
 import (
 	"context"
@@ -9,13 +6,15 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ssm"
+
+	"github.com/aws/eks-hybrid/test/e2e"
 )
 
 //go:embed testdata/amazonlinux/2023/cloud-init.txt
 var al23CloudInit []byte
 
 type amazonLinuxCloudInitData struct {
-	UserDataInput
+	e2e.UserDataInput
 	NodeadmUrl string
 }
 
@@ -54,7 +53,7 @@ func (a AmazonLinux2023) AMIName(ctx context.Context, awsSession *session.Sessio
 	return *amiId, err
 }
 
-func (a AmazonLinux2023) BuildUserData(userDataInput UserDataInput) ([]byte, error) {
+func (a AmazonLinux2023) BuildUserData(userDataInput e2e.UserDataInput) ([]byte, error) {
 	if err := populateBaseScripts(&userDataInput); err != nil {
 		return nil, err
 	}

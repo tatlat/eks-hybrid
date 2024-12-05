@@ -1,7 +1,4 @@
-//go:build e2e
-// +build e2e
-
-package e2e
+package credentials
 
 import (
 	"bytes"
@@ -17,14 +14,14 @@ import (
 	"time"
 )
 
-type certificate struct {
+type Certificate struct {
 	Cert    *x509.Certificate `json:"cert"`
 	CertPEM []byte            `json:"certPEM"`
 	Key     *ecdsa.PrivateKey `json:"key"`
 	KeyPEM  []byte            `json:"keyPEM"`
 }
 
-func createCA() (*certificate, error) {
+func CreateCA() (*Certificate, error) {
 	caCertFile := "ca.crt"
 	caKeyFile := "ca.key"
 
@@ -83,7 +80,7 @@ func createCA() (*certificate, error) {
 		return nil, fmt.Errorf("writing CA key to file: %w", err)
 	}
 
-	return &certificate{
+	return &Certificate{
 		CertPEM: caPEM.Bytes(),
 		Cert:    ca,
 		Key:     privateKey,
@@ -91,8 +88,8 @@ func createCA() (*certificate, error) {
 	}, nil
 }
 
-// createCertificateForNode creates a new certificate with the nodeName as the Subject's CN.
-func createCertificateForNode(ca *x509.Certificate, caPrivKey any, nodeName string) (*certificate, error) {
+// CreateCertificateForNode creates a new certificate with the nodeName as the Subject's CN.
+func CreateCertificateForNode(ca *x509.Certificate, caPrivKey any, nodeName string) (*Certificate, error) {
 	privateKey, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
 	if err != nil {
 		return nil, fmt.Errorf("generating private key for certificate: %w", err)
@@ -137,7 +134,7 @@ func createCertificateForNode(ca *x509.Certificate, caPrivKey any, nodeName stri
 	keyPEM := new(bytes.Buffer)
 	pem.Encode(keyPEM, &pem.Block{Type: "EC PRIVATE KEY", Bytes: privateKeyBytes})
 
-	return &certificate{
+	return &Certificate{
 		CertPEM: certPEM.Bytes(),
 		Cert:    cert,
 		Key:     privateKey,
@@ -150,7 +147,7 @@ func fileExists(filePath string) bool {
 	return !os.IsNotExist(err)
 }
 
-func readCertificate(certPath, keyPath string) (*certificate, error) {
+func readCertificate(certPath, keyPath string) (*Certificate, error) {
 	certEncoded, err := os.ReadFile(certPath)
 	if err != nil {
 		return nil, err
@@ -161,10 +158,10 @@ func readCertificate(certPath, keyPath string) (*certificate, error) {
 		return nil, err
 	}
 
-	return parseCertificate(certEncoded, keyEncoded)
+	return ParseCertificate(certEncoded, keyEncoded)
 }
 
-func parseCertificate(certPEM, keyPEM []byte) (*certificate, error) {
+func ParseCertificate(certPEM, keyPEM []byte) (*Certificate, error) {
 	certDecoded, _ := pem.Decode(certPEM)
 	cert, err := x509.ParseCertificate(certDecoded.Bytes)
 	if err != nil {
@@ -177,7 +174,7 @@ func parseCertificate(certPEM, keyPEM []byte) (*certificate, error) {
 		return nil, fmt.Errorf("parsing key: %w", err)
 	}
 
-	return &certificate{
+	return &Certificate{
 		Cert:    cert,
 		CertPEM: certPEM,
 		Key:     key,

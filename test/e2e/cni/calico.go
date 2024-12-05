@@ -1,4 +1,4 @@
-package e2e
+package cni
 
 import (
 	"bytes"
@@ -16,30 +16,30 @@ var tigeraTemplate []byte
 //go:embed testdata/calico/calico-template.yaml
 var calicoTemplate []byte
 
-type calico struct {
+type Calico struct {
 	K8s dynamic.Interface
-	// PodCIDR is the cluster level CIDR to be use for Pods. It needs to be big enough for
+	// podCIDR is the cluster level CIDR to be use for Pods. It needs to be big enough for
 	// Hybrid Nodes.
 	//
 	// Check the calico-template file for the node pod cidr mask. The default is 24.
-	PodCIDR string
+	podCIDR string
 }
 
-func newCalico(k8s dynamic.Interface, podCIDR string) calico {
-	return calico{
+func NewCalico(k8s dynamic.Interface, podCIDR string) Calico {
+	return Calico{
 		K8s:     k8s,
-		PodCIDR: podCIDR,
+		podCIDR: podCIDR,
 	}
 }
 
-// deploy creates or updates the Calico reosurces.
-func (c calico) deploy(ctx context.Context) error {
+// Deploy creates or updates the Calico reosurces.
+func (c Calico) Deploy(ctx context.Context) error {
 	tmpl, err := template.New("calico").Parse(string(calicoTemplate))
 	if err != nil {
 		return err
 	}
 	values := map[string]string{
-		"PodCIDR": c.PodCIDR,
+		"PodCIDR": c.podCIDR,
 	}
 	installation := &bytes.Buffer{}
 	err = tmpl.Execute(installation, values)

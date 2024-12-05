@@ -1,7 +1,4 @@
-//go:build e2e
-// +build e2e
-
-package e2e
+package kubernetes
 
 import (
 	"context"
@@ -22,11 +19,10 @@ const (
 	nodePodDelayInterval    = 5 * time.Second
 	hybridNodeWaitTimeout   = 10 * time.Minute
 	hybridNodeDelayInterval = 5 * time.Second
-	podNamespace            = "default"
 )
 
-// waitForNode wait for the node to join the cluster and fetches the node info from an internal IP address of the node
-func waitForNode(ctx context.Context, k8s *kubernetes.Clientset, internalIP string, logger logr.Logger) (*corev1.Node, error) {
+// WaitForNode wait for the node to join the cluster and fetches the node info from an internal IP address of the node
+func WaitForNode(ctx context.Context, k8s *kubernetes.Clientset, internalIP string, logger logr.Logger) (*corev1.Node, error) {
 	foundNode := &corev1.Node{}
 	consecutiveErrors := 0
 	err := wait.PollUntilContextTimeout(ctx, hybridNodeDelayInterval, hybridNodeWaitTimeout, true, func(ctx context.Context) (done bool, err error) {
@@ -73,7 +69,7 @@ func nodeByInternalIP(nodes *corev1.NodeList, nodeIP string) *corev1.Node {
 	return nil
 }
 
-func waitForHybridNodeToBeReady(ctx context.Context, k8s *kubernetes.Clientset, nodeName string, logger logr.Logger) error {
+func WaitForHybridNodeToBeReady(ctx context.Context, k8s *kubernetes.Clientset, nodeName string, logger logr.Logger) error {
 	consecutiveErrors := 0
 	err := wait.PollUntilContextTimeout(ctx, nodePodDelayInterval, hybridNodeWaitTimeout, true, func(ctx context.Context) (done bool, err error) {
 		node, err := k8s.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
@@ -107,7 +103,7 @@ func waitForHybridNodeToBeReady(ctx context.Context, k8s *kubernetes.Clientset, 
 	return nil
 }
 
-func waitForHybridNodeToBeNotReady(ctx context.Context, k8s *kubernetes.Clientset, nodeName string, logger logr.Logger) error {
+func WaitForHybridNodeToBeNotReady(ctx context.Context, k8s *kubernetes.Clientset, nodeName string, logger logr.Logger) error {
 	consecutiveErrors := 0
 	err := wait.PollUntilContextTimeout(ctx, nodePodDelayInterval, hybridNodeWaitTimeout, true, func(ctx context.Context) (done bool, err error) {
 		node, err := k8s.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
@@ -146,16 +142,16 @@ func nodeReady(node *corev1.Node) bool {
 	return false
 }
 
-func getNginxPodName(name string) string {
+func GetNginxPodName(name string) string {
 	return "nginx-" + name
 }
 
-func createNginxPodInNode(ctx context.Context, k8s *kubernetes.Clientset, nodeName string, logger logr.Logger) error {
-	podName := getNginxPodName(nodeName)
+func CreateNginxPodInNode(ctx context.Context, k8s *kubernetes.Clientset, nodeName string, namespace string, logger logr.Logger) error {
+	podName := GetNginxPodName(nodeName)
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      podName,
-			Namespace: podNamespace,
+			Namespace: namespace,
 		},
 		Spec: corev1.PodSpec{
 			Containers: []corev1.Container{
@@ -177,12 +173,12 @@ func createNginxPodInNode(ctx context.Context, k8s *kubernetes.Clientset, nodeNa
 		},
 	}
 
-	_, err := k8s.CoreV1().Pods(podNamespace).Create(ctx, pod, metav1.CreateOptions{})
+	_, err := k8s.CoreV1().Pods(namespace).Create(ctx, pod, metav1.CreateOptions{})
 	if err != nil {
 		return fmt.Errorf("creating the test pod: %w", err)
 	}
 
-	err = waitForPodToBeRunning(ctx, k8s, podName, podNamespace, nodeName, logger)
+	err = waitForPodToBeRunning(ctx, k8s, podName, namespace, nodeName, logger)
 	if err != nil {
 		return fmt.Errorf("waiting for test pod to be running: %w", err)
 	}
@@ -224,7 +220,7 @@ func waitForPodToBeDeleted(ctx context.Context, k8s *kubernetes.Clientset, name,
 	})
 }
 
-func deletePod(ctx context.Context, k8s *kubernetes.Clientset, name, namespace string) error {
+func DeletePod(ctx context.Context, k8s *kubernetes.Clientset, name, namespace string) error {
 	err := k8s.CoreV1().Pods(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 	if err != nil {
 		return fmt.Errorf("deleting pod: %w", err)
@@ -232,7 +228,7 @@ func deletePod(ctx context.Context, k8s *kubernetes.Clientset, name, namespace s
 	return waitForPodToBeDeleted(ctx, k8s, name, namespace)
 }
 
-func deleteNode(ctx context.Context, k8s *kubernetes.Clientset, name string) error {
+func DeleteNode(ctx context.Context, k8s *kubernetes.Clientset, name string) error {
 	err := k8s.CoreV1().Nodes().Delete(ctx, name, metav1.DeleteOptions{})
 	if err != nil {
 		return fmt.Errorf("deleting node: %w", err)
@@ -240,7 +236,7 @@ func deleteNode(ctx context.Context, k8s *kubernetes.Clientset, name string) err
 	return nil
 }
 
-func ensureNodeWithIPIsDeleted(ctx context.Context, k8s *kubernetes.Clientset, internalIP string) error {
+func EnsureNodeWithIPIsDeleted(ctx context.Context, k8s *kubernetes.Clientset, internalIP string) error {
 	node, err := getNodeByInternalIP(ctx, k8s, internalIP)
 	if err != nil {
 		return fmt.Errorf("getting node by internal IP: %w", err)
@@ -249,7 +245,7 @@ func ensureNodeWithIPIsDeleted(ctx context.Context, k8s *kubernetes.Clientset, i
 		return nil
 	}
 
-	err = deleteNode(ctx, k8s, node.Name)
+	err = DeleteNode(ctx, k8s, node.Name)
 	if err != nil {
 		return fmt.Errorf("deleting node %s: %w", node.Name, err)
 	}

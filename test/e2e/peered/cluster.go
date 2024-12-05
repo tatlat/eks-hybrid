@@ -1,7 +1,4 @@
-//go:build e2e
-// +build e2e
-
-package e2e
+package peered
 
 import (
 	"context"
@@ -13,12 +10,12 @@ import (
 )
 
 type HybridCluster struct {
-	clusterName       string
-	clusterArn        string
-	clusterRegion     string
-	kubernetesVersion string
-	subnetID          string
-	securityGroupID   string
+	Name              string
+	Arn               string
+	Region            string
+	KubernetesVersion string
+	SubnetID          string
+	SecurityGroupID   string
 }
 
 func getClusterDetails(ctx context.Context, client *eks.EKS, clusterName string) (eks.Cluster, error) {
@@ -80,10 +77,10 @@ func getDefaultSecurityGroup(ctx context.Context, client *ec2.EC2, vpcID string)
 	return *result.SecurityGroups[0].GroupId, nil
 }
 
-func getHybridClusterDetails(ctx context.Context, eksClient *eks.EKS, ec2Client *ec2.EC2, clusterName, clusterRegion, hybridVpcID string) (*HybridCluster, error) {
+func GetHybridCluster(ctx context.Context, eksClient *eks.EKS, ec2Client *ec2.EC2, clusterName, clusterRegion, hybridVpcID string) (*HybridCluster, error) {
 	cluster := &HybridCluster{
-		clusterName:   clusterName,
-		clusterRegion: clusterRegion,
+		Name:   clusterName,
+		Region: clusterRegion,
 	}
 
 	clusterDetails, err := getClusterDetails(ctx, eksClient, clusterName)
@@ -91,15 +88,15 @@ func getHybridClusterDetails(ctx context.Context, eksClient *eks.EKS, ec2Client 
 		return nil, fmt.Errorf("getting cluster kubernetes version: %w", err)
 	}
 
-	cluster.kubernetesVersion = *clusterDetails.Version
-	cluster.clusterArn = *clusterDetails.Arn
+	cluster.KubernetesVersion = *clusterDetails.Version
+	cluster.Arn = *clusterDetails.Arn
 
-	cluster.subnetID, err = findSubnetInVPC(ctx, ec2Client, hybridVpcID)
+	cluster.SubnetID, err = findSubnetInVPC(ctx, ec2Client, hybridVpcID)
 	if err != nil {
 		return nil, fmt.Errorf("getting public subnet in the given hybrid node vpc %s: %w", hybridVpcID, err)
 	}
 
-	cluster.securityGroupID, err = getDefaultSecurityGroup(ctx, ec2Client, hybridVpcID)
+	cluster.SecurityGroupID, err = getDefaultSecurityGroup(ctx, ec2Client, hybridVpcID)
 	if err != nil {
 		return nil, fmt.Errorf("getting default security group in the given hybrid node vpc %s: %w", hybridVpcID, err)
 	}

@@ -1,7 +1,4 @@
-//go:build e2e
-// +build e2e
-
-package e2e
+package os
 
 import (
 	"context"
@@ -11,6 +8,8 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ec2"
+
+	"github.com/aws/eks-hybrid/test/e2e"
 )
 
 const rhelAWSAccount = "309956199498"
@@ -22,7 +21,7 @@ var rhel8CloudInit []byte
 var rhel9CloudInit []byte
 
 type rhelCloudInitData struct {
-	UserDataInput
+	e2e.UserDataInput
 	NodeadmUrl        string
 	NodeadmInitScript string
 	RhelUsername      string
@@ -77,7 +76,7 @@ func (r RedHat8) AMIName(ctx context.Context, awsSession *session.Session) (stri
 	return findLatestImage(ec2.New(awsSession), "RHEL-8*", r.Architecture)
 }
 
-func (r RedHat8) BuildUserData(userDataInput UserDataInput) ([]byte, error) {
+func (r RedHat8) BuildUserData(userDataInput e2e.UserDataInput) ([]byte, error) {
 	if err := populateBaseScripts(&userDataInput); err != nil {
 		return nil, err
 	}
@@ -138,7 +137,7 @@ func (r RedHat9) AMIName(ctx context.Context, awsSession *session.Session) (stri
 	return findLatestImage(ec2.New(awsSession), "RHEL-9*", r.Architecture)
 }
 
-func (r RedHat9) BuildUserData(userDataInput UserDataInput) ([]byte, error) {
+func (r RedHat9) BuildUserData(userDataInput e2e.UserDataInput) ([]byte, error) {
 	if err := populateBaseScripts(&userDataInput); err != nil {
 		return nil, err
 	}
