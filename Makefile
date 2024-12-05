@@ -103,7 +103,7 @@ run: build ## Run nodeadm binary.
 
 .PHONY: e2e-tests-binary
 e2e-tests-binary: ## Build binary with e2e tests.
-	CGO_ENABLED=0 $(GO) test -ldflags "-s -w -buildid='' -extldflags -static" -c ./test/e2e -o ./_bin/e2e.test -tags "e2e"
+	CGO_ENABLED=0 $(GO) test -ldflags "-s -w -buildid='' -extldflags -static" -c ./test/e2e/suite -o ./_bin/e2e.test -tags "e2e"
 
 .PHONY: e2e-test
 e2e-test: ## Build e2e test setup binary.

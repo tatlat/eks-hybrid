@@ -1,17 +1,13 @@
-//go:build e2e
-// +build e2e
-
-package e2e
+package os
 
 import (
-	"bytes"
 	"context"
 	_ "embed"
 	"strings"
-	"text/template"
 
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ssm"
+	"github.com/aws/eks-hybrid/test/e2e"
 )
 
 //go:embed testdata/ubuntu/2004/cloud-init.txt
@@ -30,7 +26,7 @@ var nodeAdmInitScript []byte
 var logCollectorScript []byte
 
 type ubuntuCloudInitData struct {
-	UserDataInput
+	e2e.UserDataInput
 	NodeadmUrl            string
 	NodeadmInitScript     string
 	NodeadmAdditionalArgs string
@@ -91,7 +87,7 @@ func (u Ubuntu2004) AMIName(ctx context.Context, awsSession *session.Session) (s
 	return *amiId, err
 }
 
-func (u Ubuntu2004) BuildUserData(userDataInput UserDataInput) ([]byte, error) {
+func (u Ubuntu2004) BuildUserData(userDataInput e2e.UserDataInput) ([]byte, error) {
 	if err := populateBaseScripts(&userDataInput); err != nil {
 		return nil, err
 	}
@@ -158,7 +154,7 @@ func (u Ubuntu2204) AMIName(ctx context.Context, awsSession *session.Session) (s
 	return *amiId, err
 }
 
-func (u Ubuntu2204) BuildUserData(userDataInput UserDataInput) ([]byte, error) {
+func (u Ubuntu2204) BuildUserData(userDataInput e2e.UserDataInput) ([]byte, error) {
 	if err := populateBaseScripts(&userDataInput); err != nil {
 		return nil, err
 	}
@@ -225,7 +221,7 @@ func (u Ubuntu2404) AMIName(ctx context.Context, awsSession *session.Session) (s
 	return *amiId, err
 }
 
-func (u Ubuntu2404) BuildUserData(userDataInput UserDataInput) ([]byte, error) {
+func (u Ubuntu2404) BuildUserData(userDataInput e2e.UserDataInput) ([]byte, error) {
 	if err := populateBaseScripts(&userDataInput); err != nil {
 		return nil, err
 	}
@@ -244,32 +240,4 @@ func (u Ubuntu2404) BuildUserData(userDataInput UserDataInput) ([]byte, error) {
 	}
 
 	return executeTemplate(ubuntu2404CloudInit, data)
-}
-
-func populateBaseScripts(userDataInput *UserDataInput) error {
-	logCollector, err := executeTemplate(logCollectorScript, userDataInput)
-	if err != nil {
-		return err
-	}
-
-	userDataInput.Files = append(userDataInput.Files,
-		File{Content: string(nodeAdmInitScript), Path: "/tmp/nodeadm-init.sh", Permissions: "0755"},
-		File{Content: string(logCollector), Path: "/tmp/log-collector.sh", Permissions: "0755"},
-	)
-	return nil
-}
-
-func executeTemplate(templateData []byte, values any) ([]byte, error) {
-	tmpl, err := template.New("cloud-init").Funcs(templateFuncMap()).Parse(string(templateData))
-	if err != nil {
-		return nil, err
-	}
-
-	// Execute the template and write the result to a buffer
-	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, values); err != nil {
-		return nil, err
-	}
-
-	return buf.Bytes(), nil
 }

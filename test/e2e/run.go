@@ -12,6 +12,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ec2"
+	"github.com/aws/eks-hybrid/test/e2e/cni"
 	"gopkg.in/yaml.v2"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/tools/clientcmd"
@@ -52,9 +53,9 @@ type NetworkConfig struct {
 }
 
 const (
-	outputDir           = "/tmp"
-	ciliumCni           = "cilium"
-	calicoCni           = "calico"
+	outputDir = "/tmp"
+	ciliumCni = "cilium"
+	calicoCni = "calico"
 )
 
 func (t *TestRunner) NewAWSSession() (*session.Session, error) {
@@ -206,7 +207,7 @@ func (t *TestRunner) CreateResources(ctx context.Context) error {
 		return fmt.Errorf("saving kubeconfig for %s EKS cluster: %v", t.Spec.KubernetesVersion, err)
 	}
 
-	clientConfig, err := clientcmd.BuildConfigFromFlags("", kubeconfigPath(t.Spec.ClusterName))
+	clientConfig, err := clientcmd.BuildConfigFromFlags("", KubeconfigPath(t.Spec.ClusterName))
 	if err != nil {
 		return fmt.Errorf("loading kubeconfig: %v", err)
 	}
@@ -218,16 +219,16 @@ func (t *TestRunner) CreateResources(ctx context.Context) error {
 
 	switch t.Spec.Cni {
 	case ciliumCni:
-		cilium := newCilium(dynamicK8s, t.Spec.HybridNetwork.PodCidr)
+		cilium := cni.NewCilium(dynamicK8s, t.Spec.HybridNetwork.PodCidr)
 		fmt.Printf("Installing cilium on cluster %s...\n", t.Spec.ClusterName)
-		if err = cilium.deploy(ctx); err != nil {
+		if err = cilium.Deploy(ctx); err != nil {
 			return fmt.Errorf("installing cilium for %s EKS cluster: %v", t.Spec.KubernetesVersion, err)
 		}
 		fmt.Println("Cilium installed sucessfully.")
 	case calicoCni:
-		calico := newCalico(dynamicK8s, t.Spec.HybridNetwork.PodCidr)
+		calico := cni.NewCalico(dynamicK8s, t.Spec.HybridNetwork.PodCidr)
 		fmt.Printf("Installing calico on cluster %s...\n", t.Spec.ClusterName)
-		if err = calico.deploy(ctx); err != nil {
+		if err = calico.Deploy(ctx); err != nil {
 			return fmt.Errorf("installing calico for %s EKS cluster: %v", t.Spec.KubernetesVersion, err)
 		}
 		fmt.Println("Calico installed sucessfully.")
@@ -245,13 +246,13 @@ func (t *TestRunner) CreateResources(ctx context.Context) error {
 
 // saveKubeconfig saves the kubeconfig for the cluster
 func updateKubeconfig(clusterName, region string) error {
-	cmd := exec.Command("aws", "eks", "update-kubeconfig", "--name", clusterName, "--region", region, "--kubeconfig", kubeconfigPath(clusterName))
+	cmd := exec.Command("aws", "eks", "update-kubeconfig", "--name", clusterName, "--region", region, "--kubeconfig", KubeconfigPath(clusterName))
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
 }
 
-func kubeconfigPath(clusterName string) string {
+func KubeconfigPath(clusterName string) string {
 	return fmt.Sprintf("/tmp/%s.kubeconfig", clusterName)
 }
 

@@ -1,4 +1,4 @@
-package e2e
+package cni
 
 import (
 	"bytes"
@@ -18,30 +18,30 @@ import (
 //go:embed testdata/cilium/cilium-template.yaml
 var ciliumTemplate []byte
 
-type cilium struct {
-	K8s dynamic.Interface
-	// PodCIDR is the cluster level CIDR to be use for Pods. It needs to be big enough for
+type Cilium struct {
+	k8s dynamic.Interface
+	// podCIDR is the cluster level CIDR to be use for Pods. It needs to be big enough for
 	// Hybrid Nodes.
 	//
 	// Check the cilium-template file for the node pod cidr mask. The default is 24.
-	PodCIDR string
+	podCIDR string
 }
 
-func newCilium(k8s dynamic.Interface, podCIDR string) cilium {
-	return cilium{
-		K8s:     k8s,
-		PodCIDR: podCIDR,
+func NewCilium(k8s dynamic.Interface, podCIDR string) Cilium {
+	return Cilium{
+		k8s:     k8s,
+		podCIDR: podCIDR,
 	}
 }
 
-// deploy creates or updates the Cilium reosurces.
-func (c cilium) deploy(ctx context.Context) error {
+// Deploy creates or updates the Cilium reosurces.
+func (c Cilium) Deploy(ctx context.Context) error {
 	tmpl, err := template.New("cilium").Parse(string(ciliumTemplate))
 	if err != nil {
 		return err
 	}
 	values := map[string]string{
-		"PodCIDR": c.PodCIDR,
+		"PodCIDR": c.podCIDR,
 	}
 	installation := &bytes.Buffer{}
 	err = tmpl.Execute(installation, values)
@@ -56,7 +56,7 @@ func (c cilium) deploy(ctx context.Context) error {
 
 	fmt.Println("Applying cilium installation")
 
-	return upsertManifests(ctx, c.K8s, objs)
+	return upsertManifests(ctx, c.k8s, objs)
 }
 
 func upsertManifests(ctx context.Context, k8s dynamic.Interface, manifests []unstructured.Unstructured) error {

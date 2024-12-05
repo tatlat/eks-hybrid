@@ -1,7 +1,4 @@
-//go:build e2e
-// +build e2e
-
-package e2e
+package ec2
 
 import (
 	"context"
@@ -17,32 +14,34 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/ssm"
 	"github.com/aws/smithy-go"
+
+	"github.com/aws/eks-hybrid/test/e2e"
 )
 
 // instanceConfig holds the configuration for the EC2 instance.
-type ec2InstanceConfig struct {
-	clusterName        string
-	instanceName       string
-	amiID              string
-	instanceType       string
-	instanceProfileARN string
-	volumeSize         int32
-	userData           []byte
-	subnetID           string
-	securityGroupID    string
+type InstanceConfig struct {
+	ClusterName        string
+	InstanceName       string
+	AmiID              string
+	InstanceType       string
+	InstanceProfileARN string
+	VolumeSize         int32
+	UserData           []byte
+	SubnetID           string
+	SecurityGroupID    string
 }
 
-type ec2Instance struct {
-	instanceID string
-	ipAddress  string
+type Instance struct {
+	ID string
+	IP string
 }
 
-func (e *ec2InstanceConfig) create(ctx context.Context, ec2Client *ec2.Client, ssmClient *ssm.SSM) (ec2Instance, error) {
+func (e *InstanceConfig) Create(ctx context.Context, ec2Client *ec2.Client, ssmClient *ssm.SSM) (Instance, error) {
 	instances, err := ec2Client.DescribeInstances(ctx, &ec2.DescribeInstancesInput{
 		Filters: []types.Filter{
 			{
 				Name:   aws.String("tag:Name"),
-				Values: []string{e.instanceName},
+				Values: []string{e.InstanceName},
 			},
 			{
 				Name:   aws.String("instance-state-name"),
@@ -51,47 +50,47 @@ func (e *ec2InstanceConfig) create(ctx context.Context, ec2Client *ec2.Client, s
 		},
 	})
 	if err != nil {
-		return ec2Instance{}, fmt.Errorf("describing EC2 instances: %w", err)
+		return Instance{}, fmt.Errorf("describing EC2 instances: %w", err)
 	}
 
 	if len(instances.Reservations) > 1 {
-		return ec2Instance{}, fmt.Errorf("more than one reservation for instances with the name %s found", e.instanceName)
+		return Instance{}, fmt.Errorf("more than one reservation for instances with the name %s found", e.InstanceName)
 	}
 
 	if len(instances.Reservations) == 1 && len(instances.Reservations[0].Instances) > 1 {
-		return ec2Instance{}, fmt.Errorf("more than one instance with the name %s found", e.instanceName)
+		return Instance{}, fmt.Errorf("more than one instance with the name %s found", e.InstanceName)
 	}
 
 	if len(instances.Reservations) == 1 && len(instances.Reservations[0].Instances) == 1 {
-		return ec2Instance{
-			instanceID: *instances.Reservations[0].Instances[0].InstanceId,
-			ipAddress:  *instances.Reservations[0].Instances[0].PrivateIpAddress,
+		return Instance{
+			ID: *instances.Reservations[0].Instances[0].InstanceId,
+			IP: *instances.Reservations[0].Instances[0].PrivateIpAddress,
 		}, nil
 	}
 
-	userDataEncoded := base64.StdEncoding.EncodeToString(e.userData)
+	userDataEncoded := base64.StdEncoding.EncodeToString(e.UserData)
 
 	runResult, err := ec2Client.RunInstances(ctx, &ec2.RunInstancesInput{
-		ImageId:      aws.String(e.amiID),
-		InstanceType: types.InstanceType(e.instanceType),
+		ImageId:      aws.String(e.AmiID),
+		InstanceType: types.InstanceType(e.InstanceType),
 		MinCount:     aws.Int32(1),
 		MaxCount:     aws.Int32(1),
 		IamInstanceProfile: &types.IamInstanceProfileSpecification{
-			Arn: aws.String(e.instanceProfileARN),
+			Arn: aws.String(e.InstanceProfileARN),
 		},
 		BlockDeviceMappings: []types.BlockDeviceMapping{
 			{
 				DeviceName: aws.String("/dev/sda1"),
 				Ebs: &types.EbsBlockDevice{
-					VolumeSize: aws.Int32(e.volumeSize),
+					VolumeSize: aws.Int32(e.VolumeSize),
 				},
 			},
 		},
 		NetworkInterfaces: []types.InstanceNetworkInterfaceSpecification{
 			{
 				DeviceIndex: aws.Int32(0),
-				SubnetId:    aws.String(e.subnetID),
-				Groups:      []string{e.securityGroupID},
+				SubnetId:    aws.String(e.SubnetID),
+				Groups:      []string{e.SecurityGroupID},
 			},
 		},
 		UserData: aws.String(userDataEncoded),
@@ -101,11 +100,11 @@ func (e *ec2InstanceConfig) create(ctx context.Context, ec2Client *ec2.Client, s
 				Tags: []types.Tag{
 					{
 						Key:   aws.String("Name"),
-						Value: aws.String(e.instanceName),
+						Value: aws.String(e.InstanceName),
 					},
 					{
-						Key:   aws.String(TestClusterTagKey),
-						Value: aws.String(e.clusterName),
+						Key:   aws.String(e2e.TestClusterTagKey),
+						Value: aws.String(e.ClusterName),
 					},
 				},
 			},
@@ -118,27 +117,13 @@ func (e *ec2InstanceConfig) create(ctx context.Context, ec2Client *ec2.Client, s
 		o.Retryer = newDefaultRunEC2Retrier()
 	})
 	if err != nil {
-		return ec2Instance{}, fmt.Errorf("could not create hybrid EC2 instance: %w", err)
+		return Instance{}, fmt.Errorf("could not create hybrid EC2 instance: %w", err)
 	}
 
-	return ec2Instance{instanceID: *runResult.Instances[0].InstanceId, ipAddress: *runResult.Instances[0].PrivateIpAddress}, nil
+	return Instance{ID: *runResult.Instances[0].InstanceId, IP: *runResult.Instances[0].PrivateIpAddress}, nil
 }
 
-func getAmiIDFromSSM(ctx context.Context, client *ssm.SSM, amiName string) (*string, error) {
-	getParameterInput := &ssm.GetParameterInput{
-		Name:           aws.String(amiName),
-		WithDecryption: aws.Bool(true),
-	}
-
-	output, err := client.GetParameterWithContext(ctx, getParameterInput)
-	if err != nil {
-		return nil, err
-	}
-
-	return output.Parameter.Value, nil
-}
-
-func deleteEC2Instance(ctx context.Context, client *ec2.Client, instanceID string) error {
+func DeleteEC2Instance(ctx context.Context, client *ec2.Client, instanceID string) error {
 	terminateInstanceInput := &ec2.TerminateInstancesInput{
 		InstanceIds: []string{instanceID},
 	}
@@ -194,7 +179,7 @@ func (c runInstanceRetrier) RetryDelay(attempt int, err error) (time.Duration, e
 	return c.backoff, nil
 }
 
-func rebootEC2Instance(ctx context.Context, client *ec2.Client, instanceID string) error {
+func RebootEC2Instance(ctx context.Context, client *ec2.Client, instanceID string) error {
 	rebootInstanceInput := &ec2.RebootInstancesInput{
 		InstanceIds: []string{instanceID},
 	}
@@ -203,51 +188,4 @@ func rebootEC2Instance(ctx context.Context, client *ec2.Client, instanceID strin
 		return err
 	}
 	return nil
-}
-
-func waitForManagedInstanceUnregistered(ctx context.Context, ssmClient *ssm.SSM, instanceId string) error {
-	ctx, cancel := context.WithTimeout(ctx, 3*time.Minute)
-	defer cancel()
-
-	statusCh := make(chan struct{})
-	errCh := make(chan error)
-	consecutiveErrors := 0
-
-	go func() {
-		defer close(statusCh)
-		defer close(errCh)
-		for {
-			output, err := ssmClient.DescribeInstanceInformationWithContext(ctx, &ssm.DescribeInstanceInformationInput{
-				Filters: []*ssm.InstanceInformationStringFilter{
-					{
-						Key:    aws.String("InstanceIds"),
-						Values: []*string{aws.String(instanceId)},
-					},
-				},
-			})
-			if err != nil {
-				consecutiveErrors += 1
-				if consecutiveErrors > 3 || ctx.Err() != nil {
-					errCh <- fmt.Errorf("failed to describe instance information %s: %v", instanceId, err)
-					return
-				}
-			} else if len(output.InstanceInformationList) == 0 {
-				statusCh <- struct{}{}
-				return
-			} else {
-				consecutiveErrors = 0
-			}
-
-			time.Sleep(5 * time.Second)
-		}
-	}()
-
-	select {
-	case <-statusCh:
-		return nil
-	case err := <-errCh:
-		return err
-	case <-ctx.Done():
-		return fmt.Errorf("timed out waiting for instance to unregister: %s", instanceId)
-	}
 }

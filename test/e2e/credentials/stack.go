@@ -1,7 +1,4 @@
-//go:build e2e
-// +build e2e
-
-package e2e
+package credentials
 
 import (
 	"bytes"
@@ -17,6 +14,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/cloudformation"
 	"github.com/aws/aws-sdk-go/service/iam"
+	"github.com/aws/eks-hybrid/test/e2e"
 	"github.com/go-logr/logr"
 )
 
@@ -25,20 +23,20 @@ var cfnTemplateBody string
 
 var iraUnsupportedRegions = []string{"ap-southeast-5"}
 
-type e2eCfnStack struct {
-	clusterName            string
-	stackName              string
-	clusterArn             string
-	cfn                    *cloudformation.CloudFormation
-	iam                    *iam.IAM
-	iamRolesAnywhereCACert []byte
+type Stack struct {
+	ClusterName            string
+	Name                   string
+	ClusterArn             string
+	CFN                    *cloudformation.CloudFormation
+	IAM                    *iam.IAM
+	IAMRolesAnywhereCACert []byte
 }
 
 type hybridCfnTemplateVars struct {
 	IncludeRolesAnywhere bool
 }
 
-type e2eCfnStackOutput struct {
+type StackOutput struct {
 	EC2Role            string `json:"EC2Role"`
 	InstanceProfileARN string `json:"instanceProfileARN"`
 	SSMNodeRoleName    string `json:"ssmNodeRoleName"`
@@ -49,12 +47,12 @@ type e2eCfnStackOutput struct {
 	IRAProfileARN      string `json:"iraProfileARN"`
 }
 
-func (e *e2eCfnStack) deploy(ctx context.Context, logger logr.Logger) (*e2eCfnStackOutput, error) {
-	if err := e.deployStack(ctx, logger); err != nil {
+func (s *Stack) Deploy(ctx context.Context, logger logr.Logger) (*StackOutput, error) {
+	if err := s.deployStack(ctx, logger); err != nil {
 		return nil, err
 	}
 
-	output, err := e.readStackOutput(ctx, logger)
+	output, err := s.readStackOutput(ctx, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -69,7 +67,7 @@ func (e *e2eCfnStack) deploy(ctx context.Context, logger logr.Logger) (*e2eCfnSt
 	// considering it "created". Probably to avoid eventual consistency issues when using the instance profile in
 	// another resource immediately after. We have to deal with that problem ourselves now by retrying the ec2 instance
 	// creation on "invalid IAM instance profile" error.
-	output.InstanceProfileARN, err = e.createInstanceProfile(ctx, logger, output.EC2Role)
+	output.InstanceProfileARN, err = s.createInstanceProfile(ctx, logger, output.EC2Role)
 	if err != nil {
 		return nil, err
 	}
@@ -77,9 +75,9 @@ func (e *e2eCfnStack) deploy(ctx context.Context, logger logr.Logger) (*e2eCfnSt
 	return output, nil
 }
 
-func (e *e2eCfnStack) deployStack(ctx context.Context, logger logr.Logger) error {
-	resp, err := e.cfn.DescribeStacksWithContext(ctx, &cloudformation.DescribeStacksInput{
-		StackName: aws.String(e.stackName),
+func (s *Stack) deployStack(ctx context.Context, logger logr.Logger) error {
+	resp, err := s.CFN.DescribeStacksWithContext(ctx, &cloudformation.DescribeStacksInput{
+		StackName: aws.String(s.Name),
 	})
 	if aerr, ok := err.(awserr.Error); ok && aerr.Code() != "ValidationError" {
 		return fmt.Errorf("looking for hybrid nodes cfn stack: %w", err)
@@ -87,15 +85,15 @@ func (e *e2eCfnStack) deployStack(ctx context.Context, logger logr.Logger) error
 	params := []*cloudformation.Parameter{
 		{
 			ParameterKey:   aws.String("clusterName"),
-			ParameterValue: aws.String(e.clusterName),
+			ParameterValue: aws.String(s.ClusterName),
 		},
 		{
 			ParameterKey:   aws.String("clusterArn"),
-			ParameterValue: aws.String(e.clusterArn),
+			ParameterValue: aws.String(s.ClusterArn),
 		},
 		{
 			ParameterKey:   aws.String("caBundleCert"),
-			ParameterValue: aws.String(string(e.iamRolesAnywhereCACert)),
+			ParameterValue: aws.String(string(s.IAMRolesAnywhereCACert)),
 		},
 	}
 
@@ -104,40 +102,40 @@ func (e *e2eCfnStack) deployStack(ctx context.Context, logger logr.Logger) error
 	if err != nil {
 		return fmt.Errorf("parsing hybrid-cfn.yaml template: %w", err)
 	}
-	cfnTemplateConfig := &hybridCfnTemplateVars{IncludeRolesAnywhere: isIraSupported(*e.cfn.Config.Region)}
+	cfnTemplateConfig := &hybridCfnTemplateVars{IncludeRolesAnywhere: isIraSupported(*s.CFN.Config.Region)}
 	err = cfnTemplate.Execute(&buf, cfnTemplateConfig)
 	if err != nil {
 		return fmt.Errorf("applying data to hybrid-cfn.yaml template: %w", err)
 	}
 	if len(resp.Stacks) == 0 {
-		logger.Info("Creating hybrid nodes stack", "stackName", e.stackName)
-		_, err = e.cfn.CreateStackWithContext(ctx, &cloudformation.CreateStackInput{
-			StackName:    aws.String(e.stackName),
-			TemplateBody: aws.String(string(buf.Bytes())),
+		logger.Info("Creating hybrid nodes stack", "stackName", s.Name)
+		_, err = s.CFN.CreateStackWithContext(ctx, &cloudformation.CreateStackInput{
+			StackName:    aws.String(s.Name),
+			TemplateBody: aws.String(buf.String()),
 			Parameters:   params,
 			Capabilities: []*string{
 				aws.String("CAPABILITY_NAMED_IAM"),
 			},
 			Tags: []*cloudformation.Tag{{
-				Key:   aws.String(TestClusterTagKey),
-				Value: aws.String(e.clusterName),
+				Key:   aws.String(e2e.TestClusterTagKey),
+				Value: aws.String(s.ClusterName),
 			}},
 		})
 		if err != nil {
 			return fmt.Errorf("creating hybrid nodes cfn stack: %w", err)
 		}
 
-		logger.Info("Waiting for hybrid nodes stack to be created", "stackName", e.stackName)
-		err = e.cfn.WaitUntilStackCreateCompleteWithContext(ctx, &cloudformation.DescribeStacksInput{
-			StackName: aws.String(e.stackName),
+		logger.Info("Waiting for hybrid nodes stack to be created", "stackName", s.Name)
+		err = s.CFN.WaitUntilStackCreateCompleteWithContext(ctx, &cloudformation.DescribeStacksInput{
+			StackName: aws.String(s.Name),
 		}, request.WithWaiterDelay(request.ConstantWaiterDelay(2*time.Second)))
 		if err != nil {
 			return fmt.Errorf("waiting for hybrid nodes cfn stack: %w", err)
 		}
 	} else {
-		logger.Info("Updating hybrid nodes stack", "stackName", e.stackName)
-		_, err = e.cfn.UpdateStackWithContext(ctx, &cloudformation.UpdateStackInput{
-			StackName: aws.String(e.stackName),
+		logger.Info("Updating hybrid nodes stack", "stackName", s.Name)
+		_, err = s.CFN.UpdateStackWithContext(ctx, &cloudformation.UpdateStackInput{
+			StackName: aws.String(s.Name),
 			Capabilities: []*string{
 				aws.String("CAPABILITY_NAMED_IAM"),
 			},
@@ -148,14 +146,14 @@ func (e *e2eCfnStack) deployStack(ctx context.Context, logger logr.Logger) error
 		if aerr, ok := err.(awserr.Error); err != nil && (!ok || aerr.Message() != "No updates are to be performed.") {
 			return fmt.Errorf("updating hybrid nodes cfn stack: %w", err)
 		} else if ok && aerr.Message() == "No updates are to be performed." {
-			logger.Info("No updates are to be performed for hybrid nodes stack", "stackName", e.stackName)
+			logger.Info("No updates are to be performed for hybrid nodes stack", "stackName", s.Name)
 			// Skip waiting for update completion since no update occurred
 			return nil
 		}
 
-		logger.Info("Waiting for hybrid nodes stack to be updated", "stackName", e.stackName)
-		err = e.cfn.WaitUntilStackUpdateCompleteWithContext(ctx, &cloudformation.DescribeStacksInput{
-			StackName: aws.String(e.stackName),
+		logger.Info("Waiting for hybrid nodes stack to be updated", "stackName", s.Name)
+		err = s.CFN.WaitUntilStackUpdateCompleteWithContext(ctx, &cloudformation.DescribeStacksInput{
+			StackName: aws.String(s.Name),
 		}, request.WithWaiterDelay(request.ConstantWaiterDelay(5*time.Second)))
 		if err != nil {
 			return fmt.Errorf("waiting for hybrid nodes cfn stack: %w", err)
@@ -165,21 +163,21 @@ func (e *e2eCfnStack) deployStack(ctx context.Context, logger logr.Logger) error
 	return nil
 }
 
-func (s *e2eCfnStack) createInstanceProfile(ctx context.Context, logger logr.Logger, roleName string) (instanceProfileArn string, err error) {
+func (s *Stack) createInstanceProfile(ctx context.Context, logger logr.Logger, roleName string) (instanceProfileArn string, err error) {
 	instanceProfileName := s.instanceProfileName(roleName)
 
-	instanceProfile, err := s.iam.GetInstanceProfileWithContext(ctx, &iam.GetInstanceProfileInput{
+	instanceProfile, err := s.IAM.GetInstanceProfileWithContext(ctx, &iam.GetInstanceProfileInput{
 		InstanceProfileName: aws.String(instanceProfileName),
 	})
 	var instanceProfileHasRole bool
 	if isNotFound(err) {
 		logger.Info("Creating instance profile", "instanceProfileName", instanceProfileName)
-		instanceProfileArnOut, err := s.iam.CreateInstanceProfileWithContext(ctx, &iam.CreateInstanceProfileInput{
+		instanceProfileArnOut, err := s.IAM.CreateInstanceProfileWithContext(ctx, &iam.CreateInstanceProfileInput{
 			InstanceProfileName: aws.String(instanceProfileName),
 			Path:                aws.String("/"),
 			Tags: []*iam.Tag{{
-				Key:   aws.String(TestClusterTagKey),
-				Value: aws.String(s.clusterName),
+				Key:   aws.String(e2e.TestClusterTagKey),
+				Value: aws.String(s.ClusterName),
 			}},
 		})
 		if err != nil {
@@ -203,7 +201,7 @@ func (s *e2eCfnStack) createInstanceProfile(ctx context.Context, logger logr.Log
 		logger.Info("Instance profile already has a role", "instanceProfileName", instanceProfileName)
 	} else {
 		logger.Info("Adding role to instance profile", "roleName", roleName)
-		_, err = s.iam.AddRoleToInstanceProfileWithContext(ctx, &iam.AddRoleToInstanceProfileInput{
+		_, err = s.IAM.AddRoleToInstanceProfileWithContext(ctx, &iam.AddRoleToInstanceProfileInput{
 			InstanceProfileName: aws.String(instanceProfileName),
 			RoleName:            aws.String(roleName),
 		})
@@ -216,19 +214,19 @@ func (s *e2eCfnStack) createInstanceProfile(ctx context.Context, logger logr.Log
 	return instanceProfileArn, nil
 }
 
-func (s *e2eCfnStack) instanceProfileName(roleName string) string {
+func (s *Stack) instanceProfileName(roleName string) string {
 	return roleName
 }
 
-func (e *e2eCfnStack) readStackOutput(ctx context.Context, logger logr.Logger) (*e2eCfnStackOutput, error) {
-	resp, err := e.cfn.DescribeStacksWithContext(ctx, &cloudformation.DescribeStacksInput{
-		StackName: aws.String(e.stackName),
+func (s *Stack) readStackOutput(ctx context.Context, logger logr.Logger) (*StackOutput, error) {
+	resp, err := s.CFN.DescribeStacksWithContext(ctx, &cloudformation.DescribeStacksInput{
+		StackName: aws.String(s.Name),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("describing hybrid nodes cfn stack: %w", err)
 	}
 
-	result := &e2eCfnStackOutput{}
+	result := &StackOutput{}
 	// extract relevant stack outputs
 	for _, output := range resp.Stacks[0].Outputs {
 		switch aws.StringValue(output.OutputKey) {
@@ -249,45 +247,45 @@ func (e *e2eCfnStack) readStackOutput(ctx context.Context, logger logr.Logger) (
 		}
 	}
 
-	logger.Info("E2E resources stack deployed successfully", "stackName", e.stackName)
+	logger.Info("E2E resources stack deployed successfully", "stackName", s.Name)
 	return result, nil
 }
 
-func (e *e2eCfnStack) delete(ctx context.Context, logger logr.Logger, output *e2eCfnStackOutput) error {
-	instanceProfileName := e.instanceProfileName(output.EC2Role)
+func (s *Stack) Delete(ctx context.Context, logger logr.Logger, output *StackOutput) error {
+	instanceProfileName := s.instanceProfileName(output.EC2Role)
 	logger.Info("Deleting instance profile", "instanceProfileName", instanceProfileName)
-	instanceProfile, err := e.iam.GetInstanceProfileWithContext(ctx, &iam.GetInstanceProfileInput{
+	instanceProfile, err := s.IAM.GetInstanceProfileWithContext(ctx, &iam.GetInstanceProfileInput{
 		InstanceProfileName: aws.String(instanceProfileName),
 	})
 	if err != nil {
 		return err
 	}
-	if _, err := e.iam.RemoveRoleFromInstanceProfileWithContext(ctx, &iam.RemoveRoleFromInstanceProfileInput{
+	if _, err := s.IAM.RemoveRoleFromInstanceProfileWithContext(ctx, &iam.RemoveRoleFromInstanceProfileInput{
 		InstanceProfileName: aws.String(instanceProfileName),
 		RoleName:            instanceProfile.InstanceProfile.Roles[0].RoleName,
 	}); err != nil {
 		return err
 	}
-	if _, err := e.iam.DeleteInstanceProfileWithContext(ctx, &iam.DeleteInstanceProfileInput{
+	if _, err := s.IAM.DeleteInstanceProfileWithContext(ctx, &iam.DeleteInstanceProfileInput{
 		InstanceProfileName: aws.String(instanceProfileName),
 	}); err != nil {
 		return fmt.Errorf("deleting instance profile: %w", err)
 	}
 
-	_, err = e.cfn.DeleteStackWithContext(ctx, &cloudformation.DeleteStackInput{
-		StackName: aws.String(e.stackName),
+	_, err = s.CFN.DeleteStackWithContext(ctx, &cloudformation.DeleteStackInput{
+		StackName: aws.String(s.Name),
 	})
 	if err != nil {
 		return fmt.Errorf("deleting hybrid nodes cfn stack: %w", err)
 	}
-	err = e.cfn.WaitUntilStackDeleteCompleteWithContext(ctx,
-		&cloudformation.DescribeStacksInput{StackName: aws.String(e.stackName)},
+	err = s.CFN.WaitUntilStackDeleteCompleteWithContext(ctx,
+		&cloudformation.DescribeStacksInput{StackName: aws.String(s.Name)},
 		request.WithWaiterDelay(request.ConstantWaiterDelay(2*time.Second)),
 		request.WithWaiterMaxAttempts(240))
 	if err != nil {
 		return fmt.Errorf("waiting for hybrid nodes cfn stack: %w", err)
 	}
-	logger.Info("E2E resources stack deleted successfully", "stackName", e.stackName)
+	logger.Info("E2E resources stack deleted successfully", "stackName", s.Name)
 	return nil
 }
 
