@@ -63,11 +63,8 @@ func (r RedHat8) Name() string {
 	return "rhel8-arm64"
 }
 
-func (r RedHat8) InstanceType() string {
-	if r.Architecture == amd64Arch {
-		return "m5.2xlarge"
-	}
-	return "t4g.2xlarge"
+func (r RedHat8) InstanceType(region string) string {
+	return getInstanceTypeFromRegionAndArch(region, r.Architecture)
 }
 
 func (r RedHat8) AMIName(ctx context.Context, awsSession *session.Session) (string, error) {
@@ -124,11 +121,8 @@ func (r RedHat9) Name() string {
 	return "rhel9-arm64"
 }
 
-func (r RedHat9) InstanceType() string {
-	if r.Architecture == amd64Arch {
-		return "m5.2xlarge"
-	}
-	return "t4g.2xlarge"
+func (r RedHat9) InstanceType(region string) string {
+	return getInstanceTypeFromRegionAndArch(region, r.Architecture)
 }
 
 func (r RedHat9) AMIName(ctx context.Context, awsSession *session.Session) (string, error) {

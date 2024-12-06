@@ -391,7 +391,7 @@ var _ = Describe("Hybrid Nodes", func() {
 								ClusterName:        test.cluster.Name,
 								InstanceName:       instanceName,
 								AmiID:              amiId,
-								InstanceType:       os.InstanceType(),
+								InstanceType:       os.InstanceType(suite.TestConfig.ClusterRegion),
 								VolumeSize:         ec2VolumeSize,
 								SubnetID:           test.cluster.SubnetID,
 								SecurityGroupID:    test.cluster.SecurityGroupID,
