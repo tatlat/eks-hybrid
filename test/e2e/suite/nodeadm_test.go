@@ -80,41 +80,6 @@ func TestE2E(t *testing.T) {
 	RunSpecs(t, "E2E Suite")
 }
 
-// readTestConfig reads the configuration from the specified file path and unmarshals it into the TestConfig struct.
-func readTestConfig(configPath string) (*TestConfig, error) {
-	config := &TestConfig{}
-	file, err := os.ReadFile(configPath)
-	if err != nil {
-		return nil, fmt.Errorf("reading tests configuration file %s: %w", filePath, err)
-	}
-
-	if err = yaml.Unmarshal(file, config); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal configuration from YAML: %v", err)
-	}
-
-	return config, nil
-}
-
-func enabledCredentialsProviders(providers []e2e.NodeadmCredentialsProvider) []e2e.NodeadmCredentialsProvider {
-	filter := GinkgoLabelFilter()
-	providerList := []e2e.NodeadmCredentialsProvider{}
-
-	for _, provider := range providers {
-		if strings.Contains(filter, string(provider.Name())) {
-			providerList = append(providerList, provider)
-		}
-	}
-	return providerList
-}
-
-func getCredentialProviderNames(providers []e2e.NodeadmCredentialsProvider) string {
-	var names []string
-	for _, provider := range providers {
-		names = append(names, string(provider.Name()))
-	}
-	return strings.Join(names, "-")
-}
-
 type peeredVPCTest struct {
 	aws         awsconfig.Config // TODO: move everything to aws sdk v2
 	awsSession  *session.Session
@@ -268,7 +233,7 @@ var _ = Describe("Hybrid Nodes", func() {
 			test.k8sClient, err = clientgo.NewForConfig(clientConfig)
 			Expect(err).NotTo(HaveOccurred(), "expected to build kubernetes client")
 
-			test.cluster, err = peered.GetHybridCluster(ctx, test.eksClient, test.ec2Client, suite.TestConfig.ClusterName, suite.TestConfig.ClusterRegion, suite.TestConfig.HybridVpcID)
+			test.cluster, err = peered.GetHybridCluster(ctx, test.eksClient, test.ec2ClientV2, suite.TestConfig.ClusterName)
 			Expect(err).NotTo(HaveOccurred(), "expected to get cluster details")
 
 			for _, provider := range credentialProviders {
@@ -520,7 +485,7 @@ func (u uninstallNodeTest) Run(ctx context.Context) error {
 	return nil
 }
 
-// newE2EAWSSession constructs AWS session for E2E tests.
+// newE2EAWSSession constructs AWS session.
 func newE2EAWSSession(region string) (*session.Session, error) {
 	sess, err := session.NewSession(&aws.Config{
 		Region: aws.String(region),
@@ -529,4 +494,39 @@ func newE2EAWSSession(region string) (*session.Session, error) {
 		return nil, fmt.Errorf("creating AWS session: %w", err)
 	}
 	return sess, nil
+}
+
+// readTestConfig reads the configuration from the specified file path and unmarshals it into the TestConfig struct.
+func readTestConfig(configPath string) (*TestConfig, error) {
+	config := &TestConfig{}
+	file, err := os.ReadFile(configPath)
+	if err != nil {
+		return nil, fmt.Errorf("reading tests configuration file %s: %w", filePath, err)
+	}
+
+	if err = yaml.Unmarshal(file, config); err != nil {
+		return nil, fmt.Errorf("unmarshaling test configuration: %w", err)
+	}
+
+	return config, nil
+}
+
+func enabledCredentialsProviders(providers []e2e.NodeadmCredentialsProvider) []e2e.NodeadmCredentialsProvider {
+	filter := GinkgoLabelFilter()
+	providerList := []e2e.NodeadmCredentialsProvider{}
+
+	for _, provider := range providers {
+		if strings.Contains(filter, string(provider.Name())) {
+			providerList = append(providerList, provider)
+		}
+	}
+	return providerList
+}
+
+func getCredentialProviderNames(providers []e2e.NodeadmCredentialsProvider) string {
+	var names []string
+	for _, provider := range providers {
+		names = append(names, string(provider.Name()))
+	}
+	return strings.Join(names, "-")
 }
