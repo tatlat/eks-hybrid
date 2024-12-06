@@ -8,8 +8,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"regexp"
-	"strings"
 	"testing"
 	"time"
 
@@ -43,7 +41,6 @@ import (
 )
 
 const (
-	ec2InstanceType = "t2.large"
 	ec2VolumeSize   = int32(30)
 	podNamespace    = "default"
 )
@@ -66,7 +63,8 @@ type TestConfig struct {
 
 type suiteConfiguration struct {
 	TestConfig             *TestConfig              `json:"testConfig"`
-	EC2StackOutput         *credentials.StackOutput `json:"ec2StackOutput"`
+	SkipCleanup            bool                     `json:"skipCleanup"`
+	CredentialsStackOutput *credentials.StackOutput `json:"ec2StackOutput"`
 	RolesAnywhereCACertPEM []byte                   `json:"rolesAnywhereCACertPEM"`
 	RolesAnywhereCAKeyPEM  []byte                   `json:"rolesAnywhereCAPrivateKeyPEM"`
 }
@@ -81,50 +79,14 @@ func TestE2E(t *testing.T) {
 	RunSpecs(t, "E2E Suite")
 }
 
-// readTestConfig reads the configuration from the specified file path and unmarshals it into the TestConfig struct.
-func readTestConfig(configPath string) (*TestConfig, error) {
-	config := &TestConfig{}
-	file, err := os.ReadFile(configPath)
-	if err != nil {
-		return nil, fmt.Errorf("reading tests configuration file %s: %w", filePath, err)
-	}
-
-	if err = yaml.Unmarshal(file, config); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal configuration from YAML: %v", err)
-	}
-
-	return config, nil
-}
-
-func enabledCredentialsProviders(providers []e2e.NodeadmCredentialsProvider) []e2e.NodeadmCredentialsProvider {
-	filter := GinkgoLabelFilter()
-	providerList := []e2e.NodeadmCredentialsProvider{}
-
-	for _, provider := range providers {
-		if strings.Contains(filter, string(provider.Name())) {
-			providerList = append(providerList, provider)
-		}
-	}
-	return providerList
-}
-
-func getCredentialProviderNames(providers []e2e.NodeadmCredentialsProvider) string {
-	var names []string
-	for _, provider := range providers {
-		names = append(names, string(provider.Name()))
-	}
-	return strings.Join(names, "-")
-}
-
 type peeredVPCTest struct {
-	aws         awsconfig.Config // TODO: move everything to aws sdk v2
-	awsSession  *session.Session
-	eksClient   *eks.EKS
-	ec2Client   *ec2v1.EC2
-	ec2ClientV2 *ec2v2.Client
-	ssmClient   *ssmv1.SSM
-	ssmClientV2 *ssmv2.Client
-
+	aws             awsconfig.Config // TODO: move everything to aws sdk v2
+	awsSession      *session.Session
+	eksClient       *eks.EKS
+	ec2Client       *ec2v1.EC2
+	ec2ClientV2     *ec2v2.Client
+	ssmClient       *ssmv1.SSM
+	ssmClientV2     *ssmv2.Client
 	cfnClient       *cloudformation.CloudFormation
 	k8sClient       *clientgo.Clientset
 	k8sClientConfig *restclient.Config
@@ -133,16 +95,12 @@ type peeredVPCTest struct {
 
 	logger logr.Logger
 
-	cluster  *peered.HybridCluster
-	stackOut *credentials.StackOutput
-
-	NodeadmURLs e2e.NodeadmURLs
-
+	cluster         *peered.HybridCluster
+	stackOut        *credentials.StackOutput
+	nodeadmURLs     e2e.NodeadmURLs
 	rolesAnywhereCA *credentials.Certificate
-}
 
-func skipCleanup() bool {
-	return os.Getenv("SKIP_CLEANUP") == "true"
+	skipCleanup bool
 }
 
 var credentialProviders = []e2e.NodeadmCredentialsProvider{&credentials.SsmProvider{}, &credentials.IamRolesAnywhereProvider{}}
@@ -159,48 +117,35 @@ var _ = SynchronizedBeforeSuite(
 		Expect(err).NotTo(HaveOccurred(), "should read valid test configuration")
 
 		logger := e2e.NewLogger()
-		awsSession, err := newE2EAWSSession(config.ClusterRegion)
+		awsSession, err := session.NewSession(&aws.Config{
+			Region: aws.String(config.ClusterRegion),
+		})
+		Expect(err).NotTo(HaveOccurred())
+		aws, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(config.ClusterRegion))
 		Expect(err).NotTo(HaveOccurred())
 
-		eksClient := eks.New(awsSession)
-		ec2Client := ec2v1.New(awsSession)
-		cfnClient := cloudformation.New(awsSession)
-		iamClient := iam.New(awsSession)
-		cluster, err := peered.GetHybridCluster(ctx, eksClient, ec2Client, config.ClusterName, config.ClusterRegion, config.HybridVpcID)
-		Expect(err).NotTo(HaveOccurred(), "expected to get cluster details")
+		infra, err := credentials.Setup(ctx, logger, awsSession, aws, config.ClusterName)
+		Expect(err).NotTo(HaveOccurred(), "should setup e2e resources for peered test")
 
-		rolesAnywhereCA, err := credentials.CreateCA()
-		Expect(err).NotTo(HaveOccurred())
-
-		stackName := fmt.Sprintf("EKSHybridCI-%s", removeSpecialChars(config.ClusterName))
-		stack := &credentials.Stack{
-			ClusterName:            cluster.Name,
-			ClusterArn:             cluster.Arn,
-			Name:                   e2e.GetTruncatedName(stackName, 60),
-			IAMRolesAnywhereCACert: rolesAnywhereCA.CertPEM,
-			CFN:                    cfnClient,
-			IAM:                    iamClient,
-		}
-		stackOut, err := stack.Deploy(ctx, logger)
-		Expect(err).NotTo(HaveOccurred(), "e2e nodes stack should have been deployed")
+		skipCleanup := os.Getenv("SKIP_CLEANUP") == "true"
 
 		// DeferCleanup is context aware, so it will behave as SynchronizedAfterSuite
 		// We prefer this because it's simpler and it avoids having to share global state
 		DeferCleanup(func(ctx context.Context) {
-			if skipCleanup() {
+			if skipCleanup {
 				logger.Info("Skipping cleanup of e2e resources stack")
 				return
 			}
-			logger.Info("Deleting e2e resources stack", "stackName", stack.Name)
-			Expect(stack.Delete(ctx, logger, stackOut)).To(Succeed(), "should delete ec2 nodes stack successfully")
+			Expect(infra.Teardown(ctx)).To(Succeed(), "should teardown e2e resources")
 		})
 
 		suiteJson, err := yaml.Marshal(
 			&suiteConfiguration{
 				TestConfig:             config,
-				EC2StackOutput:         stackOut,
-				RolesAnywhereCACertPEM: rolesAnywhereCA.CertPEM,
-				RolesAnywhereCAKeyPEM:  rolesAnywhereCA.KeyPEM,
+				SkipCleanup:            skipCleanup,
+				CredentialsStackOutput: &infra.StackOutput,
+				RolesAnywhereCACertPEM: infra.RolesAnywhereCA.CertPEM,
+				RolesAnywhereCAKeyPEM:  infra.RolesAnywhereCA.KeyPEM,
 			},
 		)
 		Expect(err).NotTo(HaveOccurred(), "suite config should be marshalled successfully")
@@ -217,7 +162,7 @@ var _ = SynchronizedBeforeSuite(
 		suite = &suiteConfiguration{}
 		Expect(yaml.Unmarshal(data, suite)).To(Succeed(), "should unmarshal suite config coming from first test process successfully")
 		Expect(suite.TestConfig).NotTo(BeNil(), "test configuration should have been set")
-		Expect(suite.EC2StackOutput).NotTo(BeNil(), "ec2 stack output should have been set")
+		Expect(suite.CredentialsStackOutput).NotTo(BeNil(), "ec2 stack output should have been set")
 	},
 )
 
@@ -241,7 +186,6 @@ var _ = Describe("Hybrid Nodes", func() {
 	}
 
 	When("using peered VPC", func() {
-		skipCleanup := skipCleanup()
 		var test *peeredVPCTest
 
 		// Here is where we setup everything we need for the test. This includes
@@ -251,44 +195,11 @@ var _ = Describe("Hybrid Nodes", func() {
 		BeforeEach(func(ctx context.Context) {
 			Expect(suite).NotTo(BeNil(), "suite configuration should have been set")
 			Expect(suite.TestConfig).NotTo(BeNil(), "test configuration should have been set")
-			Expect(suite.EC2StackOutput).NotTo(BeNil(), "ec2 stack output should have been set")
-			test = &peeredVPCTest{
-				stackOut: suite.EC2StackOutput,
-				logger:   e2e.NewLogger(),
-			}
+			Expect(suite.CredentialsStackOutput).NotTo(BeNil(), "credentials stack output should have been set")
 
-			awsSession, err := newE2EAWSSession(suite.TestConfig.ClusterRegion)
-			Expect(err).NotTo(HaveOccurred())
-
-			aws, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(suite.TestConfig.ClusterRegion))
-			Expect(err).NotTo(HaveOccurred())
-
-			test.aws = aws
-			test.awsSession = awsSession
-			test.eksClient = eks.New(awsSession)
-			test.ec2Client = ec2v1.New(awsSession)
-			test.ec2ClientV2 = ec2v2.NewFromConfig(aws) // TODO: move everything else to ec2 sdk v2
-			test.ssmClient = ssmv1.New(awsSession)
-			test.ssmClientV2 = ssmv2.NewFromConfig(aws)
-			test.s3Client = s3v1.New(awsSession)
-			test.cfnClient = cloudformation.New(awsSession)
-			test.iamClient = iam.New(awsSession)
-
-			ca, err := credentials.ParseCertificate(suite.RolesAnywhereCACertPEM, suite.RolesAnywhereCAKeyPEM)
-			Expect(err).NotTo(HaveOccurred())
-
-			test.rolesAnywhereCA = ca
-
-			// TODO: ideally this should be an input to the tests and not just
-			// assume same name/path used by the setup command.
-			clientConfig, err := clientcmd.BuildConfigFromFlags("", e2e.KubeconfigPath(suite.TestConfig.ClusterName))
-			Expect(err).NotTo(HaveOccurred(), "should load correctly kubeconfig file for cluster %s", suite.TestConfig.ClusterName)
-
-			test.k8sClient, err = clientgo.NewForConfig(clientConfig)
-			Expect(err).NotTo(HaveOccurred(), "expected to build kubernetes client")
-
-			test.cluster, err = peered.GetHybridCluster(ctx, test.eksClient, test.ec2Client, suite.TestConfig.ClusterName, suite.TestConfig.ClusterRegion, suite.TestConfig.HybridVpcID)
-			Expect(err).NotTo(HaveOccurred(), "expected to get cluster details")
+			var err error
+			test, err = buildPeeredVPCTestForSuite(ctx, suite)
+			Expect(err).NotTo(HaveOccurred(), "should build peered VPC test config")
 
 			for _, provider := range credentialProviders {
 				switch p := provider.(type) {
@@ -302,17 +213,6 @@ var _ = Describe("Hybrid Nodes", func() {
 					p.TrustAnchorARN = test.stackOut.IRATrustAnchorARN
 					p.CA = test.rolesAnywhereCA
 				}
-			}
-
-			if suite.TestConfig.NodeadmUrlAMD != "" {
-				nodeadmUrl, err := s3.GetNodeadmURL(test.s3Client, suite.TestConfig.NodeadmUrlAMD)
-				Expect(err).NotTo(HaveOccurred(), "expected to retrieve nodeadm amd URL from S3 successfully")
-				test.NodeadmURLs.AMD = nodeadmUrl
-			}
-			if suite.TestConfig.NodeadmUrlARM != "" {
-				nodeadmUrl, err := s3.GetNodeadmURL(test.s3Client, suite.TestConfig.NodeadmUrlARM)
-				Expect(err).NotTo(HaveOccurred(), "expected to retrieve nodeadm arm URL from S3 successfully")
-				test.NodeadmURLs.ARM = nodeadmUrl
 			}
 		})
 
@@ -334,9 +234,9 @@ var _ = Describe("Hybrid Nodes", func() {
 							}
 
 							instanceName := fmt.Sprintf("EKSHybridCI-%s-%s-%s",
-								removeSpecialChars(test.cluster.Name),
-								removeSpecialChars(os.Name()),
-								removeSpecialChars(string(provider.Name())),
+								e2e.SanitizeForAWSName(test.cluster.Name),
+								e2e.SanitizeForAWSName(os.Name()),
+								e2e.SanitizeForAWSName(string(provider.Name())),
 							)
 
 							files, err := provider.FilesForNode(nodeSpec)
@@ -375,7 +275,7 @@ var _ = Describe("Hybrid Nodes", func() {
 
 							userdata, err := os.BuildUserData(e2e.UserDataInput{
 								KubernetesVersion: k8sVersion,
-								NodeadmUrls:       test.NodeadmURLs,
+								NodeadmUrls:       test.nodeadmURLs,
 								NodeadmConfigYaml: string(nodeadmConfigYaml),
 								Provider:          string(provider.Name()),
 								RootPasswordHash:  rootPasswordHash,
@@ -405,7 +305,7 @@ var _ = Describe("Hybrid Nodes", func() {
 							test.logger.Info(fmt.Sprintf("EC2 Instance Connect: https://%s.console.aws.amazon.com/ec2-instance-connect/ssh?connType=serial&instanceId=%s&region=%s&serialPort=0", suite.TestConfig.ClusterRegion, instance.ID, suite.TestConfig.ClusterRegion))
 
 							DeferCleanup(func(ctx context.Context) {
-								if skipCleanup {
+								if test.skipCleanup {
 									test.logger.Info("Skipping EC2 Instance deletion", "instanceID", instance.ID)
 									return
 								}
@@ -420,7 +320,7 @@ var _ = Describe("Hybrid Nodes", func() {
 								nodeIPAddress: instance.IP,
 								logger:        test.logger,
 							}
-							Expect(joinNodeTest.Run(ctx)).To(Succeed(), "node should have joined the cluster sucessfully")
+							Expect(joinNodeTest.Run(ctx)).To(Succeed(), "node should have joined the cluster successfully")
 
 							test.logger.Info("Resetting hybrid node...")
 
@@ -431,7 +331,7 @@ var _ = Describe("Hybrid Nodes", func() {
 								provider: provider,
 								logger:   test.logger,
 							}
-							Expect(uninstallNodeTest.Run(ctx)).To(Succeed(), "node should have been reset sucessfully")
+							Expect(uninstallNodeTest.Run(ctx)).To(Succeed(), "node should have been reset successfully")
 
 							test.logger.Info("Rebooting EC2 Instance.")
 							Expect(ec2.RebootEC2Instance(ctx, test.ec2ClientV2, instance.ID)).NotTo(HaveOccurred(), "EC2 Instance should have rebooted successfully")
@@ -439,7 +339,7 @@ var _ = Describe("Hybrid Nodes", func() {
 
 							Expect(joinNodeTest.Run(ctx)).To(Succeed(), "node should have re-joined, there must be a problem with uninstall")
 
-							if skipCleanup {
+							if test.skipCleanup {
 								test.logger.Info("Skipping nodeadm uninstall from the hybrid node...")
 								return
 							}
@@ -539,19 +439,85 @@ func (u uninstallNodeTest) Run(ctx context.Context) error {
 	return nil
 }
 
-// removeSpecialChars removes everything except alphanumeric characters and hyphens from a string.
-func removeSpecialChars(input string) string {
-	re := regexp.MustCompile(`[^a-zA-Z0-9-]+`)
-	return re.ReplaceAllString(input, "")
+// readTestConfig reads the configuration from the specified file path and unmarshals it into the TestConfig struct.
+func readTestConfig(configPath string) (*TestConfig, error) {
+	config := &TestConfig{}
+	file, err := os.ReadFile(configPath)
+	if err != nil {
+		return nil, fmt.Errorf("reading tests configuration file %s: %w", filePath, err)
+	}
+
+	if err = yaml.Unmarshal(file, config); err != nil {
+		return nil, fmt.Errorf("unmarshaling test configuration: %w", err)
+	}
+
+	return config, nil
 }
 
-// newE2EAWSSession constructs AWS session for E2E tests.
-func newE2EAWSSession(region string) (*session.Session, error) {
-	sess, err := session.NewSession(&aws.Config{
-		Region: aws.String(region),
+func buildPeeredVPCTestForSuite(ctx context.Context, suite *suiteConfiguration) (*peeredVPCTest, error) {
+	test := &peeredVPCTest{
+		stackOut:    suite.CredentialsStackOutput,
+		logger:      e2e.NewLogger(),
+		skipCleanup: suite.SkipCleanup,
+	}
+
+	awsSession, err := session.NewSession(&aws.Config{
+		Region: aws.String(suite.TestConfig.ClusterRegion),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("creating AWS session: %w", err)
+		return nil, err
 	}
-	return sess, nil
+	aws, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(suite.TestConfig.ClusterRegion))
+	if err != nil {
+		return nil, err
+	}
+
+	test.aws = aws
+	test.awsSession = awsSession
+	test.eksClient = eks.New(awsSession)
+	test.ec2Client = ec2v1.New(awsSession)
+	test.ec2ClientV2 = ec2v2.NewFromConfig(aws) // TODO: move everything else to ec2 sdk v2
+	test.ssmClient = ssmv1.New(awsSession)
+	test.ssmClientV2 = ssmv2.NewFromConfig(aws)
+	test.s3Client = s3v1.New(awsSession)
+	test.cfnClient = cloudformation.New(awsSession)
+	test.iamClient = iam.New(awsSession)
+
+	ca, err := credentials.ParseCertificate(suite.RolesAnywhereCACertPEM, suite.RolesAnywhereCAKeyPEM)
+	if err != nil {
+		return nil, err
+	}
+	test.rolesAnywhereCA = ca
+
+	// TODO: ideally this should be an input to the tests and not just
+	// assume same name/path used by the setup command.
+	clientConfig, err := clientcmd.BuildConfigFromFlags("", e2e.KubeconfigPath(suite.TestConfig.ClusterName))
+	if err != nil {
+		return nil, err
+	}
+	test.k8sClient, err = clientgo.NewForConfig(clientConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	test.cluster, err = peered.GetHybridCluster(ctx, test.eksClient, test.ec2ClientV2, suite.TestConfig.ClusterName)
+	if err != nil {
+		return nil, err
+	}
+
+	if suite.TestConfig.NodeadmUrlAMD != "" {
+		nodeadmUrl, err := s3.GetNodeadmURL(test.s3Client, suite.TestConfig.NodeadmUrlAMD)
+		if err != nil {
+			return nil, err
+		}
+		test.nodeadmURLs.AMD = nodeadmUrl
+	}
+	if suite.TestConfig.NodeadmUrlARM != "" {
+		nodeadmUrl, err := s3.GetNodeadmURL(test.s3Client, suite.TestConfig.NodeadmUrlARM)
+		if err != nil {
+			return nil, err
+		}
+		test.nodeadmURLs.ARM = nodeadmUrl
+	}
+	return test, nil
 }

@@ -4,8 +4,9 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/aws/aws-sdk-go-v2/service/ec2"
+	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/aws/aws-sdk-go/service/eks"
 )
 
@@ -16,6 +17,39 @@ type HybridCluster struct {
 	KubernetesVersion string
 	SubnetID          string
 	SecurityGroupID   string
+}
+
+// GetHybridCluster returns the hybrid cluster details.
+func GetHybridCluster(ctx context.Context, eksClient *eks.EKS, ec2Client *ec2.Client, clusterName string) (*HybridCluster, error) {
+	cluster := &HybridCluster{
+		Name:   clusterName,
+		Region: *eksClient.Config.Region,
+	}
+
+	clusterDetails, err := getClusterDetails(ctx, eksClient, clusterName)
+	if err != nil {
+		return nil, fmt.Errorf("getting cluster kubernetes version: %w", err)
+	}
+
+	cluster.KubernetesVersion = *clusterDetails.Version
+	cluster.Arn = *clusterDetails.Arn
+
+	hybridVpcID, err := findPeeredVPC(ctx, ec2Client, *clusterDetails.ResourcesVpcConfig.VpcId)
+	if err != nil {
+		return nil, fmt.Errorf("getting peered VPC for the given cluster %s: %w", clusterName, err)
+	}
+
+	cluster.SubnetID, err = findSubnetInVPC(ctx, ec2Client, hybridVpcID)
+	if err != nil {
+		return nil, fmt.Errorf("getting public subnet in the given hybrid node vpc %s: %w", hybridVpcID, err)
+	}
+
+	cluster.SecurityGroupID, err = getDefaultSecurityGroup(ctx, ec2Client, hybridVpcID)
+	if err != nil {
+		return nil, fmt.Errorf("getting default security group in the given hybrid node vpc %s: %w", hybridVpcID, err)
+	}
+
+	return cluster, nil
 }
 
 func getClusterDetails(ctx context.Context, client *eks.EKS, clusterName string) (eks.Cluster, error) {
@@ -31,20 +65,45 @@ func getClusterDetails(ctx context.Context, client *eks.EKS, clusterName string)
 	return *result.Cluster, nil
 }
 
-func findSubnetInVPC(ctx context.Context, client *ec2.EC2, vpcID string) (subnetID string, err error) {
-	input := &ec2.DescribeSubnetsInput{
-		Filters: []*ec2.Filter{
+func findPeeredVPC(ctx context.Context, client *ec2.Client, clusterVpcID string) (vpcID string, err error) {
+	in := &ec2.DescribeVpcPeeringConnectionsInput{
+		Filters: []types.Filter{
 			{
-				Name:   aws.String("vpc-id"),
-				Values: []*string{aws.String(vpcID)},
-			},
-			{
-				Name:   aws.String("map-public-ip-on-launch"),
-				Values: []*string{aws.String("true")},
+				Name:   aws.String("requester-vpc-info.vpc-id"),
+				Values: []string{clusterVpcID},
 			},
 		},
 	}
-	result, err := client.DescribeSubnetsWithContext(ctx, input)
+	resp, err := client.DescribeVpcPeeringConnections(ctx, in)
+	if err != nil {
+		return "", err
+	}
+
+	if len(resp.VpcPeeringConnections) == 0 {
+		return "", fmt.Errorf("no peered VPC found for VPC %s", clusterVpcID)
+	}
+
+	if len(resp.VpcPeeringConnections) > 1 {
+		return "", fmt.Errorf("more than one peered VPC found for VPC %s", clusterVpcID)
+	}
+
+	return *resp.VpcPeeringConnections[0].RequesterVpcInfo.VpcId, nil
+}
+
+func findSubnetInVPC(ctx context.Context, client *ec2.Client, vpcID string) (subnetID string, err error) {
+	input := &ec2.DescribeSubnetsInput{
+		Filters: []types.Filter{
+			{
+				Name:   aws.String("vpc-id"),
+				Values: []string{vpcID},
+			},
+			{
+				Name:   aws.String("map-public-ip-on-launch"),
+				Values: []string{"true"},
+			},
+		},
+	}
+	result, err := client.DescribeSubnets(ctx, input)
 	if err != nil {
 		return "", err
 	}
@@ -55,17 +114,17 @@ func findSubnetInVPC(ctx context.Context, client *ec2.EC2, vpcID string) (subnet
 	return *result.Subnets[0].SubnetId, nil
 }
 
-func getDefaultSecurityGroup(ctx context.Context, client *ec2.EC2, vpcID string) (string, error) {
+func getDefaultSecurityGroup(ctx context.Context, client *ec2.Client, vpcID string) (string, error) {
 	input := &ec2.DescribeSecurityGroupsInput{
-		Filters: []*ec2.Filter{
+		Filters: []types.Filter{
 			{
 				Name:   aws.String("vpc-id"),
-				Values: []*string{aws.String(vpcID)},
+				Values: []string{vpcID},
 			},
 		},
 	}
 
-	result, err := client.DescribeSecurityGroupsWithContext(ctx, input)
+	result, err := client.DescribeSecurityGroups(ctx, input)
 	if err != nil {
 		return "", err
 	}
@@ -75,31 +134,4 @@ func getDefaultSecurityGroup(ctx context.Context, client *ec2.EC2, vpcID string)
 	}
 
 	return *result.SecurityGroups[0].GroupId, nil
-}
-
-func GetHybridCluster(ctx context.Context, eksClient *eks.EKS, ec2Client *ec2.EC2, clusterName, clusterRegion, hybridVpcID string) (*HybridCluster, error) {
-	cluster := &HybridCluster{
-		Name:   clusterName,
-		Region: clusterRegion,
-	}
-
-	clusterDetails, err := getClusterDetails(ctx, eksClient, clusterName)
-	if err != nil {
-		return nil, fmt.Errorf("getting cluster kubernetes version: %w", err)
-	}
-
-	cluster.KubernetesVersion = *clusterDetails.Version
-	cluster.Arn = *clusterDetails.Arn
-
-	cluster.SubnetID, err = findSubnetInVPC(ctx, ec2Client, hybridVpcID)
-	if err != nil {
-		return nil, fmt.Errorf("getting public subnet in the given hybrid node vpc %s: %w", hybridVpcID, err)
-	}
-
-	cluster.SecurityGroupID, err = getDefaultSecurityGroup(ctx, ec2Client, hybridVpcID)
-	if err != nil {
-		return nil, fmt.Errorf("getting default security group in the given hybrid node vpc %s: %w", hybridVpcID, err)
-	}
-
-	return cluster, nil
 }

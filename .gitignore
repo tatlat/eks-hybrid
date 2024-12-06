@@ -4,6 +4,7 @@ _bin
 cover.out
 coverage.out
 .idea
+.vscode
 .DS_Store
 vendor
 e2e-config
