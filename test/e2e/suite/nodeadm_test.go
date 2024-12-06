@@ -64,6 +64,7 @@ type TestConfig struct {
 
 type suiteConfiguration struct {
 	TestConfig             *TestConfig              `json:"testConfig"`
+	SkipCleanup            bool                     `json:"skipCleanup"`
 	CredentialsStackOutput *credentials.StackOutput `json:"ec2StackOutput"`
 	RolesAnywhereCACertPEM []byte                   `json:"rolesAnywhereCACertPEM"`
 	RolesAnywhereCAKeyPEM  []byte                   `json:"rolesAnywhereCAPrivateKeyPEM"`
@@ -99,10 +100,8 @@ type peeredVPCTest struct {
 	stackOut        *credentials.StackOutput
 	nodeadmURLs     e2e.NodeadmURLs
 	rolesAnywhereCA *credentials.Certificate
-}
 
-func skipCleanup() bool {
-	return os.Getenv("SKIP_CLEANUP") == "true"
+	skipCleanup bool
 }
 
 var credentialProviders = []e2e.NodeadmCredentialsProvider{&credentials.SsmProvider{}, &credentials.IamRolesAnywhereProvider{}}
@@ -129,10 +128,12 @@ var _ = SynchronizedBeforeSuite(
 		infra, err := credentials.Setup(ctx, logger, awsSession, aws, config.ClusterName)
 		Expect(err).NotTo(HaveOccurred(), "should setup e2e resources for peered test")
 
+		skipCleanup := os.Getenv("SKIP_CLEANUP") == "true"
+
 		// DeferCleanup is context aware, so it will behave as SynchronizedAfterSuite
 		// We prefer this because it's simpler and it avoids having to share global state
 		DeferCleanup(func(ctx context.Context) {
-			if skipCleanup() {
+			if skipCleanup {
 				logger.Info("Skipping cleanup of e2e resources stack")
 				return
 			}
@@ -142,6 +143,7 @@ var _ = SynchronizedBeforeSuite(
 		suiteJson, err := yaml.Marshal(
 			&suiteConfiguration{
 				TestConfig:             config,
+				SkipCleanup:            skipCleanup,
 				CredentialsStackOutput: &infra.StackOutput,
 				RolesAnywhereCACertPEM: infra.RolesAnywhereCA.CertPEM,
 				RolesAnywhereCAKeyPEM:  infra.RolesAnywhereCA.KeyPEM,
@@ -185,7 +187,6 @@ var _ = Describe("Hybrid Nodes", func() {
 	}
 
 	When("using peered VPC", func() {
-		skipCleanup := skipCleanup()
 		var test *peeredVPCTest
 
 		// Here is where we setup everything we need for the test. This includes
@@ -305,7 +306,7 @@ var _ = Describe("Hybrid Nodes", func() {
 							test.logger.Info(fmt.Sprintf("EC2 Instance Connect: https://%s.console.aws.amazon.com/ec2-instance-connect/ssh?connType=serial&instanceId=%s&region=%s&serialPort=0", suite.TestConfig.ClusterRegion, instance.ID, suite.TestConfig.ClusterRegion))
 
 							DeferCleanup(func(ctx context.Context) {
-								if skipCleanup {
+								if test.skipCleanup {
 									test.logger.Info("Skipping EC2 Instance deletion", "instanceID", instance.ID)
 									return
 								}
@@ -339,7 +340,7 @@ var _ = Describe("Hybrid Nodes", func() {
 
 							Expect(joinNodeTest.Run(ctx)).To(Succeed(), "node should have re-joined, there must be a problem with uninstall")
 
-							if skipCleanup {
+							if test.skipCleanup {
 								test.logger.Info("Skipping nodeadm uninstall from the hybrid node...")
 								return
 							}
@@ -456,8 +457,9 @@ func readTestConfig(configPath string) (*TestConfig, error) {
 
 func buildPeeredVPCTestForSuite(ctx context.Context, suite *suiteConfiguration) (*peeredVPCTest, error) {
 	test := &peeredVPCTest{
-		stackOut: suite.CredentialsStackOutput,
-		logger:   e2e.NewLogger(),
+		stackOut:    suite.CredentialsStackOutput,
+		logger:      e2e.NewLogger(),
+		skipCleanup: suite.SkipCleanup,
 	}
 
 	awsSession, err := session.NewSession(&aws.Config{
