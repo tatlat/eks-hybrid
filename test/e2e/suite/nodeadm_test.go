@@ -66,7 +66,7 @@ type TestConfig struct {
 
 type suiteConfiguration struct {
 	TestConfig             *TestConfig              `json:"testConfig"`
-	EC2StackOutput         *credentials.StackOutput `json:"ec2StackOutput"`
+	CredentialsStackOutput *credentials.StackOutput `json:"ec2StackOutput"`
 	RolesAnywhereCACertPEM []byte                   `json:"rolesAnywhereCACertPEM"`
 	RolesAnywhereCAKeyPEM  []byte                   `json:"rolesAnywhereCAPrivateKeyPEM"`
 }
@@ -161,28 +161,11 @@ var _ = SynchronizedBeforeSuite(
 		logger := e2e.NewLogger()
 		awsSession, err := newE2EAWSSession(config.ClusterRegion)
 		Expect(err).NotTo(HaveOccurred())
-
-		eksClient := eks.New(awsSession)
-		ec2Client := ec2v1.New(awsSession)
-		cfnClient := cloudformation.New(awsSession)
-		iamClient := iam.New(awsSession)
-		cluster, err := peered.GetHybridCluster(ctx, eksClient, ec2Client, config.ClusterName, config.ClusterRegion, config.HybridVpcID)
-		Expect(err).NotTo(HaveOccurred(), "expected to get cluster details")
-
-		rolesAnywhereCA, err := credentials.CreateCA()
+		aws, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(config.ClusterRegion))
 		Expect(err).NotTo(HaveOccurred())
 
-		stackName := fmt.Sprintf("EKSHybridCI-%s", removeSpecialChars(config.ClusterName))
-		stack := &credentials.Stack{
-			ClusterName:            cluster.Name,
-			ClusterArn:             cluster.Arn,
-			Name:                   e2e.GetTruncatedName(stackName, 60),
-			IAMRolesAnywhereCACert: rolesAnywhereCA.CertPEM,
-			CFN:                    cfnClient,
-			IAM:                    iamClient,
-		}
-		stackOut, err := stack.Deploy(ctx, logger)
-		Expect(err).NotTo(HaveOccurred(), "e2e nodes stack should have been deployed")
+		infra, err := credentials.Setup(ctx, logger, awsSession, aws, config.ClusterName)
+		Expect(err).NotTo(HaveOccurred(), "should setup e2e resources for peered test")
 
 		// DeferCleanup is context aware, so it will behave as SynchronizedAfterSuite
 		// We prefer this because it's simpler and it avoids having to share global state
@@ -191,16 +174,15 @@ var _ = SynchronizedBeforeSuite(
 				logger.Info("Skipping cleanup of e2e resources stack")
 				return
 			}
-			logger.Info("Deleting e2e resources stack", "stackName", stack.Name)
-			Expect(stack.Delete(ctx, logger, stackOut)).To(Succeed(), "should delete ec2 nodes stack successfully")
+			Expect(infra.Teardown(ctx)).To(Succeed(), "should teardown e2e resources")
 		})
 
 		suiteJson, err := yaml.Marshal(
 			&suiteConfiguration{
 				TestConfig:             config,
-				EC2StackOutput:         stackOut,
-				RolesAnywhereCACertPEM: rolesAnywhereCA.CertPEM,
-				RolesAnywhereCAKeyPEM:  rolesAnywhereCA.KeyPEM,
+				CredentialsStackOutput: &infra.StackOutput,
+				RolesAnywhereCACertPEM: infra.RolesAnywhereCA.CertPEM,
+				RolesAnywhereCAKeyPEM:  infra.RolesAnywhereCA.KeyPEM,
 			},
 		)
 		Expect(err).NotTo(HaveOccurred(), "suite config should be marshalled successfully")
@@ -217,7 +199,7 @@ var _ = SynchronizedBeforeSuite(
 		suite = &suiteConfiguration{}
 		Expect(yaml.Unmarshal(data, suite)).To(Succeed(), "should unmarshal suite config coming from first test process successfully")
 		Expect(suite.TestConfig).NotTo(BeNil(), "test configuration should have been set")
-		Expect(suite.EC2StackOutput).NotTo(BeNil(), "ec2 stack output should have been set")
+		Expect(suite.CredentialsStackOutput).NotTo(BeNil(), "ec2 stack output should have been set")
 	},
 )
 
@@ -251,9 +233,9 @@ var _ = Describe("Hybrid Nodes", func() {
 		BeforeEach(func(ctx context.Context) {
 			Expect(suite).NotTo(BeNil(), "suite configuration should have been set")
 			Expect(suite.TestConfig).NotTo(BeNil(), "test configuration should have been set")
-			Expect(suite.EC2StackOutput).NotTo(BeNil(), "ec2 stack output should have been set")
+			Expect(suite.CredentialsStackOutput).NotTo(BeNil(), "credentials stack output should have been set")
 			test = &peeredVPCTest{
-				stackOut: suite.EC2StackOutput,
+				stackOut: suite.CredentialsStackOutput,
 				logger:   e2e.NewLogger(),
 			}
 
@@ -334,9 +316,9 @@ var _ = Describe("Hybrid Nodes", func() {
 							}
 
 							instanceName := fmt.Sprintf("EKSHybridCI-%s-%s-%s",
-								removeSpecialChars(test.cluster.Name),
-								removeSpecialChars(os.Name()),
-								removeSpecialChars(string(provider.Name())),
+								e2e.SanitizeForAWSName(test.cluster.Name),
+								e2e.SanitizeForAWSName(os.Name()),
+								e2e.SanitizeForAWSName(string(provider.Name())),
 							)
 
 							files, err := provider.FilesForNode(nodeSpec)
@@ -537,12 +519,6 @@ func (u uninstallNodeTest) Run(ctx context.Context) error {
 	u.logger.Info("Node unregistered successfully", "node", node.Name)
 
 	return nil
-}
-
-// removeSpecialChars removes everything except alphanumeric characters and hyphens from a string.
-func removeSpecialChars(input string) string {
-	re := regexp.MustCompile(`[^a-zA-Z0-9-]+`)
-	return re.ReplaceAllString(input, "")
 }
 
 // newE2EAWSSession constructs AWS session for E2E tests.
