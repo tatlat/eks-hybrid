@@ -320,7 +320,7 @@ var _ = Describe("Hybrid Nodes", func() {
 								nodeIPAddress: instance.IP,
 								logger:        test.logger,
 							}
-							Expect(joinNodeTest.Run(ctx)).To(Succeed(), "node should have joined the cluster sucessfully")
+							Expect(joinNodeTest.Run(ctx)).To(Succeed(), "node should have joined the cluster successfully")
 
 							test.logger.Info("Resetting hybrid node...")
 
@@ -331,7 +331,7 @@ var _ = Describe("Hybrid Nodes", func() {
 								provider: provider,
 								logger:   test.logger,
 							}
-							Expect(uninstallNodeTest.Run(ctx)).To(Succeed(), "node should have been reset sucessfully")
+							Expect(uninstallNodeTest.Run(ctx)).To(Succeed(), "node should have been reset successfully")
 
 							test.logger.Info("Rebooting EC2 Instance.")
 							Expect(ec2.RebootEC2Instance(ctx, test.ec2ClientV2, instance.ID)).NotTo(HaveOccurred(), "EC2 Instance should have rebooted successfully")
