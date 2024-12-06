@@ -75,11 +75,8 @@ func (u Ubuntu2004) Name() string {
 	return name
 }
 
-func (u Ubuntu2004) InstanceType() string {
-	if u.Architecture == "amd64" {
-		return "m5.2xlarge"
-	}
-	return "t4g.2xlarge"
+func (u Ubuntu2004) InstanceType(region string) string {
+	return getInstanceTypeFromRegionAndArch(region, u.Architecture)
 }
 
 func (u Ubuntu2004) AMIName(ctx context.Context, awsSession *session.Session) (string, error) {
@@ -142,11 +139,8 @@ func (u Ubuntu2204) Name() string {
 	return name
 }
 
-func (u Ubuntu2204) InstanceType() string {
-	if u.Architecture == "amd64" {
-		return "m5.2xlarge"
-	}
-	return "t4g.2xlarge"
+func (u Ubuntu2204) InstanceType(region string) string {
+	return getInstanceTypeFromRegionAndArch(region, u.Architecture)
 }
 
 func (u Ubuntu2204) AMIName(ctx context.Context, awsSession *session.Session) (string, error) {
@@ -209,11 +203,8 @@ func (u Ubuntu2404) Name() string {
 	return name
 }
 
-func (u Ubuntu2404) InstanceType() string {
-	if u.Architecture == "amd64" {
-		return "m5.2xlarge"
-	}
-	return "t4g.2xlarge"
+func (u Ubuntu2404) InstanceType(region string) string {
+	return getInstanceTypeFromRegionAndArch(region, u.Architecture)
 }
 
 func (u Ubuntu2404) AMIName(ctx context.Context, awsSession *session.Session) (string, error) {

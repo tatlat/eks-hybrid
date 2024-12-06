@@ -56,3 +56,13 @@ func getAmiIDFromSSM(ctx context.Context, client *ssm.SSM, amiName string) (*str
 
 	return output.Parameter.Value, nil
 }
+
+func getInstanceTypeFromRegionAndArch(region string, arch string) string {
+	if arch == amd64Arch {
+		if region == "ap-southeast-5" {
+			return "m6i.large"
+		}
+		return "m5.2xlarge"
+	}
+	return "t4g.2xlarge"
+}

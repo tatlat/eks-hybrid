@@ -41,11 +41,8 @@ func (a AmazonLinux2023) Name() string {
 	return "al23-arm64"
 }
 
-func (a AmazonLinux2023) InstanceType() string {
-	if a.Architecture == amd64Arch {
-		return "m5.2xlarge"
-	}
-	return "t4g.2xlarge"
+func (a AmazonLinux2023) InstanceType(region string) string {
+	return getInstanceTypeFromRegionAndArch(region, a.Architecture)
 }
 
 func (a AmazonLinux2023) AMIName(ctx context.Context, awsSession *session.Session) (string, error) {

@@ -16,7 +16,7 @@ type NodeadmOS interface {
 	Name() string
 	AMIName(ctx context.Context, awsSession *session.Session) (string, error)
 	BuildUserData(UserDataInput UserDataInput) ([]byte, error)
-	InstanceType() string
+	InstanceType(region string) string
 }
 
 type UserDataInput struct {
