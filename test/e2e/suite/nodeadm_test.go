@@ -41,7 +41,6 @@ import (
 )
 
 const (
-	ec2InstanceType = "t2.large"
 	ec2VolumeSize   = int32(30)
 	podNamespace    = "default"
 )
