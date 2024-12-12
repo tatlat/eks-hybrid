@@ -81,7 +81,7 @@ test-integration: ## Run integration tests.
 	test/integration/run.sh
 
 .PHONY: lint
-lint: $(GOLANGCI_LINT) ## Run golangci-lint.
+lint: golangci-lint ## Run golangci-lint.
 	$(GOLANGCI_LINT) run --new-from-rev main
 
 ##@ Build
@@ -181,6 +181,7 @@ $(GINKGO): $(LOCALBIN)
 update-deps:
 	$(GO) get $(shell $(GO) list -f '{{if not (or .Main .Indirect)}}{{.Path}}{{end}}' -mod=mod -m all) && $(GO) mod tidy
 
+.PHONY: golangci-lint
 golangci-lint: $(GOLANGCI_LINT) ## Download golangci-lint.
 $(GOLANGCI_LINT): $(LOCALBIN) $(GOLANGCI_LINT_CONFIG)
 	$(eval GOLANGCI_LINT_VERSION?=$(shell cat .github/workflows/golangci-lint.yml | yq e '.jobs.golangci.steps[] | select(.name == "golangci-lint") .with.version' -))
