@@ -15,7 +15,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/ssm"
 	"github.com/aws/smithy-go"
 
-	"github.com/aws/eks-hybrid/test/e2e"
+	"github.com/aws/eks-hybrid/test/e2e/constants"
 )
 
 // instanceConfig holds the configuration for the EC2 instance.
@@ -103,7 +103,7 @@ func (e *InstanceConfig) Create(ctx context.Context, ec2Client *ec2.Client, ssmC
 						Value: aws.String(e.InstanceName),
 					},
 					{
-						Key:   aws.String(e2e.TestClusterTagKey),
+						Key:   aws.String(constants.TestClusterTagKey),
 						Value: aws.String(e.ClusterName),
 					},
 				},
