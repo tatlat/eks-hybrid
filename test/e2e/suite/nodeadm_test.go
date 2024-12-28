@@ -578,7 +578,7 @@ func (u uninstallNodeTest) Run(ctx context.Context) error {
 	}
 
 	u.logger.Info("Cordoning hybrid node...")
-	err = kubernetes.CordonNode(ctx, u.k8s, node)
+	err = kubernetes.CordonNode(ctx, u.k8s, node, u.logger)
 	if err != nil {
 		return err
 	}
@@ -723,7 +723,7 @@ func (u upgradeNodeTest) Run(ctx context.Context) error {
 	}
 	nodeName := node.Name
 	u.logger.Info("Cordoning hybrid node...")
-	err = kubernetes.CordonNode(ctx, u.k8s, node)
+	err = kubernetes.CordonNode(ctx, u.k8s, node, u.logger)
 	if err != nil {
 		return err
 	}
