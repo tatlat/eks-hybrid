@@ -38,9 +38,9 @@ func NewUpgradeCommand() cli.Command {
 
 	fc := flaggy.NewSubcommand("upgrade")
 	fc.Description = "Upgrade components installed using the install sub-command"
-	fc.AddPositionalValue(&cmd.kubernetesVersion, "KUBERNETES_VERSION", 1, true, "The major[.minor[.patch]] version of Kubernetes to install")
+	fc.AddPositionalValue(&cmd.kubernetesVersion, "KUBERNETES_VERSION", 1, true, "The major[.minor[.patch]] version of Kubernetes to install.")
 	fc.String(&cmd.configSource, "c", "config-source", "Source of node configuration. The format is a URI with supported schemes: [file, imds].")
-	fc.StringSlice(&cmd.skipPhases, "s", "skip", "phases of the upgrade you want to skip")
+	fc.StringSlice(&cmd.skipPhases, "s", "skip", "Phases of the upgrade to skip. Allowed values: [init-validation, pod-validation, node-validation].")
 	fc.Duration(&cmd.timeout, "t", "timeout", "Maximum upgrade command duration. Input follows duration format. Example: 1h23s")
 	cmd.flaggy = fc
 	return &cmd
