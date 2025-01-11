@@ -26,6 +26,7 @@ func NewCommand() cli.Command {
 	fc.AddPositionalValue(&cmd.kubernetesVersion, "KUBERNETES_VERSION", 1, true, "The major[.minor[.patch]] version of Kubernetes to install")
 	fc.String(&cmd.credentialProvider, "p", "credential-provider", "Credential process to install. Allowed values are ssm & iam-ra")
 	fc.String(&cmd.containerdSource, "s", "containerd-source", "Source for containerd artifact. Allowed values are none, distro & docker")
+	fc.StringSlice(&cmd.skipPhases, "", "skip", "phases of the install to skip. Allowed values: [ validate ].")
 	fc.Duration(&cmd.timeout, "t", "timeout", "Maximum install command duration. Input follows duration format. Example: 1h23s")
 	cmd.flaggy = fc
 
@@ -37,6 +38,7 @@ type command struct {
 	kubernetesVersion  string
 	credentialProvider string
 	containerdSource   string
+	skipPhases         []string
 	timeout            time.Duration
 }
 
@@ -110,6 +112,7 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		ContainerdSource:   containerdSource,
 		CredentialProvider: credentialProvider,
 		Logger:             log,
+		SkipPhases:         c.skipPhases,
 	}
 
 	return installer.Run(ctx)
