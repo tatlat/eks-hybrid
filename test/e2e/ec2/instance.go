@@ -9,12 +9,11 @@ import (
 	"fmt"
 	"strings"
 
-	awsV2 "github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/aws/retry"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/ssm"
+	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	"github.com/aws/smithy-go"
 
 	"github.com/aws/eks-hybrid/test/e2e/constants"
@@ -34,11 +33,12 @@ type InstanceConfig struct {
 }
 
 type Instance struct {
-	ID string
-	IP string
+	ID   string
+	Name string
+	IP   string
 }
 
-func (e *InstanceConfig) Create(ctx context.Context, ec2Client *ec2.Client, ssmClient *ssm.SSM) (Instance, error) {
+func (e *InstanceConfig) Create(ctx context.Context, ec2Client *ec2.Client, ssmClient *ssm.Client) (Instance, error) {
 	instances, err := ec2Client.DescribeInstances(ctx, &ec2.DescribeInstancesInput{
 		Filters: []types.Filter{
 			{
@@ -133,7 +133,11 @@ func (e *InstanceConfig) Create(ctx context.Context, ec2Client *ec2.Client, ssmC
 		return Instance{}, fmt.Errorf("could not create hybrid EC2 instance: %w", err)
 	}
 
-	return Instance{ID: *runResult.Instances[0].InstanceId, IP: *runResult.Instances[0].PrivateIpAddress}, nil
+	return Instance{
+		ID:   *runResult.Instances[0].InstanceId,
+		Name: e.InstanceName,
+		IP:   *runResult.Instances[0].PrivateIpAddress,
+	}, nil
 }
 
 func DeleteEC2Instance(ctx context.Context, client *ec2.Client, instanceID string) error {
@@ -149,7 +153,7 @@ func DeleteEC2Instance(ctx context.Context, client *ec2.Client, instanceID strin
 
 type invalidInstanceProfileRetryable struct{}
 
-func (c invalidInstanceProfileRetryable) IsErrorRetryable(err error) awsV2.Ternary {
+func (c invalidInstanceProfileRetryable) IsErrorRetryable(err error) aws.Ternary {
 	var awsErr smithy.APIError
 	if ok := errors.As(err, &awsErr); ok {
 		// We retry invalid instance profile errors because sometimes there is a delay between creating
@@ -161,9 +165,9 @@ func (c invalidInstanceProfileRetryable) IsErrorRetryable(err error) awsV2.Terna
 		// - Invalid IAM Instance Profile ARN
 		// Depending if the input uses the name or the ARN in the params.
 		if awsErr.ErrorCode() == "InvalidParameterValue" && strings.Contains(awsErr.ErrorMessage(), "Invalid IAM Instance Profile") {
-			return awsV2.BoolTernary(true)
+			return aws.BoolTernary(true)
 		}
 	}
 
-	return awsV2.BoolTernary(false)
+	return aws.BoolTernary(false)
 }

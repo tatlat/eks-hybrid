@@ -71,7 +71,7 @@ function should_cleanup_cluster(){
 
     # if a cluster_name is passed to the script, only clean it up and no others
     if [ -n "$CLUSTER_NAME" ]; then
-        if [ "$cluster_name" != "$CLUSTER_NAME" ]; then
+        if ! [[ "$cluster_name" =~ ^${CLUSTER_NAME/\*/.*}$ ]]; then
             return $skip
         fi
         return $clean
@@ -178,10 +178,11 @@ function iam_ra_cluster_name_tag_from_resource(){
 }
 
 # See above note about role tags
-function ssm_parameter_cluster_name_tag(){
+function ssm_resource_cluster_name_tag(){
     id="$1"
-    >&2 echo "($(pwd)) \$ command aws ssm list-tags-for-resource --resource-id $id --resource-type Parameter --query "{Tags:TagList}" --output json" 
-    tags="$(command aws ssm list-tags-for-resource --resource-id $id --resource-type Parameter --query "{Tags:TagList}" --output json 2>/dev/null)"
+    type="$2"
+    >&2 echo "($(pwd)) \$ command aws ssm list-tags-for-resource --resource-id $id --resource-type $type --query "{Tags:TagList}" --output json" 
+    tags="$(command aws ssm list-tags-for-resource --resource-id $id --resource-type $type --query "{Tags:TagList}" --output json 2>/dev/null)"
     if [ $? != 0 ]; then
         echo ""
         return        
@@ -426,19 +427,13 @@ if [ "${#TEST_STACKS[@]}" -gt 0 ]; then
     done
 fi
 
-# When a cluster name is supplied it along with all its resources are deleted
-# No other resources are deleted
-# We force the cluster status to be deleting in this case so that all future resources
-# are deleted
-if [ -n "$CLUSTER_NAME" ]; then   
-    delete_cluster_if_should_cleanup $CLUSTER_NAME    
-else
-    # list clusters does not support tag filters so we pull all clusters
-    # then describe to get the tags to filter out the ones that arent e2e tests clusters
-    for eks_cluster in $(aws eks list-clusters --query "clusters" --output text); do
-        delete_cluster_if_should_cleanup $eks_cluster
-    done
-fi
+# list clusters does not support tag filters so we pull all clusters
+# then describe to get the tags to filter out the ones that dont match:
+# - if cluster name or prefix was provide
+# - have the e2e tag and are over a day old
+for eks_cluster in $(aws eks list-clusters --query "clusters" --output text); do
+    delete_cluster_if_should_cleanup $eks_cluster
+done
 
 if [ "${#ARCH_STACKS[@]}" -gt 0 ]; then
     for stack in "${ARCH_STACKS[@]}"; do
@@ -542,7 +537,7 @@ done
 
 # see note about roles
 for ssm_parameter in $(aws ssm describe-parameters  --query "Parameters[*].Name" --output text); do
-    cluster_name="$(ssm_parameter_cluster_name_tag "$ssm_parameter")"
+    cluster_name="$(ssm_resource_cluster_name_tag "$ssm_parameter" "Parameter")"
     if ! should_cleanup_cluster "$cluster_name"; then
         continue
     fi
@@ -573,15 +568,15 @@ if [ -n "$CLUSTER_NAME" ]; then
     describe_instance_filters="Key=tag:$TEST_CLUSTER_TAG_KEY,Values=$CLUSTER_NAME"
 fi
 
-for managed_instance in $(aws ssm describe-instance-information --max-items 100 --filters "$describe_instance_filters" --query "InstanceInformationList[*].{InstanceId:InstanceId,LastPingDateTime:LastPingDateTime,ResourceType:ResourceType}" --output json | jq -c '.[]'); do
+for managed_instance in $(aws ssm describe-instance-information --max-items 100 --filters "$describe_instance_filters" --query "InstanceInformationList[*].{InstanceId:InstanceId,ResourceType:ResourceType}" --output json | jq -c '.[]'); do
     resource_type=$(echo $managed_instance | jq -r ".ResourceType")
     if [ "$resource_type" != "ManagedInstance" ]; then  
         continue
     fi
-    last_ping=$(echo $managed_instance | jq -r ".LastPingDateTime")
-    if ! older_than_one_day $last_ping; then
+    id=$(echo $managed_instance | jq -r ".InstanceId")
+    cluster_name="$(ssm_resource_cluster_name_tag "$id" "ManagedInstance")"
+    if ! should_cleanup_cluster "$cluster_name"; then
         continue
     fi
-    id=$(echo $managed_instance | jq -r ".InstanceId")
     aws ssm deregister-managed-instance --instance-id $id
 done

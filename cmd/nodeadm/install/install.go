@@ -16,6 +16,16 @@ import (
 	"github.com/aws/eks-hybrid/internal/packagemanager"
 )
 
+const installHelpText = `Examples:
+  # Install Kubernetes version 1.31 with AWS Systems Manager (SSM) as the credential provider
+  nodeadm install 1.31 --credential-provider ssm
+
+  # Install Kubernetes version 1.31 with AWS IAM Roles Anywhere as the credential provider and Docker as the containerd source
+  nodeadm install 1.31 --credential-provider iam-ra --containerd-source docker
+
+Documentation:
+  https://docs.aws.amazon.com/eks/latest/userguide/hybrid-nodes-nodeadm.html#_install`
+
 func NewCommand() cli.Command {
 	cmd := command{
 		timeout: 20 * time.Minute,
@@ -23,7 +33,8 @@ func NewCommand() cli.Command {
 
 	fc := flaggy.NewSubcommand("install")
 	fc.Description = "Install components required to join an EKS cluster"
-	fc.AddPositionalValue(&cmd.kubernetesVersion, "KUBERNETES_VERSION", 1, true, "The major[.minor[.patch]] version of Kubernetes to install.")
+	fc.AdditionalHelpAppend = installHelpText
+  fc.AddPositionalValue(&cmd.kubernetesVersion, "KUBERNETES_VERSION", 1, true, "The major[.minor[.patch]] version of Kubernetes to install.")
 	fc.String(&cmd.credentialProvider, "p", "credential-provider", "Credential process to install. Allowed values: [ssm, iam-ra].")
 	fc.String(&cmd.containerdSource, "s", "containerd-source", "Source for containerd artifact. Allowed values: [none, distro, docker].")
 	fc.StringSlice(&cmd.skipPhases, "", "skip", "Phases of the install to skip. Allowed values: [validate].")

@@ -27,12 +27,23 @@ const (
 	skipNodePreflightCheck = "node-validation"
 )
 
+const uninstallHelpText = `Examples:
+  # Uninstall all components
+  nodeadm uninstall
+
+  # Uninstall all components and skip pod-validation and node-validation pre-flight validation
+  nodeadm uninstall --skip node-validation,pod-validation
+
+Documentation:
+  https://docs.aws.amazon.com/eks/latest/userguide/hybrid-nodes-nodeadm.html#_uninstall`
+
 func NewCommand() cli.Command {
 	cmd := command{}
 
 	fc := flaggy.NewSubcommand("uninstall")
 	fc.Description = "Uninstall components installed using the install sub-command"
-	fc.StringSlice(&cmd.skipPhases, "s", "skip", "Phases of uninstall to skip. Allowed values: [pod-validation, node-validation].")
+	fc.AdditionalHelpAppend = uninstallHelpText
+  fc.StringSlice(&cmd.skipPhases, "s", "skip", "Phases of uninstall to skip. Allowed values: [pod-validation, node-validation].")
 	cmd.flaggy = fc
 
 	return &cmd

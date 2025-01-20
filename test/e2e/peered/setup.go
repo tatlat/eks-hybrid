@@ -7,7 +7,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
-	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/go-logr/logr"
 
 	"github.com/aws/eks-hybrid/test/e2e/constants"
@@ -22,35 +21,17 @@ type Infrastructure struct {
 }
 
 // Setup creates the necessary infrastructure for credentials providers to be used by nodeadm.
-func Setup(ctx context.Context, logger logr.Logger, awsSession *session.Session, config aws.Config, clusterName string) (*Infrastructure, error) {
-	credsInfra, err := credentials.Setup(ctx, logger, awsSession, config, clusterName)
+func Setup(ctx context.Context, logger logr.Logger, config aws.Config, clusterName string) (*Infrastructure, error) {
+	credsInfra, err := credentials.Setup(ctx, logger, config, clusterName)
 	if err != nil {
 		return nil, err
 	}
 
 	ec2Client := ec2.NewFromConfig(config)
 
-	instances, err := ec2Client.DescribeInstances(ctx, &ec2.DescribeInstancesInput{
-		Filters: []types.Filter{
-			{
-				Name:   aws.String("tag:" + constants.TestClusterTagKey),
-				Values: []string{clusterName},
-			},
-			{
-				Name:   aws.String("tag:Jumpbox"),
-				Values: []string{"true"},
-			},
-			{
-				Name:   aws.String("instance-state-name"),
-				Values: []string{"running"},
-			},
-		},
-	})
+	jumpbox, err := JumpboxInstance(ctx, ec2Client, clusterName)
 	if err != nil {
 		return nil, err
-	}
-	if len(instances.Reservations) == 0 || len(instances.Reservations[0].Instances) == 0 {
-		return nil, fmt.Errorf("no jumpbox instance found for cluster %s", clusterName)
 	}
 
 	keypair, err := ec2Client.DescribeKeyPairs(ctx, &ec2.DescribeKeyPairsInput{
@@ -71,7 +52,7 @@ func Setup(ctx context.Context, logger logr.Logger, awsSession *session.Session,
 
 	return &Infrastructure{
 		Credentials:       *credsInfra,
-		JumpboxInstanceId: *instances.Reservations[0].Instances[0].InstanceId,
+		JumpboxInstanceId: *jumpbox.InstanceId,
 		NodesPublicSSHKey: *keypair.KeyPairs[0].PublicKey,
 	}, nil
 }
