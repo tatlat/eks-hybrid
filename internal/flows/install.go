@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"go.uber.org/zap"
-	"k8s.io/utils/strings/slices"
 
 	"github.com/aws/eks-hybrid/internal/aws"
 	"github.com/aws/eks-hybrid/internal/cni"
@@ -22,10 +21,6 @@ import (
 	"github.com/aws/eks-hybrid/internal/tracker"
 )
 
-const (
-	validatePhase = "validate"
-)
-
 type Installer struct {
 	AwsSource          aws.Source
 	ContainerdSource   containerd.SourceName
@@ -33,7 +28,6 @@ type Installer struct {
 	CredentialProvider creds.CredentialProvider
 	Tracker            *tracker.Tracker
 	Logger             *zap.Logger
-	SkipPhases         []string
 }
 
 func (i *Installer) Run(ctx context.Context) error {
@@ -65,11 +59,9 @@ func (i *Installer) installDistroPackages(ctx context.Context) error {
 		return err
 	}
 
-	if !slices.Contains(i.SkipPhases, validatePhase) {
-		i.Logger.Info("Validating containerd unit file...")
-		if err := containerd.ValidateSystemdUnitFile(); err != nil {
-			return fmt.Errorf("please install systemd unit file for containerd: %v", err)
-		}
+	i.Logger.Info("Validating containerd unit file...")
+	if err := containerd.ValidateSystemdUnitFile(); err != nil {
+		return fmt.Errorf("please install systemd unit file for containerd: %v", err)
 	}
 
 	i.Logger.Info("Installing iptables...")
