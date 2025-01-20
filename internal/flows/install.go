@@ -59,7 +59,6 @@ func (i *Installer) installDistroPackages(ctx context.Context) error {
 		return err
 	}
 
-	i.Logger.Info("Validating containerd unit file...")
 	if err := containerd.ValidateSystemdUnitFile(); err != nil {
 		return fmt.Errorf("please install systemd unit file for containerd: %v", err)
 	}
