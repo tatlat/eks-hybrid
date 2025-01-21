@@ -43,7 +43,7 @@ func NewCommand() cli.Command {
 	fc := flaggy.NewSubcommand("uninstall")
 	fc.Description = "Uninstall components installed using the install sub-command"
 	fc.AdditionalHelpAppend = uninstallHelpText
-	fc.StringSlice(&cmd.skipPhases, "s", "skip", "Phases of uninstall you want to skip.")
+	fc.StringSlice(&cmd.skipPhases, "s", "skip", "Phases of uninstall to skip. Allowed values: [pod-validation, node-validation].")
 	cmd.flaggy = fc
 
 	return &cmd
