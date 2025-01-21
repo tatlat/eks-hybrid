@@ -17,6 +17,7 @@ import (
 
 	"github.com/aws/eks-hybrid/test/e2e/constants"
 	"github.com/aws/eks-hybrid/test/e2e/errors"
+	e2eSSM "github.com/aws/eks-hybrid/test/e2e/ssm"
 )
 
 //go:embed cfn-templates/setup-cfn.yaml
@@ -207,6 +208,15 @@ func (s *stack) deploy(ctx context.Context, test TestResources) (*resourcesStack
 	})
 	if err != nil {
 		return nil, fmt.Errorf("tagging private key ssm parameter: %w", err)
+	}
+
+	command := "/root/download-private-key.sh"
+	output, err := e2eSSM.RunCommand(ctx, s.ssmClient, result.jumpboxInstanceId, command, s.logger)
+	if err != nil {
+		return nil, fmt.Errorf("jumpbox getting private key from ssm: %w", err)
+	}
+	if output.Status != "Success" {
+		return nil, fmt.Errorf("jumpbox getting private key from ssm")
 	}
 
 	s.logger.Info("E2E resources stack deployed successfully", "stackName", stackName)
