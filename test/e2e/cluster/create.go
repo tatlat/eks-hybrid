@@ -22,6 +22,7 @@ type TestResources struct {
 	HybridNetwork     NetworkConfig `yaml:"hybridNetwork"`
 	KubernetesVersion string        `yaml:"kubernetesVersion"`
 	Cni               string        `yaml:"cni"`
+	Endpoint          string        `yaml:"endpoint"`
 }
 
 type NetworkConfig struct {
@@ -42,10 +43,12 @@ type Create struct {
 	stack  *stack
 }
 
-func NewCreate(aws aws.Config, logger logr.Logger) Create {
+func NewCreate(aws aws.Config, logger logr.Logger, endpoint string) Create {
 	return Create{
 		logger: logger,
-		eks:    eks.NewFromConfig(aws),
+		eks: eks.NewFromConfig(aws, func(o *eks.Options) {
+			o.EndpointResolverV2 = &eksResolverV2{endpoint: endpoint}
+		}),
 		stack: &stack{
 			cfn:       cloudformation.NewFromConfig(aws),
 			logger:    logger,

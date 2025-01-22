@@ -19,6 +19,7 @@ const deleteClusterTimeout = 5 * time.Minute
 type DeleteInput struct {
 	ClusterName   string `yaml:"clusterName"`
 	ClusterRegion string `yaml:"clusterRegion"`
+	Endpoint      string `yaml:"endpoint"`
 }
 
 type Delete struct {
@@ -27,10 +28,14 @@ type Delete struct {
 	stack  *stack
 }
 
-func NewDelete(aws aws.Config, logger logr.Logger) Delete {
+func NewDelete(aws aws.Config, logger logr.Logger, endpoint string) Delete {
 	return Delete{
 		logger: logger,
-		eks:    eks.NewFromConfig(aws),
+		eks: eks.NewFromConfig(aws, func(o *eks.Options) {
+			o.EndpointResolverV2 = &eksResolverV2{
+				endpoint: endpoint,
+			}
+		}),
 		stack: &stack{
 			cfn:    cloudformation.NewFromConfig(aws),
 			logger: logger,
