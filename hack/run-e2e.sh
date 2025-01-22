@@ -71,6 +71,7 @@ clusterRegion: "$REGION"
 nodeadmUrlAMD: "$NODEADM_AMD_URL"
 nodeadmUrlARM: "$NODEADM_ARM_URL"
 logsBucket: "$LOGS_BUCKET"
+endpoint: "$ENDPOINT"
 EOF
 
 

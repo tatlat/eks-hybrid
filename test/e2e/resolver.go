@@ -1,4 +1,4 @@
-package cluster
+package e2e
 
 import (
 	"context"
@@ -8,16 +8,17 @@ import (
 	smithyendpoints "github.com/aws/smithy-go/endpoints"
 )
 
-type eksResolverV2 struct {
-	endpoint string
+// EksResolverV2 is used to resolve custom endpoints for EKS clients.
+type EksResolverV2 struct {
+	Endpoint string
 }
 
 // ResolveEndpoint resolves to a custom endpoint if not empty or default otherwise.
-func (r *eksResolverV2) ResolveEndpoint(ctx context.Context, params eks.EndpointParameters) (
+func (r *EksResolverV2) ResolveEndpoint(ctx context.Context, params eks.EndpointParameters) (
 	smithyendpoints.Endpoint, error,
 ) {
-	if r.endpoint != "" {
-		u, err := url.Parse(r.endpoint)
+	if r.Endpoint != "" {
+		u, err := url.Parse(r.Endpoint)
 		if err != nil {
 			return smithyendpoints.Endpoint{}, err
 		}

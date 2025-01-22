@@ -54,6 +54,7 @@ type TestConfig struct {
 	SetRootPassword bool   `yaml:"setRootPassword"`
 	NodeK8sVersion  string `yaml:"nodeK8SVersion"`
 	LogsBucket      string `yaml:"logsBucket"`
+	Endpoint        string `yaml:"endpoint"`
 }
 
 type suiteConfiguration struct {
@@ -121,7 +122,7 @@ var _ = SynchronizedBeforeSuite(
 		aws, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(config.ClusterRegion))
 		Expect(err).NotTo(HaveOccurred())
 
-		infra, err := peered.Setup(ctx, logger, aws, config.ClusterName)
+		infra, err := peered.Setup(ctx, logger, aws, config.ClusterName, config.Endpoint)
 		Expect(err).NotTo(HaveOccurred(), "should setup e2e resources for peered test")
 
 		skipCleanup := os.Getenv("SKIP_CLEANUP") == "true"

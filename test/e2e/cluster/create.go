@@ -12,6 +12,7 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/tools/clientcmd"
 
+	"github.com/aws/eks-hybrid/test/e2e"
 	"github.com/aws/eks-hybrid/test/e2e/cni"
 )
 
@@ -43,11 +44,13 @@ type Create struct {
 	stack  *stack
 }
 
+// NewCreate creates a new workflow to create an EKS cluster. The EKS client will use
+// the specified endpoint or the default endpoint if empty string is passed.
 func NewCreate(aws aws.Config, logger logr.Logger, endpoint string) Create {
 	return Create{
 		logger: logger,
 		eks: eks.NewFromConfig(aws, func(o *eks.Options) {
-			o.EndpointResolverV2 = &eksResolverV2{endpoint: endpoint}
+			o.EndpointResolverV2 = &e2e.EksResolverV2{Endpoint: endpoint}
 		}),
 		stack: &stack{
 			cfn:       cloudformation.NewFromConfig(aws),
