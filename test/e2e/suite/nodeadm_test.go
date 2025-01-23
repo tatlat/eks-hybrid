@@ -31,6 +31,7 @@ import (
 	"github.com/aws/eks-hybrid/test/e2e/cluster"
 	"github.com/aws/eks-hybrid/test/e2e/commands"
 	"github.com/aws/eks-hybrid/test/e2e/credentials"
+	"github.com/aws/eks-hybrid/test/e2e/ec2"
 	"github.com/aws/eks-hybrid/test/e2e/kubernetes"
 	"github.com/aws/eks-hybrid/test/e2e/nodeadm"
 	osystem "github.com/aws/eks-hybrid/test/e2e/os"
@@ -241,6 +242,9 @@ var _ = Describe("Hybrid Nodes", func() {
 							DeferCleanup(func(ctx context.Context) {
 								Expect(peeredNode.Cleanup(ctx, instance)).To(Succeed())
 							}, NodeTimeout(deferCleanupTimeout))
+
+							test.logger.Info("Waiting for EC2 Instance to be Running...")
+							Expect(ec2.WaitForEC2InstanceRunning(ctx, test.ec2Client, instance.ID)).To(Succeed(), "EC2 Instance should have been reached Running status")
 
 							verifyNode := test.newVerifyNode(instance.IP)
 							Expect(verifyNode.Run(ctx)).To(
