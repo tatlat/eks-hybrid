@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
 	"os/exec"
 	"runtime"
 	"time"
@@ -33,6 +34,7 @@ const (
 	ubuntuDockerGpgKeyPath      = "/etc/apt/keyrings/docker.asc"
 	ubuntuDockerGpgKeyFilePerms = 0o755
 	aptDockerRepoSourceFilePath = "/etc/apt/sources.list.d/docker.list"
+	yumDockerRepoSourceFilePath = "/etc/yum.repos.d/docker-ce.repo"
 
 	containerdDistroPkgName = "containerd"
 	containerdDockerPkgName = "containerd.io"
@@ -155,6 +157,43 @@ func (pm *DistroPackageManager) configureAptPackageManagerWithDockerRepo(ctx con
 	return nil
 }
 
+// uninstallDockerRepo uninstalls docker repos installed by package managers when containerd source is docker
+func (pm *DistroPackageManager) uninstallDockerRepo() error {
+	removeRepoFile := func(path, pkgType string) error {
+		_, err := os.Stat(path)
+
+		if os.IsNotExist(err) {
+			return nil
+		}
+		if err != nil {
+			return errors.Wrapf(err, "encountered error while trying to reach %s docker repo file at %s",
+				pkgType, path)
+		}
+
+		if err := os.Remove(path); err != nil {
+			return errors.Wrapf(err, "failed to remove %s docker repo from %s",
+				pkgType, path)
+		}
+
+		return nil
+	}
+
+	switch pm.manager {
+	case yumPackageManager:
+		return removeRepoFile(yumDockerRepoSourceFilePath, yumPackageManager)
+	case aptPackageManager:
+		if err := os.Remove(ubuntuDockerGpgKeyPath); err != nil {
+			if !os.IsNotExist(err) {
+				return err
+			}
+		}
+
+		return removeRepoFile(aptDockerRepoSourceFilePath, aptPackageManager)
+	default:
+		return nil
+	}
+}
+
 // updateAllPackages updates all packages and repo metadata on the system
 func (pm *DistroPackageManager) updateDockerAptPackagesCommand(ctx context.Context) *exec.Cmd {
 	return exec.CommandContext(ctx, pm.manager, pm.updateVerb, "-y", "-o", fmt.Sprintf("Dir::Etc::sourcelist=\"%s\"", aptDockerRepoSourceFilePath))
@@ -220,6 +259,18 @@ func (pm *DistroPackageManager) runcPackage() artifact.Package {
 		artifact.NewCmd(pm.manager, pm.installVerb, runcPkgName, "-y"),
 		artifact.NewCmd(pm.manager, pm.deleteVerb, runcPkgName, "-y"),
 	)
+}
+
+// Cleanup cleans up any artifacts used by package manager during nodeadm install process
+func (pm *DistroPackageManager) Cleanup() error {
+	// Removes docker repos if installed by nodeadm ("Containerd: docker" was set in tracker file)
+	if pm.dockerRepo != "" {
+		if err := pm.uninstallDockerRepo(); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func getOsPackageManager() (string, error) {
