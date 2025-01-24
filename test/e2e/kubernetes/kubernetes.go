@@ -10,9 +10,8 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -36,6 +35,8 @@ const (
 	hybridNodeUpgradeTimeout = 2 * time.Minute
 	nodeCordonDelayInterval  = 1 * time.Second
 	nodeCordonTimeout        = 30 * time.Second
+	daemonSetWaitTimeout     = 3 * time.Minute
+	daemonSetDelayInternal   = 5 * time.Second
 	MinimumVersion           = "1.25"
 )
 
@@ -260,7 +261,7 @@ func waitForPodToBeDeleted(ctx context.Context, k8s *kubernetes.Clientset, name,
 	return wait.PollUntilContextTimeout(ctx, nodePodDelayInterval, nodePodWaitTimeout, true, func(ctx context.Context) (done bool, err error) {
 		_, err = k8s.CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
 
-		if errors.IsNotFound(err) {
+		if apierrors.IsNotFound(err) {
 			return true, nil
 		} else if err != nil {
 			return false, err
@@ -489,7 +490,7 @@ func ExecPodWithRetries(ctx context.Context, config *restclient.Config, k8s *kub
 func execPod(ctx context.Context, config *restclient.Config, k8s *kubernetes.Clientset, name, namespace string, cmd ...string) (stdout, stderr string, err error) {
 	req := k8s.CoreV1().RESTClient().Post().Resource("pods").Name(name).Namespace(namespace).SubResource("exec")
 	req.VersionedParams(
-		&v1.PodExecOptions{
+		&corev1.PodExecOptions{
 			Command: cmd,
 			Stdin:   false,
 			Stdout:  true,
@@ -513,4 +514,33 @@ func execPod(ctx context.Context, config *restclient.Config, k8s *kubernetes.Cli
 	}
 
 	return stdoutBuf.String(), stderrBuf.String(), nil
+}
+
+func GetDaemonSet(ctx context.Context, logger logr.Logger, k8s *kubernetes.Clientset, namespace, name string) (*appsv1.DaemonSet, error) {
+	var foundDaemonSet *appsv1.DaemonSet
+	consecutiveErrors := 0
+	err := wait.PollUntilContextTimeout(ctx, daemonSetDelayInternal, daemonSetWaitTimeout, true, func(ctx context.Context) (done bool, err error) {
+		daemonSet, err := k8s.AppsV1().DaemonSets(namespace).Get(ctx, name, metav1.GetOptions{})
+		if err != nil {
+			consecutiveErrors += 1
+			if consecutiveErrors > 3 {
+				return false, fmt.Errorf("getting daemonSet %s: %w", name, err)
+			}
+			logger.Info("Retryable error getting DaemonSet. Continuing to poll", "name", name, "error", err)
+			return false, nil // continue polling
+		}
+
+		consecutiveErrors = 0
+		if daemonSet != nil {
+			foundDaemonSet = daemonSet
+			return true, nil
+		}
+
+		return false, nil // continue polling
+	})
+	if err != nil {
+		return nil, fmt.Errorf("waiting for DaemonSet %s to be ready: %w", name, err)
+	}
+
+	return foundDaemonSet, nil
 }

@@ -13,6 +13,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 
 	"github.com/aws/eks-hybrid/test/e2e"
+	"github.com/aws/eks-hybrid/test/e2e/addon"
 	"github.com/aws/eks-hybrid/test/e2e/cni"
 )
 
@@ -34,8 +35,9 @@ type NetworkConfig struct {
 }
 
 const (
-	ciliumCni = "cilium"
-	calicoCni = "calico"
+	ciliumCni        = "cilium"
+	calicoCni        = "calico"
+	podIdentityAddon = "eks-pod-identity-agent"
 )
 
 type Create struct {
@@ -80,6 +82,17 @@ func (c *Create) Run(ctx context.Context, test TestResources) error {
 	err = hybridCluster.create(ctx, c.eks, c.logger)
 	if err != nil {
 		return fmt.Errorf("creating %s EKS cluster: %w", test.KubernetesVersion, err)
+	}
+
+	podIdentityAddon := addon.Addon{
+		Cluster:       hybridCluster.Name,
+		Name:          podIdentityAddon,
+		Configuration: "{\"daemonsets\":{\"hybrid\":{\"create\": true}}}",
+	}
+
+	err = podIdentityAddon.Create(ctx, c.eks, c.logger)
+	if err != nil {
+		return fmt.Errorf("creating add-on %s for EKS cluster: %w", podIdentityAddon, err)
 	}
 
 	kubeconfig := KubeconfigPath(test.ClusterName)
