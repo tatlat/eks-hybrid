@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/cloudformation"
 	"github.com/aws/aws-sdk-go-v2/service/cloudformation/types"
+	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	ssmTypes "github.com/aws/aws-sdk-go-v2/service/ssm/types"
 	"github.com/go-logr/logr"
@@ -17,6 +18,7 @@ import (
 
 	"github.com/aws/eks-hybrid/test/e2e/constants"
 	"github.com/aws/eks-hybrid/test/e2e/errors"
+	"github.com/aws/eks-hybrid/test/e2e/peered"
 	e2eSSM "github.com/aws/eks-hybrid/test/e2e/ssm"
 )
 
@@ -36,18 +38,15 @@ type vpcConfig struct {
 }
 
 type resourcesStackOutput struct {
-	clusterRole                   string
-	vpcPeeringConnection          string
-	clusterVpcConfig              vpcConfig
-	hybridNodeVpcConfig           vpcConfig
-	jumpboxInstanceId             string
-	keypairPrivateKeySSMParameter string
+	clusterRole      string
+	clusterVpcConfig vpcConfig
 }
 
 type stack struct {
 	logger    logr.Logger
 	cfn       *cloudformation.Client
 	ssmClient *ssm.Client
+	ec2Client *ec2.Client
 }
 
 func (s *stack) deploy(ctx context.Context, test TestResources) (*resourcesStackOutput, error) {
@@ -180,24 +179,18 @@ func (s *stack) deploy(ctx context.Context, test TestResources) (*resourcesStack
 			result.clusterVpcConfig.privateSubnet = *output.OutputValue
 		case "ClusterSecurityGroup":
 			result.clusterVpcConfig.securityGroup = *output.OutputValue
-		case "HybridNodeVPC":
-			result.hybridNodeVpcConfig.vpcID = *output.OutputValue
-		case "HybridNodeVPCPublicSubnet":
-			result.hybridNodeVpcConfig.publicSubnet = *output.OutputValue
-		case "HybridNodeVPCPrivateSubnet":
-			result.hybridNodeVpcConfig.privateSubnet = *output.OutputValue
-		case "HybridNodeSecurityGroup":
-			result.hybridNodeVpcConfig.securityGroup = *output.OutputValue
-		case "VPCPeeringConnection":
-			result.vpcPeeringConnection = *output.OutputValue
-		case "JumpboxInstanceId":
-			result.jumpboxInstanceId = *output.OutputValue
-		case "JumpboxKeyPairSSMParameter":
-			result.keypairPrivateKeySSMParameter = *output.OutputValue
 		}
 	}
+
+	// We explictly fetch the keypair/jumpbox instead of relying on outputs
+	// from the cfn stack. We have seen cases across different regions
+	// where the outputs have been unreliable
+	keyPair, err := peered.KeyPair(ctx, s.ec2Client, test.ClusterName)
+	if err != nil {
+		return nil, err
+	}
 	_, err = s.ssmClient.AddTagsToResource(ctx, &ssm.AddTagsToResourceInput{
-		ResourceId:   &result.keypairPrivateKeySSMParameter,
+		ResourceId:   aws.String("/ec2/keypair/" + *keyPair.KeyPairId),
 		ResourceType: ssmTypes.ResourceTypeForTaggingParameter,
 		Tags: []ssmTypes.Tag{
 			{
@@ -210,8 +203,13 @@ func (s *stack) deploy(ctx context.Context, test TestResources) (*resourcesStack
 		return nil, fmt.Errorf("tagging private key ssm parameter: %w", err)
 	}
 
+	jumpbox, err := peered.JumpboxInstance(ctx, s.ec2Client, test.ClusterName)
+	if err != nil {
+		return nil, err
+	}
+
 	command := "/root/download-private-key.sh"
-	output, err := e2eSSM.RunCommand(ctx, s.ssmClient, result.jumpboxInstanceId, command, s.logger)
+	output, err := e2eSSM.RunCommand(ctx, s.ssmClient, *jumpbox.InstanceId, command, s.logger)
 	if err != nil {
 		return nil, fmt.Errorf("jumpbox getting private key from ssm: %w", err)
 	}

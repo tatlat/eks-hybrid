@@ -382,31 +382,3 @@ Outputs:
   ClusterSecurityGroup:
     Description: The ID of the EKS Hybrid Cluster Security Group.
     Value: !GetAtt ClusterVPC.DefaultSecurityGroup
-
-  HybridNodeVPC:
-    Description: The ID of the EC2 hybrid node VPC.
-    Value: !Ref HybridNodeVPC
-
-  HybridNodeVPCPublicSubnet:
-    Description: The ID of the EC2 Hybrid Node VPC Public Subnet.
-    Value: !Ref HybridNodeVPCPublicSubnet
-
-  HybridNodeVPCPrivateSubnet:
-    Description: The ID of the EC2 Hybrid Node VPC Private Subnet.
-    Value: !Ref HybridNodeVPCPrivateSubnet
-
-  HybridNodeSecurityGroup:
-    Description: The ID of the EC2 Hybrid Node Security Group.
-    Value: !GetAtt HybridNodeVPC.DefaultSecurityGroup
-
-  VPCPeeringConnection:
-    Description: The ID of the VPC Peering Connection.
-    Value: !Ref VPCPeeringConnection
-
-  JumpboxInstanceId:
-    Description: Instance ID of Jumpbox.
-    Value: !Ref Jumpbox
-  
-  JumpboxKeyPairSSMParameter:
-    Description: SSM parameter storing key pair private key
-    Value: !Sub /ec2/keypair/${JumpboxKeyPair.KeyPairId}
