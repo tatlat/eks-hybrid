@@ -2,14 +2,11 @@ package peered
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
-	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/go-logr/logr"
 
-	"github.com/aws/eks-hybrid/test/e2e/constants"
 	"github.com/aws/eks-hybrid/test/e2e/credentials"
 )
 
@@ -34,26 +31,15 @@ func Setup(ctx context.Context, logger logr.Logger, config aws.Config, clusterNa
 		return nil, err
 	}
 
-	keypair, err := ec2Client.DescribeKeyPairs(ctx, &ec2.DescribeKeyPairsInput{
-		IncludePublicKey: aws.Bool(true),
-		Filters: []types.Filter{
-			{
-				Name:   aws.String("tag:" + constants.TestClusterTagKey),
-				Values: []string{clusterName},
-			},
-		},
-	})
+	keypair, err := KeyPair(ctx, ec2Client, clusterName)
 	if err != nil {
 		return nil, err
-	}
-	if len(keypair.KeyPairs) == 0 {
-		return nil, fmt.Errorf("no key pair found for cluster %s", clusterName)
 	}
 
 	return &Infrastructure{
 		Credentials:       *credsInfra,
 		JumpboxInstanceId: *jumpbox.InstanceId,
-		NodesPublicSSHKey: *keypair.KeyPairs[0].PublicKey,
+		NodesPublicSSHKey: *keypair.PublicKey,
 	}, nil
 }
 
