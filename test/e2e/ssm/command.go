@@ -8,14 +8,18 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
+	"github.com/aws/aws-sdk-go-v2/service/ssm/types"
+	smithytime "github.com/aws/smithy-go/time"
 	"github.com/go-logr/logr"
 
 	e2eCommands "github.com/aws/eks-hybrid/test/e2e/commands"
 )
 
 const (
-	commandExecTimeout = 10 * time.Minute
-	commandWaitTimeout = commandExecTimeout + time.Minute
+	commandExecTimeout           = 10 * time.Minute
+	commandWaitTimeout           = commandExecTimeout + time.Minute
+	instanceRegisterTimeout      = 5 * time.Minute
+	instanceRegisterSleepTimeout = 15 * time.Second
 )
 
 // ssm commands run as root user on jumpbox
@@ -85,4 +89,35 @@ func RunCommand(ctx context.Context, client *ssm.Client, instanceId, command str
 	logger.Info(fmt.Sprintf("Stderr: %s", commandOutput.StandardError))
 
 	return commandOutput, nil
+}
+
+// WaitForInstance uses DescribeInstanceInformation in a loop to wait for it be registered
+// There is no built in wait for instance to be registered with ssm
+// see: https://github.com/aws/aws-cli/issues/4006
+func WaitForInstance(ctx context.Context, client *ssm.Client, instanceId string, logger logr.Logger) error {
+	waitCtx, cancel := context.WithTimeout(ctx, instanceRegisterTimeout)
+	defer cancel()
+
+	logger.Info("Waiting for instance to be registered with SSM", "instanceID", instanceId)
+	for {
+		output, err := client.DescribeInstanceInformation(waitCtx, &ssm.DescribeInstanceInformationInput{
+			Filters: []types.InstanceInformationStringFilter{
+				{
+					Key:    aws.String("InstanceIds"),
+					Values: []string{instanceId},
+				},
+			},
+		})
+		if err != nil {
+			return err
+		}
+		if len(output.InstanceInformationList) > 0 {
+			logger.Info("Instance is registered with SSM", "instanceID", instanceId)
+			return nil
+		}
+		logger.Info("Instance still not registered with SSM, retrying", "instanceID", instanceId)
+		if err := smithytime.SleepWithContext(waitCtx, instanceRegisterSleepTimeout); err != nil {
+			return fmt.Errorf("request cancelled while waiting, %w", err)
+		}
+	}
 }
