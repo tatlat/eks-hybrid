@@ -13,7 +13,10 @@ import (
 	e2eCommands "github.com/aws/eks-hybrid/test/e2e/commands"
 )
 
-const commandTimeout = 10 * time.Minute
+const (
+	commandExecTimeout = 10 * time.Minute
+	commandWaitTimeout = commandExecTimeout + time.Minute
+)
 
 // ssm commands run as root user on jumpbox
 func makeSshCommand(instanceIP string, commands []string) string {
@@ -44,7 +47,8 @@ func RunCommand(ctx context.Context, client *ssm.Client, instanceId, command str
 	input := &ssm.SendCommandInput{
 		DocumentName: aws.String("AWS-RunShellScript"),
 		Parameters: map[string][]string{
-			"commands": {command},
+			"commands":         {command},
+			"executionTimeout": {fmt.Sprintf("%g", commandExecTimeout.Seconds())},
 		},
 		InstanceIds: []string{instanceId},
 	}
@@ -62,7 +66,7 @@ func RunCommand(ctx context.Context, client *ssm.Client, instanceId, command str
 	}
 	waiter := ssm.NewCommandExecutedWaiter(client)
 	// Will wait on Pending, InProgress, or Cancelling until we reach a terminal status of Success, Cancelled, Failed, TimedOut
-	_ = waiter.Wait(ctx, invocationInput, commandTimeout)
+	_ = waiter.Wait(ctx, invocationInput, commandWaitTimeout)
 	invocationOutput, err := client.GetCommandInvocation(ctx, invocationInput, optsFn)
 	if err != nil {
 		return e2eCommands.RemoteCommandOutput{}, fmt.Errorf("got an error calling GetCommandInvocation: %w", err)
