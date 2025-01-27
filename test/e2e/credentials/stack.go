@@ -75,6 +75,7 @@ func (s *Stack) Deploy(ctx context.Context, logger logr.Logger) (*StackOutput, e
 		return nil, err
 	}
 
+	logger.Info("Creating access entry", "ssmRoleArn", output.SSMNodeRoleARN)
 	_, err = s.EKS.CreateAccessEntry(ctx, &eks.CreateAccessEntryInput{
 		ClusterName:  &s.ClusterName,
 		PrincipalArn: &output.SSMNodeRoleARN,
@@ -83,6 +84,7 @@ func (s *Stack) Deploy(ctx context.Context, logger logr.Logger) (*StackOutput, e
 	if err != nil {
 		return nil, err
 	}
+	logger.Info("Creating access entry", "iamRoleArn", output.IRANodeRoleARN)
 	_, err = s.EKS.CreateAccessEntry(ctx, &eks.CreateAccessEntryInput{
 		ClusterName:  &s.ClusterName,
 		PrincipalArn: &output.IRANodeRoleARN,
@@ -311,6 +313,21 @@ func (s *Stack) Delete(ctx context.Context, logger logr.Logger, output *StackOut
 		InstanceProfileName: aws.String(instanceProfileName),
 	}); err != nil {
 		return fmt.Errorf("deleting instance profile: %w", err)
+	}
+
+	logger.Info("Deleting access entry", "ssmRoleArn", output.SSMNodeRoleARN)
+	if _, err := s.EKS.DeleteAccessEntry(ctx, &eks.DeleteAccessEntryInput{
+		ClusterName:  &s.ClusterName,
+		PrincipalArn: &output.SSMNodeRoleARN,
+	}); err != nil {
+		return fmt.Errorf("deleting SSM access entry: %w", err)
+	}
+	logger.Info("Deleting access entry", "iamRoleArn", output.IRANodeRoleARN)
+	if _, err := s.EKS.DeleteAccessEntry(ctx, &eks.DeleteAccessEntryInput{
+		ClusterName:  &s.ClusterName,
+		PrincipalArn: &output.IRANodeRoleARN,
+	}); err != nil {
+		return fmt.Errorf("deleting iam-ra access entry: %w", err)
 	}
 
 	_, err = s.CFN.DeleteStack(ctx, &cloudformation.DeleteStackInput{
