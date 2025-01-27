@@ -208,6 +208,10 @@ func (s *stack) deploy(ctx context.Context, test TestResources) (*resourcesStack
 		return nil, err
 	}
 
+	if err := e2eSSM.WaitForInstance(ctx, s.ssmClient, *jumpbox.InstanceId, s.logger); err != nil {
+		return nil, err
+	}
+
 	command := "/root/download-private-key.sh"
 	output, err := e2eSSM.RunCommand(ctx, s.ssmClient, *jumpbox.InstanceId, command, s.logger)
 	if err != nil {
