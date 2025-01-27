@@ -8,6 +8,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/cloudformation"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/eks"
+	"github.com/aws/aws-sdk-go-v2/service/eks/types"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	"github.com/go-logr/logr"
 	"k8s.io/client-go/dynamic"
@@ -16,6 +17,7 @@ import (
 	"github.com/aws/eks-hybrid/test/e2e"
 	"github.com/aws/eks-hybrid/test/e2e/addon"
 	"github.com/aws/eks-hybrid/test/e2e/cni"
+	"github.com/aws/eks-hybrid/test/e2e/errors"
 )
 
 type TestResources struct {
@@ -36,9 +38,9 @@ type NetworkConfig struct {
 }
 
 const (
-	ciliumCni        = "cilium"
-	calicoCni        = "calico"
-	podIdentityAddon = "eks-pod-identity-agent"
+	ciliumCni            = "cilium"
+	calicoCni            = "calico"
+	podIdentityAddonName = "eks-pod-identity-agent"
 )
 
 type Create struct {
@@ -88,12 +90,12 @@ func (c *Create) Run(ctx context.Context, test TestResources) error {
 
 	podIdentityAddon := addon.Addon{
 		Cluster:       hybridCluster.Name,
-		Name:          podIdentityAddon,
+		Name:          podIdentityAddonName,
 		Configuration: "{\"daemonsets\":{\"hybrid\":{\"create\": true}}}",
 	}
 
 	err = podIdentityAddon.Create(ctx, c.eks, c.logger)
-	if err != nil {
+	if err != nil && !errors.IsType(err, &types.ResourceInUseException{}) {
 		return fmt.Errorf("creating add-on %s for EKS cluster: %w", podIdentityAddon, err)
 	}
 
