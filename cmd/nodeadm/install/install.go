@@ -101,12 +101,6 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	ctx, cancel := context.WithTimeout(ctx, c.timeout)
 	defer cancel()
 
-	log.Info("Setting package manager config", zap.Reflect("containerd source", string(containerdSource)))
-	log.Info("Configuring package manager. This might take a while...")
-	if err := packageManager.Configure(ctx); err != nil {
-		return err
-	}
-
 	log.Info("Validating Kubernetes version", zap.Reflect("kubernetes version", c.kubernetesVersion))
 	// Create a Source for all AWS managed artifacts.
 	awsSource, err := aws.GetLatestSource(ctx, c.kubernetesVersion)
