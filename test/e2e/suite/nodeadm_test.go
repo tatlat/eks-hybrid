@@ -120,7 +120,7 @@ var _ = SynchronizedBeforeSuite(
 		config, err := readTestConfig(filePath)
 		Expect(err).NotTo(HaveOccurred(), "should read valid test configuration")
 
-		logger := e2e.NewLogger()
+		logger := newLoggerForTests()
 		aws, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(config.ClusterRegion))
 		Expect(err).NotTo(HaveOccurred())
 
@@ -350,7 +350,7 @@ func readTestConfig(configPath string) (*TestConfig, error) {
 func buildPeeredVPCTestForSuite(ctx context.Context, suite *suiteConfiguration) (*peeredVPCTest, error) {
 	test := &peeredVPCTest{
 		stackOut:               suite.CredentialsStackOutput,
-		logger:                 e2e.NewLogger(),
+		logger:                 newLoggerForTests(),
 		logsBucket:             suite.TestConfig.LogsBucket,
 		overrideNodeK8sVersion: suite.TestConfig.NodeK8sVersion,
 		publicKey:              suite.PublicKey,
@@ -476,4 +476,13 @@ func (t *peeredVPCTest) newVerifyPodIdentityAddon() *addon.VerifyPodIdentityAddo
 		Logger:    t.logger,
 		EKSClient: t.eksClient,
 	}
+}
+
+func newLoggerForTests() logr.Logger {
+	_, reporter := GinkgoConfiguration()
+	cfg := e2e.LoggerConfig{}
+	if reporter.NoColor {
+		cfg.NoColor = true
+	}
+	return e2e.NewLogger(cfg)
 }
