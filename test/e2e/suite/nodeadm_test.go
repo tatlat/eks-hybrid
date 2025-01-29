@@ -107,8 +107,6 @@ type peeredVPCTest struct {
 	remoteCommandRunner commands.RemoteCommandRunner
 }
 
-var credentialProviders = []e2e.NodeadmCredentialsProvider{&credentials.SsmProvider{}, &credentials.IamRolesAnywhereProvider{}}
-
 var _ = SynchronizedBeforeSuite(
 	// This function only runs once, on the first process
 	// Here is where we want to run the setup infra code that should only run once
@@ -186,6 +184,21 @@ var _ = Describe("Hybrid Nodes", func() {
 		osystem.NewRedHat9AMD(os.Getenv("RHEL_USERNAME"), os.Getenv("RHEL_PASSWORD")),
 		osystem.NewRedHat9ARM(os.Getenv("RHEL_USERNAME"), os.Getenv("RHEL_PASSWORD")),
 	}
+	credentialProviders := []e2e.NodeadmCredentialsProvider{
+		&credentials.SsmProvider{},
+		&credentials.IamRolesAnywhereProvider{},
+	}
+
+	notSupported := nodeadmConfigMatchers{
+		{
+			matchOS:            osystem.IsUbuntu2004,
+			matchCredsProvider: credentials.IsIAMRolesAnywhere,
+		},
+		{
+			matchOS:            osystem.IsRHEL8,
+			matchCredsProvider: credentials.IsIAMRolesAnywhere,
+		},
+	}
 
 	When("using peered VPC", func() {
 		var test *peeredVPCTest
@@ -219,7 +232,12 @@ var _ = Describe("Hybrid Nodes", func() {
 
 		When("using ec2 instance as hybrid nodes", func() {
 			for _, os := range osList {
+			providerLoop:
 				for _, provider := range credentialProviders {
+					if notSupported.matches(os.Name(), provider.Name()) {
+						continue providerLoop
+					}
+
 					DescribeTable("Joining a node",
 						func(ctx context.Context, os e2e.NodeadmOS, provider e2e.NodeadmCredentialsProvider) {
 							Expect(os).NotTo(BeNil())
