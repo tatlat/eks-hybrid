@@ -9,9 +9,28 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-func NewLogger() logr.Logger {
+type LoggerConfig struct {
+	NoColor bool
+}
+
+func (c LoggerConfig) Apply(opts *LoggerConfig) {
+	opts.NoColor = c.NoColor
+}
+
+type LoggerOption interface {
+	Apply(*LoggerConfig)
+}
+
+func NewLogger(opts ...LoggerOption) logr.Logger {
+	cfg := &LoggerConfig{}
+	for _, opt := range opts {
+		opt.Apply(cfg)
+	}
+
 	encoderCfg := zap.NewDevelopmentEncoderConfig()
-	encoderCfg.EncodeLevel = zapcore.CapitalColorLevelEncoder
+	if !cfg.NoColor {
+		encoderCfg.EncodeLevel = zapcore.CapitalColorLevelEncoder
+	}
 
 	consoleEncoder := zapcore.NewConsoleEncoder(encoderCfg)
 	core := zapcore.NewCore(consoleEncoder, zapcore.AddSync(os.Stdout), zapcore.DebugLevel)
