@@ -221,3 +221,8 @@ func findLatestImage(ctx context.Context, client *ec2.Client, amiPrefix, arch st
 func paginationDone(in *ec2.DescribeImagesInput, out *ec2.DescribeImagesOutput) bool {
 	return (in.NextToken != nil && in.NextToken == out.NextToken) || len(out.Images) == 0
 }
+
+// IsRHEL8 returns true if the given name is a RHEL 8 OS name.
+func IsRHEL8(name string) bool {
+	return strings.HasPrefix(name, "rhel8")
+}
