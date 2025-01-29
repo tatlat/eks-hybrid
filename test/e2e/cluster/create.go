@@ -114,8 +114,8 @@ func (c *Create) Run(ctx context.Context, test TestResources) error {
 			Name:          podIdentityAddonName,
 			Configuration: "{\"daemonsets\":{\"hybrid\":{\"create\": true}}}",
 		},
-		Kubernetes: k8sClient,
-		IAMClient:  c.iam,
+		Kubernetes:         k8sClient,
+		IAMClient:          c.iam,
 		PodIdentityRoleArn: stackOut.podIdentityRoleArn,
 	}
 
