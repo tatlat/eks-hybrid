@@ -2,6 +2,7 @@ package addon
 
 import (
 	"context"
+	_ "embed"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/eks"
@@ -27,19 +28,27 @@ type VerifyPodIdentityAddon struct {
 func (v VerifyPodIdentityAddon) Run(ctx context.Context) error {
 	v.Logger.Info("Verify pod identity add-on is installed")
 
-	podIdentityAddon := Addon{
-		Name:    podIdentityAgent,
-		Cluster: v.Cluster,
+	podIdentityAddon := PodIdentityAddon{
+		Addon: Addon{
+			Name:    podIdentityAgent,
+			Cluster: v.Cluster,
+		},
 	}
 
 	timeoutCtx, cancel := context.WithTimeout(ctx, getAddonTimeout)
 	defer cancel()
 
-	if err := podIdentityAddon.WaitUtilActive(timeoutCtx, v.EKSClient, v.Logger); err != nil {
+	var err error
+	if err = podIdentityAddon.WaitUtilActive(timeoutCtx, v.EKSClient, v.Logger); err != nil {
 		return err
 	}
 
 	v.Logger.Info("Check if daemon set exists", "daemonSet", podIdentityDaemonSet)
-	_, err := kubernetes.GetDaemonSet(ctx, v.Logger, v.K8S, "kube-system", podIdentityDaemonSet)
-	return err
+	if _, err := kubernetes.GetDaemonSet(ctx, v.Logger, v.K8S, "kube-system", podIdentityDaemonSet); err != nil {
+		return err
+	}
+
+	// TODO: Deploy a pod with service account to verify the pod identity token section is populated in pod manifest files
+
+	return nil
 }

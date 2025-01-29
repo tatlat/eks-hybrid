@@ -255,7 +255,6 @@ var _ = Describe("Hybrid Nodes", func() {
 
 							test.logger.Info("Testing Pod Identity add-on functionality")
 							verifyPodIdentityAddon := test.newVerifyPodIdentityAddon()
-
 							Expect(verifyPodIdentityAddon.Run(ctx)).To(Succeed(), "pod identity add-on should be created successfully")
 
 							test.logger.Info("Resetting hybrid node...")
