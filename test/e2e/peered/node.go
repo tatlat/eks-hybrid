@@ -57,7 +57,7 @@ type NodeSpec struct {
 // Create spins up an EC2 instance with the proper user data to join as a Hybrid node to the cluster.
 func (c Node) Create(ctx context.Context, spec *NodeSpec) (ec2.Instance, error) {
 	if c.LogsBucket != "" {
-		c.Logger.Info(fmt.Sprintf("Logs bucket: https://%s.console.aws.amazon.com/s3/buckets/%s?prefix=%s/", c.Cluster.Region, c.LogsBucket, c.logsPrefix(spec.InstanceName)))
+		c.Logger.Info("Instance logs will be collected in S3", "url", c.S3LogsURL(spec.InstanceName))
 	}
 
 	nodeSpec := e2e.NodeSpec{
@@ -160,6 +160,10 @@ func (c *Node) Cleanup(ctx context.Context, instance ec2.Instance) error {
 	}
 
 	return nil
+}
+
+func (c Node) S3LogsURL(instanceName string) string {
+	return fmt.Sprintf("https://%s.console.aws.amazon.com/s3/buckets/%s?prefix=%s/", c.Cluster.Region, c.LogsBucket, c.logsPrefix(instanceName))
 }
 
 func (c Node) logsPrefix(instanceName string) string {
