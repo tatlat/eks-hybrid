@@ -268,7 +268,8 @@ var _ = Describe("Hybrid Nodes", func() {
 
 							verifyNode := test.newVerifyNode(instance.IP)
 							Expect(verifyNode.Run(ctx)).To(
-								Succeed(), "node should have joined the cluster successfully",
+								Succeed(), "node should have joined the cluster successfully"+
+									". You can access the collected node logs at: %s", peeredNode.S3LogsURL(instance.Name),
 							)
 
 							test.logger.Info("Testing Pod Identity add-on functionality")
@@ -284,7 +285,10 @@ var _ = Describe("Hybrid Nodes", func() {
 							Expect(nodeadm.RebootInstance(ctx, test.remoteCommandRunner, instance.IP)).NotTo(HaveOccurred(), "EC2 Instance should have rebooted successfully")
 							test.logger.Info("EC2 Instance rebooted successfully.")
 
-							Expect(verifyNode.Run(ctx)).To(Succeed(), "node should have re-joined, there must be a problem with uninstall")
+							Expect(verifyNode.Run(ctx)).To(Succeed(),
+								"node should have re-joined, there must be a problem with uninstall"+
+									". You can access the collected node logs at: %s", peeredNode.S3LogsURL(instance.Name),
+							)
 
 							if test.skipCleanup {
 								test.logger.Info("Skipping nodeadm uninstall from the hybrid node...")
@@ -328,11 +332,13 @@ var _ = Describe("Hybrid Nodes", func() {
 
 							verifyNode := test.newVerifyNode(instance.IP)
 							Expect(verifyNode.Run(ctx)).To(
-								Succeed(), "node should have joined the cluster successfully",
+								Succeed(), "node should have joined the cluster successfully"+
+									". You can access the collected node logs at: %s", peeredNode.S3LogsURL(instance.Name),
 							)
 
 							Expect(test.newUpgradeNode(instance.IP).Run(ctx)).To(
-								Succeed(), "node should have upgraded successfully",
+								Succeed(), "node should have upgraded successfully"+
+									". You can access the collected node logs at: %s", peeredNode.S3LogsURL(instance.Name),
 							)
 
 							Expect(verifyNode.Run(ctx)).To(Succeed(), "node should have joined the cluster successfully after nodeadm upgrade")
