@@ -28,11 +28,9 @@ type VerifyPodIdentityAddon struct {
 func (v VerifyPodIdentityAddon) Run(ctx context.Context) error {
 	v.Logger.Info("Verify pod identity add-on is installed")
 
-	podIdentityAddon := PodIdentityAddon{
-		Addon: Addon{
-			Name:    podIdentityAgent,
-			Cluster: v.Cluster,
-		},
+	podIdentityAddon := Addon{
+		Name:    podIdentityAgent,
+		Cluster: v.Cluster,
 	}
 
 	timeoutCtx, cancel := context.WithTimeout(ctx, getAddonTimeout)

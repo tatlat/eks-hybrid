@@ -16,15 +16,28 @@ import (
 
 type PodIdentityAddon struct {
 	Addon
-	Kubernetes         *clientgo.Clientset
-	IAMClient          *iam.Client
-	PodIdentityRoleArn string
+	kubernetes *clientgo.Clientset
+	iamClient  *iam.Client
+	roleArn    string
 }
 
 const (
 	podIdentityServiceAccount = "pod-identity-sa"
 	namespace                 = "default"
 )
+
+func NewPodIdentityAddon(cluster, name string, k8sClient *clientgo.Clientset, iamClient *iam.Client, roleArn string) PodIdentityAddon {
+	return PodIdentityAddon{
+		Addon: Addon{
+			Cluster:       cluster,
+			Name:          name,
+			Configuration: "{\"daemonsets\":{\"hybrid\":{\"create\": true}}}",
+		},
+		kubernetes: k8sClient,
+		iamClient:  iamClient,
+		roleArn:    roleArn,
+	}
+}
 
 func (p PodIdentityAddon) Create(ctx context.Context, client *eks.Client, logger logr.Logger) error {
 	if err := p.Addon.Create(ctx, client, logger); err != nil {
@@ -33,14 +46,14 @@ func (p PodIdentityAddon) Create(ctx context.Context, client *eks.Client, logger
 
 	// Provision PodIdentity addon related resources
 	// Create service account in kubernetes
-	if err := kubernetes.NewServiceAccount(ctx, logger, p.Kubernetes, namespace, podIdentityServiceAccount); err != nil {
+	if err := kubernetes.NewServiceAccount(ctx, logger, p.kubernetes, namespace, podIdentityServiceAccount); err != nil {
 		return err
 	}
 
 	createPodIdentityAssociationInput := &eks.CreatePodIdentityAssociationInput{
 		ClusterName:    &p.Cluster,
 		Namespace:      aws.String(namespace),
-		RoleArn:        &p.PodIdentityRoleArn,
+		RoleArn:        &p.roleArn,
 		ServiceAccount: aws.String(podIdentityServiceAccount),
 	}
 

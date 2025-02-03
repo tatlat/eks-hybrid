@@ -547,7 +547,7 @@ func GetDaemonSet(ctx context.Context, logger logr.Logger, k8s *kubernetes.Clien
 
 func NewServiceAccount(ctx context.Context, logger logr.Logger, k8s *kubernetes.Clientset, namespace, name string) error {
 	if _, err := k8s.CoreV1().ServiceAccounts(namespace).Get(ctx, name, metav1.GetOptions{}); err == nil {
-		logger.Info("Service account has already been created", "namespace", namespace, name)
+		logger.Info("Service account already exists", "namespace", namespace, "name", name)
 		return nil
 	}
 

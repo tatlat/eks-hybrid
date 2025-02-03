@@ -8,7 +8,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/cloudformation"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/eks"
-	"github.com/aws/aws-sdk-go-v2/service/eks/types"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	"github.com/go-logr/logr"
@@ -19,7 +18,6 @@ import (
 	"github.com/aws/eks-hybrid/test/e2e"
 	"github.com/aws/eks-hybrid/test/e2e/addon"
 	"github.com/aws/eks-hybrid/test/e2e/cni"
-	"github.com/aws/eks-hybrid/test/e2e/errors"
 )
 
 type TestResources struct {
@@ -108,19 +106,10 @@ func (c *Create) Run(ctx context.Context, test TestResources) error {
 		return fmt.Errorf("creating kubernetes client: %w", err)
 	}
 
-	podIdentityAddon := addon.PodIdentityAddon{
-		Addon: addon.Addon{
-			Cluster:       hybridCluster.Name,
-			Name:          podIdentityAddonName,
-			Configuration: "{\"daemonsets\":{\"hybrid\":{\"create\": true}}}",
-		},
-		Kubernetes:         k8sClient,
-		IAMClient:          c.iam,
-		PodIdentityRoleArn: stackOut.podIdentityRoleArn,
-	}
+	podIdentityAddon := addon.NewPodIdentityAddon(hybridCluster.Name, podIdentityAddonName, k8sClient, c.iam, stackOut.podIdentityRoleArn)
 
 	err = podIdentityAddon.Create(ctx, c.eks, c.logger)
-	if err != nil && !errors.IsType(err, &types.ResourceInUseException{}) {
+	if err != nil {
 		return fmt.Errorf("creating add-on %s for EKS cluster: %w", podIdentityAddon.Name, err)
 	}
 
