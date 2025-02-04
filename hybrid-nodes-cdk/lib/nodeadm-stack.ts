@@ -468,6 +468,7 @@ export class NodeadmBuildStack extends cdk.Stack {
         new iam.PolicyStatement({
           effect: iam.Effect.ALLOW,
           actions: [
+            'cloudformation:DescribeStackEvents',
             'cloudformation:DescribeStacks',
             'cloudformation:UpdateStack',
           ],
