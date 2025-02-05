@@ -106,9 +106,9 @@ func (c *Create) Run(ctx context.Context, test TestResources) error {
 		return fmt.Errorf("creating kubernetes client: %w", err)
 	}
 
-	podIdentityAddon := addon.NewPodIdentityAddon(hybridCluster.Name, podIdentityAddonName, k8sClient, c.iam, stackOut.podIdentityRoleArn)
+	podIdentityAddon := addon.NewPodIdentityAddon(hybridCluster.Name, podIdentityAddonName, stackOut.podIdentityRoleArn)
 
-	err = podIdentityAddon.Create(ctx, c.eks, c.logger)
+	err = podIdentityAddon.Create(ctx, c.logger, c.eks, k8sClient)
 	if err != nil {
 		return fmt.Errorf("creating add-on %s for EKS cluster: %w", podIdentityAddon.Name, err)
 	}

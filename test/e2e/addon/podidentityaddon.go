@@ -6,7 +6,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/eks"
 	"github.com/aws/aws-sdk-go-v2/service/eks/types"
-	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/go-logr/logr"
 	clientgo "k8s.io/client-go/kubernetes"
 
@@ -16,9 +15,7 @@ import (
 
 type PodIdentityAddon struct {
 	Addon
-	kubernetes *clientgo.Clientset
-	iamClient  *iam.Client
-	roleArn    string
+	roleArn string
 }
 
 const (
@@ -26,27 +23,25 @@ const (
 	namespace                 = "default"
 )
 
-func NewPodIdentityAddon(cluster, name string, k8sClient *clientgo.Clientset, iamClient *iam.Client, roleArn string) PodIdentityAddon {
+func NewPodIdentityAddon(cluster, name, roleArn string) PodIdentityAddon {
 	return PodIdentityAddon{
 		Addon: Addon{
 			Cluster:       cluster,
 			Name:          name,
 			Configuration: "{\"daemonsets\":{\"hybrid\":{\"create\": true}}}",
 		},
-		kubernetes: k8sClient,
-		iamClient:  iamClient,
-		roleArn:    roleArn,
+		roleArn: roleArn,
 	}
 }
 
-func (p PodIdentityAddon) Create(ctx context.Context, client *eks.Client, logger logr.Logger) error {
-	if err := p.Addon.Create(ctx, client, logger); err != nil {
+func (p PodIdentityAddon) Create(ctx context.Context, logger logr.Logger, eksClient *eks.Client, k8sClient *clientgo.Clientset) error {
+	if err := p.Addon.Create(ctx, eksClient, logger); err != nil {
 		return err
 	}
 
 	// Provision PodIdentity addon related resources
 	// Create service account in kubernetes
-	if err := kubernetes.NewServiceAccount(ctx, logger, p.kubernetes, namespace, podIdentityServiceAccount); err != nil {
+	if err := kubernetes.NewServiceAccount(ctx, logger, k8sClient, namespace, podIdentityServiceAccount); err != nil {
 		return err
 	}
 
@@ -57,7 +52,7 @@ func (p PodIdentityAddon) Create(ctx context.Context, client *eks.Client, logger
 		ServiceAccount: aws.String(podIdentityServiceAccount),
 	}
 
-	_, err := client.CreatePodIdentityAssociation(ctx, createPodIdentityAssociationInput)
+	_, err := eksClient.CreatePodIdentityAssociation(ctx, createPodIdentityAssociationInput)
 	if err != nil && !errors.IsType(err, &types.ResourceInUseException{}) {
 		return err
 	}
