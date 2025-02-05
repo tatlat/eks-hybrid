@@ -38,8 +38,9 @@ type vpcConfig struct {
 }
 
 type resourcesStackOutput struct {
-	clusterRole      string
-	clusterVpcConfig vpcConfig
+	clusterRole        string
+	clusterVpcConfig   vpcConfig
+	podIdentityRoleArn string
 }
 
 type stack struct {
@@ -179,6 +180,8 @@ func (s *stack) deploy(ctx context.Context, test TestResources) (*resourcesStack
 			result.clusterVpcConfig.privateSubnet = *output.OutputValue
 		case "ClusterSecurityGroup":
 			result.clusterVpcConfig.securityGroup = *output.OutputValue
+		case "PodIdentityAssociationRoleARN":
+			result.podIdentityRoleArn = *output.OutputValue
 		}
 	}
 
