@@ -37,7 +37,7 @@ const (
 	yumDockerRepoSourceFilePath = "/etc/yum.repos.d/docker-ce.repo"
 
 	// pin containerd to same version as EKS
-	containerd_version = "1.7.*"
+	containerdVersion = "1.7.*"
 
 	containerdDistroPkgName = "containerd"
 	containerdDockerPkgName = "containerd.io"
@@ -209,22 +209,26 @@ func (pm *DistroPackageManager) updateDockerAptPackagesWithRetries(ctx context.C
 func (pm *DistroPackageManager) appendContainerdVersion(target string) string {
 	switch pm.manager {
 	case yumPackageManager:
-		return fmt.Sprintf("%s-%s", target, containerd_version)
+		return fmt.Sprintf("%s-%s", target, containerdVersion)
 	case aptPackageManager:
-		return fmt.Sprintf("%s=%s", target, containerd_version)
+		return fmt.Sprintf("%s=%s", target, containerdVersion)
 	default:
 		return target
 	}
 }
 
-// GetContainerd gets the Package
-// Satisfies the containerd source interface
-func (pm *DistroPackageManager) GetContainerd() artifact.Package {
+func (pm *DistroPackageManager) getContainerdPackageNameWithVersion() string {
 	packageName := containerdDistroPkgName
 	if pm.dockerRepo != "" {
 		packageName = containerdDockerPkgName
 	}
-	packageName = pm.appendContainerdVersion(packageName)
+	return pm.appendContainerdVersion(packageName)
+}
+
+// GetContainerd gets the Package
+// Satisfies the containerd source interface
+func (pm *DistroPackageManager) GetContainerd() artifact.Package {
+	packageName := pm.getContainerdPackageNameWithVersion()
 	return artifact.NewPackageSource(
 		artifact.NewCmd(pm.manager, pm.installVerb, packageName, "-y"),
 		artifact.NewCmd(pm.manager, pm.deleteVerb, packageName, "-y"),
