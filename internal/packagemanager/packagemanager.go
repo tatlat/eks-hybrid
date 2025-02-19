@@ -203,13 +203,29 @@ func (pm *DistroPackageManager) updateDockerAptPackagesWithRetries(ctx context.C
 	return cmd.Retry(ctx, pm.updateDockerAptPackagesCommand, 5*time.Second)
 }
 
-// GetContainerd gets the Package
-// Satisfies the containerd source interface
-func (pm *DistroPackageManager) GetContainerd() artifact.Package {
+func (pm *DistroPackageManager) appendContainerdVersion(target string) string {
+	switch pm.manager {
+	case yumPackageManager:
+		return fmt.Sprintf("%s-%s", target, containerd.ContainerdVersion)
+	case aptPackageManager:
+		return fmt.Sprintf("%s=%s", target, containerd.ContainerdVersion)
+	default:
+		return target
+	}
+}
+
+func (pm *DistroPackageManager) getContainerdPackageNameWithVersion() string {
 	packageName := containerdDistroPkgName
 	if pm.dockerRepo != "" {
 		packageName = containerdDockerPkgName
 	}
+	return pm.appendContainerdVersion(packageName)
+}
+
+// GetContainerd gets the Package
+// Satisfies the containerd source interface
+func (pm *DistroPackageManager) GetContainerd() artifact.Package {
+	packageName := pm.getContainerdPackageNameWithVersion()
 	return artifact.NewPackageSource(
 		artifact.NewCmd(pm.manager, pm.installVerb, packageName, "-y"),
 		artifact.NewCmd(pm.manager, pm.deleteVerb, packageName, "-y"),

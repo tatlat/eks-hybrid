@@ -21,6 +21,8 @@ const (
 	ContainerdSourceNone   SourceName = "none"
 	ContainerdSourceDistro SourceName = "distro"
 	ContainerdSourceDocker SourceName = "docker"
+	// pin containerd to major version 1.x
+	ContainerdVersion = "1.*"
 
 	containerdPackageName = "containerd"
 	runcPackageName       = "runc"
