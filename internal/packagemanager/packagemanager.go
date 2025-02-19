@@ -36,9 +36,6 @@ const (
 	aptDockerRepoSourceFilePath = "/etc/apt/sources.list.d/docker.list"
 	yumDockerRepoSourceFilePath = "/etc/yum.repos.d/docker-ce.repo"
 
-	// pin containerd to same version as EKS
-	containerdVersion = "1.7.*"
-
 	containerdDistroPkgName = "containerd"
 	containerdDockerPkgName = "containerd.io"
 	runcPkgName             = "runc"
@@ -209,9 +206,9 @@ func (pm *DistroPackageManager) updateDockerAptPackagesWithRetries(ctx context.C
 func (pm *DistroPackageManager) appendContainerdVersion(target string) string {
 	switch pm.manager {
 	case yumPackageManager:
-		return fmt.Sprintf("%s-%s", target, containerdVersion)
+		return fmt.Sprintf("%s-%s", target, containerd.ContainerdVersion)
 	case aptPackageManager:
-		return fmt.Sprintf("%s=%s", target, containerdVersion)
+		return fmt.Sprintf("%s=%s", target, containerd.ContainerdVersion)
 	default:
 		return target
 	}
