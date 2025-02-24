@@ -186,7 +186,7 @@ func LogEC2InstanceDescribe(ctx context.Context, ec2Client *ec2.Client, instance
 	if len(describeStatusOutput.InstanceStatuses) == 0 {
 		return fmt.Errorf("no instance status found with ID %s", instanceID)
 	}
-	logger.Info("Instance status", "InstanceID", instanceID, "DescribeInstanceStatusResponse", awsutil.Prettify(describeStatusOutput.InstanceStatuses))
+	logger.Info("Instance status", "instanceID", instanceID, "describeInstanceStatusResponse", awsutil.Prettify(describeStatusOutput.InstanceStatuses))
 	return nil
 }
 
