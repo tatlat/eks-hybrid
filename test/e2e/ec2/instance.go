@@ -174,7 +174,7 @@ func LogEC2InstanceDescribe(ctx context.Context, ec2Client *ec2.Client, instance
 	if len(instances.Reservations) == 0 || len(instances.Reservations[0].Instances) == 0 {
 		return fmt.Errorf("no instance found with ID %s", instanceID)
 	}
-	logger.Info("Instance details", "InstanceID", instanceID, "DescribeInstanceResponse", awsutil.Prettify(instances.Reservations[0].Instances))
+	logger.Info("Instance details", "instanceID", instanceID, "describeInstanceResponse", awsutil.Prettify(instances.Reservations[0].Instances))
 
 	describeStatusOutput, err := ec2Client.DescribeInstanceStatus(ctx, &ec2.DescribeInstanceStatusInput{
 		InstanceIds:         []string{instanceID},
