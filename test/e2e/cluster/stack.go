@@ -253,7 +253,7 @@ func waitForStackOperation(ctx context.Context, client *cloudformation.Client, s
 			StackName: aws.String(stackName),
 		})
 		if err != nil {
-			if errors.IsType(err, &types.StackInstanceNotFoundException{}) {
+			if errors.IsCFNStackNotFound(err) {
 				return true, nil
 			}
 			return false, err
