@@ -64,7 +64,7 @@ func (s *stack) deploy(ctx context.Context, test TestResources) (*resourcesStack
 	resp, err := s.cfn.DescribeStacks(ctx, &cloudformation.DescribeStacksInput{
 		StackName: aws.String(stackName),
 	})
-	if err != nil && !errors.IsType(err, &types.StackInstanceNotFoundException{}) {
+	if err != nil && !errors.IsCFNStackNotFound(err) {
 		return nil, fmt.Errorf("looking for hybrid nodes cfn stack: %w", err)
 	}
 
