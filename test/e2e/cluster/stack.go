@@ -353,16 +353,22 @@ func getStackFailureReason(ctx context.Context, client *cloudformation.Client, s
 	if err != nil {
 		return "", fmt.Errorf("describing events for stack %s: %w", stackName, err)
 	}
-
+	firstFailedEventTimestamp := time.Now()
+	var firstFailedEventReason string
 	for _, event := range resp.StackEvents {
 		if event.ResourceStatus == types.ResourceStatusCreateFailed ||
 			event.ResourceStatus == types.ResourceStatusUpdateFailed ||
 			event.ResourceStatus == types.ResourceStatusDeleteFailed {
-			if event.ResourceStatusReason != nil {
-				return *event.ResourceStatusReason, nil
+			if event.ResourceStatusReason == nil {
+				continue
+			}
+			timestamp := aws.ToTime(event.Timestamp)
+			if timestamp.Before(firstFailedEventTimestamp) {
+				firstFailedEventTimestamp = timestamp
+				firstFailedEventReason = *event.ResourceStatusReason
 			}
 		}
 	}
 
-	return "", nil
+	return firstFailedEventReason, nil
 }
