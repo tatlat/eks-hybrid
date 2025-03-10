@@ -9,6 +9,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 
 	"github.com/aws/eks-hybrid/test/e2e/constants"
+	e2eErrors "github.com/aws/eks-hybrid/test/e2e/errors"
 )
 
 var PodIdentityBucketNotFound = errors.New("pod identity bucket not found")
@@ -27,6 +28,11 @@ func PodIdentityBucket(ctx context.Context, client *s3.Client, cluster string) (
 		getBucketTaggingOutput, err := client.GetBucketTagging(ctx, &s3.GetBucketTaggingInput{
 			Bucket: bucket.Name,
 		})
+		if err != nil && e2eErrors.IsS3BucketNotFound(err) {
+			// We have to pull all buckets and then get the tags
+			// the bucket could get deleted between the list and get tags call
+			continue
+		}
 		if err != nil {
 			return "", fmt.Errorf("getting bucket tagging: %w", err)
 		}
