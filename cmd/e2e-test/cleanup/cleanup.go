@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/integrii/flaggy"
 	"go.uber.org/zap"
@@ -56,7 +57,7 @@ func (s *Command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return fmt.Errorf("unmarshaling cleanup config: %w", err)
 	}
 
-	aws, err := config.LoadDefaultConfig(ctx, config.WithRegion(deleteCluster.ClusterRegion))
+	aws, err := config.LoadDefaultConfig(ctx, config.WithRegion(deleteCluster.ClusterRegion), config.WithRetryMaxAttempts(20), config.WithRetryMode(aws.RetryModeAdaptive))
 	if err != nil {
 		return fmt.Errorf("reading AWS configuration: %w", err)
 	}
