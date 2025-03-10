@@ -136,6 +136,10 @@ func (s *Stack) deployStack(ctx context.Context, logger logr.Logger) error {
 			ParameterKey:   aws.String("caBundleCert"),
 			ParameterValue: aws.String(string(s.IAMRolesAnywhereCACert)),
 		},
+		{
+			ParameterKey:   aws.String("rolePathPrefix"),
+			ParameterValue: aws.String(constants.TestRolePathPrefix),
+		},
 	}
 
 	var buf bytes.Buffer
@@ -220,7 +224,7 @@ func (s *Stack) createInstanceProfile(ctx context.Context, logger logr.Logger, r
 		logger.Info("Creating instance profile", "instanceProfileName", instanceProfileName)
 		instanceProfileArnOut, err := s.IAM.CreateInstanceProfile(ctx, &iam.CreateInstanceProfileInput{
 			InstanceProfileName: aws.String(instanceProfileName),
-			Path:                aws.String("/"),
+			Path:                aws.String(constants.TestRolePathPrefix),
 			Tags: []iamTypes.Tag{{
 				Key:   aws.String(constants.TestClusterTagKey),
 				Value: aws.String(s.ClusterName),

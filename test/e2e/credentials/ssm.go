@@ -63,7 +63,7 @@ func (s *SsmProvider) createSSMActivation(ctx context.Context, clusterName, node
 	// Define the input for the CreateActivation API
 	input := &ssm.CreateActivationInput{
 		DefaultInstanceName: aws.String(nodeName),
-		IamRole:             aws.String(s.Role),
+		IamRole:             aws.String(constants.TestRolePathPrefix[1:] + s.Role),
 		RegistrationLimit:   aws.Int32(2),
 		Tags: []types.Tag{
 			{

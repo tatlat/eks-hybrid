@@ -117,6 +117,10 @@ func (s *stack) deploy(ctx context.Context, test TestResources) (*resourcesStack
 			ParameterKey:   aws.String("PodIdentityS3BucketPrefix"),
 			ParameterValue: aws.String(strings.ToLower(addon.PodIdentityS3Bucket)),
 		},
+		{
+			ParameterKey:   aws.String("RolePathPrefix"),
+			ParameterValue: aws.String(constants.TestRolePathPrefix),
+		},
 	}
 
 	if resp == nil || resp.Stacks == nil {
@@ -230,7 +234,7 @@ func (s *stack) deploy(ctx context.Context, test TestResources) (*resourcesStack
 		return nil, err
 	}
 
-	instanceProfileName := strings.Split(*jumpbox.IamInstanceProfile.Arn, "/")[1]
+	instanceProfileName := strings.Split(*jumpbox.IamInstanceProfile.Arn, "/")[2]
 	_, err = s.iamClient.TagInstanceProfile(ctx, &iam.TagInstanceProfileInput{
 		InstanceProfileName: aws.String(instanceProfileName),
 		Tags: []iamTypes.Tag{

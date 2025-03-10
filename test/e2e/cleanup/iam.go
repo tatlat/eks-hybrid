@@ -3,7 +3,6 @@ package cleanup
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
@@ -26,43 +25,32 @@ func NewIAMCleaner(iamClient *iam.Client, logger logr.Logger) *IAMCleaner {
 	}
 }
 
-// TODO: introduce use of role prefix to clean this up
-
 func (c *IAMCleaner) ListRoles(ctx context.Context, filterInput FilterInput) ([]string, error) {
 	var roles []string
 
-	// list-roles does not allow filtering by tags so we have to pull them all
-	// We have the role =* checks to try and limit which roles we bother checking tags for
-	// but we only delete those with the e2e cluster tag
-	paginator := iam.NewListRolesPaginator(c.iamClient, &iam.ListRolesInput{})
+	paginator := iam.NewListRolesPaginator(c.iamClient, &iam.ListRolesInput{
+		PathPrefix: aws.String(constants.TestRolePathPrefix),
+	})
 
 	for paginator.HasMorePages() {
 		page, err := paginator.NextPage(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("listing IAM roles: %w", err)
 		}
+
 		for _, role := range page.Roles {
-			if !strings.HasPrefix(*role.RoleName, constants.TestCredentialsStackNamePrefix) {
-				continue
-			}
-			paginator := iam.NewListRoleTagsPaginator(c.iamClient, &iam.ListRoleTagsInput{
+			roleTags, err := c.iamClient.ListRoleTags(ctx, &iam.ListRoleTagsInput{
 				RoleName: role.RoleName,
 			})
-			var tags []types.Tag
-			for paginator.HasMorePages() {
-				page, err := paginator.NextPage(ctx)
-				if err != nil && errors.IsType(err, &types.NoSuchEntityException{}) {
-					// skipping log since we are possiblying check rolesd we do not
-					// intend to delete
-					continue
-				}
-				if err != nil {
-					return nil, fmt.Errorf("listing IAM role tags: %w", err)
-				}
-				tags = append(tags, page.Tags...)
+			if err != nil && errors.IsType(err, &types.NoSuchEntityException{}) {
+				// skipping log since we are possibly checking roles we do not
+				// intend to delete
+				continue
 			}
-			role.Tags = tags
-			if shouldDeleteRole(role, filterInput) {
+			if err != nil {
+				return nil, fmt.Errorf("listing IAM role tags: %w", err)
+			}
+			if shouldDeleteRole(role, roleTags.Tags, filterInput) {
 				roles = append(roles, *role.RoleName)
 			}
 		}
@@ -70,9 +58,9 @@ func (c *IAMCleaner) ListRoles(ctx context.Context, filterInput FilterInput) ([]
 	return roles, nil
 }
 
-func shouldDeleteRole(role types.Role, input FilterInput) bool {
+func shouldDeleteRole(role types.Role, roleTags []types.Tag, input FilterInput) bool {
 	var tags []Tag
-	for _, tag := range role.Tags {
+	for _, tag := range roleTags {
 		tags = append(tags, Tag{
 			Key:   *tag.Key,
 			Value: *tag.Value,
@@ -203,10 +191,9 @@ func (c *IAMCleaner) deleteRoleEntity(ctx context.Context, roleName string) erro
 func (c *IAMCleaner) ListInstanceProfiles(ctx context.Context, filterInput FilterInput) ([]string, error) {
 	var instanceProfiles []string
 
-	// list-instance-profiles does not allow filtering by tags so we have to pull them all
-	// We have the role =* checks to try and limit which roles we bother checking tags for
-	// but we only delete those with the e2e cluster tag
-	paginator := iam.NewListInstanceProfilesPaginator(c.iamClient, &iam.ListInstanceProfilesInput{})
+	paginator := iam.NewListInstanceProfilesPaginator(c.iamClient, &iam.ListInstanceProfilesInput{
+		PathPrefix: aws.String(constants.TestRolePathPrefix),
+	})
 
 	for paginator.HasMorePages() {
 		page, err := paginator.NextPage(ctx)
@@ -214,9 +201,6 @@ func (c *IAMCleaner) ListInstanceProfiles(ctx context.Context, filterInput Filte
 			return nil, fmt.Errorf("listing IAM instance profiles: %w", err)
 		}
 		for _, profile := range page.InstanceProfiles {
-			if !strings.HasPrefix(*profile.InstanceProfileName, constants.TestCredentialsStackNamePrefix) {
-				continue
-			}
 			instanceProfile, err := c.iamClient.GetInstanceProfile(ctx, &iam.GetInstanceProfileInput{
 				InstanceProfileName: profile.InstanceProfileName,
 			})
