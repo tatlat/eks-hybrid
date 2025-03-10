@@ -212,13 +212,13 @@ type NodeCleanup struct {
 	SkipDelete  bool
 }
 
-func (c *NodeCleanup) CleanupSSMActivation(ctx context.Context, nodeName string) error {
+func (c *NodeCleanup) CleanupSSMActivation(ctx context.Context, nodeName, clusterName string) error {
 	if c.SkipDelete {
 		c.Logger.Info("Skipping SSM activation cleanup", "nodeName", nodeName)
 		return nil
 	}
 	cleaner := cleanup.NewSSMCleaner(c.SSM, c.Logger)
-	activationIDs, err := cleaner.ListActivationsForNode(ctx, nodeName)
+	activationIDs, err := cleaner.ListActivationsForNode(ctx, nodeName, clusterName)
 	if err != nil {
 		return fmt.Errorf("listing activations: %w", err)
 	}

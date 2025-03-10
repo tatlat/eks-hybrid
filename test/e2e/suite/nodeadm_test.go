@@ -264,7 +264,7 @@ var _ = Describe("Hybrid Nodes", func() {
 								Expect(err).NotTo(HaveOccurred(), "EC2 Instance should have been created successfully")
 								flakeRun.DeferCleanup(func(ctx context.Context) {
 									if credentials.IsSsm(provider.Name()) {
-										Expect(peeredNode.CleanupSSMActivation(ctx, nodeName)).To(Succeed())
+										Expect(peeredNode.CleanupSSMActivation(ctx, nodeName, test.cluster.Name)).To(Succeed())
 									}
 									Expect(peeredNode.Cleanup(ctx, instance)).To(Succeed())
 								}, NodeTimeout(deferCleanupTimeout))
@@ -379,7 +379,7 @@ var _ = Describe("Hybrid Nodes", func() {
 								Expect(err).NotTo(HaveOccurred(), "EC2 Instance should have been created successfully")
 								DeferCleanup(func(ctx context.Context) {
 									if credentials.IsSsm(provider.Name()) {
-										Expect(peeredNode.CleanupSSMActivation(ctx, nodeName)).To(Succeed())
+										Expect(peeredNode.CleanupSSMActivation(ctx, nodeName, test.cluster.Name)).To(Succeed())
 									}
 									Expect(peeredNode.Cleanup(ctx, instance)).To(Succeed())
 								}, NodeTimeout(deferCleanupTimeout))
