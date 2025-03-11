@@ -120,6 +120,10 @@ func (c *Sweeper) Run(ctx context.Context, input SweeperInput) error {
 		return fmt.Errorf("cleaning up S3 pod identity buckets: %w", err)
 	}
 
+	if err := c.cleanupKeyPairs(ctx, filterInput); err != nil {
+		return fmt.Errorf("cleaning up key pairs: %w", err)
+	}
+
 	if err := c.cleanupSSMParameters(ctx, filterInput); err != nil {
 		return fmt.Errorf("cleaning up SSM parameters: %w", err)
 	}
@@ -409,5 +413,24 @@ func (c *Sweeper) cleanupSSMParameters(ctx context.Context, filterInput FilterIn
 		}
 	}
 
+	return nil
+}
+
+func (c *Sweeper) cleanupKeyPairs(ctx context.Context, filterInput FilterInput) error {
+	ec2Cleaner := NewEC2Cleaner(c.ec2Client, c.logger)
+	keyPairIDs, err := ec2Cleaner.ListKeyPairs(ctx, filterInput)
+	if err != nil {
+		return fmt.Errorf("listing key pairs: %w", err)
+	}
+
+	c.logger.Info("Deleting key pairs", "keyPairIDs", keyPairIDs)
+	if filterInput.DryRun {
+		return nil
+	}
+	for _, keyPairID := range keyPairIDs {
+		if err := ec2Cleaner.DeleteKeyPair(ctx, keyPairID); err != nil {
+			return fmt.Errorf("deleting key pair %s: %w", keyPairID, err)
+		}
+	}
 	return nil
 }

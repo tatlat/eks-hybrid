@@ -114,3 +114,66 @@ func (e *EC2Cleaner) DeleteInstances(ctx context.Context, instanceIDs []string) 
 
 	return nil
 }
+
+func (e *EC2Cleaner) ListKeyPairs(ctx context.Context, input FilterInput) ([]string, error) {
+	describeInput := &ec2.DescribeKeyPairsInput{
+		Filters: []types.Filter{
+			{
+				Name:   aws.String("tag-key"),
+				Values: []string{constants.TestClusterTagKey},
+			},
+		},
+	}
+
+	clusterNameFilter := input.ClusterName
+	if input.ClusterNamePrefix != "" {
+		clusterNameFilter = input.ClusterNamePrefix + "*"
+	}
+	if clusterNameFilter != "" {
+		describeInput.Filters = append(describeInput.Filters, types.Filter{
+			Name:   aws.String("tag:" + constants.TestClusterTagKey),
+			Values: []string{clusterNameFilter},
+		})
+	}
+
+	keyPairs, err := e.ec2Client.DescribeKeyPairs(ctx, describeInput)
+	if err != nil {
+		return nil, fmt.Errorf("describing key pairs: %w", err)
+	}
+
+	var keyPairIDs []string
+	for _, keyPair := range keyPairs.KeyPairs {
+		if shouldDeleteKeyPair(keyPair, input) {
+			keyPairIDs = append(keyPairIDs, *keyPair.KeyPairId)
+		}
+	}
+
+	return keyPairIDs, nil
+}
+
+func (e *EC2Cleaner) DeleteKeyPair(ctx context.Context, keyPairID string) error {
+	_, err := e.ec2Client.DeleteKeyPair(ctx, &ec2.DeleteKeyPairInput{
+		KeyPairId: aws.String(keyPairID),
+	})
+	if err != nil {
+		return fmt.Errorf("deleting key pair: %w", err)
+	}
+	return nil
+}
+
+func shouldDeleteKeyPair(keyPair types.KeyPairInfo, input FilterInput) bool {
+	var tags []Tag
+	for _, tag := range keyPair.Tags {
+		tags = append(tags, Tag{
+			Key:   *tag.Key,
+			Value: *tag.Value,
+		})
+	}
+
+	resource := ResourceWithTags{
+		ID:           *keyPair.KeyPairId,
+		CreationTime: aws.ToTime(keyPair.CreateTime),
+		Tags:         tags,
+	}
+	return shouldDeleteResource(resource, input)
+}
