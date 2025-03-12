@@ -308,6 +308,7 @@ export class NodeadmBuildStack extends cdk.Stack {
             'ec2:DescribeAvailabilityZones',
             'ec2:DescribeImages',
             'ec2:DescribeInstances',
+            'ec2:DescribeInstanceStatus',
             'ec2:DescribeInternetGateways',
             'ec2:DescribeKeyPairs',
             'ec2:DescribeNetworkInterfaces',
