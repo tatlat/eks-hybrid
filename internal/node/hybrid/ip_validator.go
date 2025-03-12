@@ -4,9 +4,8 @@ import (
 	"fmt"
 	"net"
 
+	"github.com/aws/aws-sdk-go-v2/service/eks/types"
 	apimachinerynet "k8s.io/apimachinery/pkg/util/net"
-
-	"github.com/aws/eks-hybrid/internal/aws/eks"
 )
 
 const (
@@ -61,15 +60,12 @@ func isIPInCIDRs(ip net.IP, cidrs []string) (bool, error) {
 	return false, nil
 }
 
-func extractCIDRsFromNodeNetworks(networks []*eks.RemoteNodeNetwork) []string {
+func extractCIDRsFromNodeNetworks(networks []types.RemoteNodeNetwork) []string {
 	var cidrs []string
 	for _, network := range networks {
-		if network == nil {
-			continue
-		}
-		for _, cidr := range network.CIDRs {
-			if cidr != nil {
-				cidrs = append(cidrs, *cidr)
+		for _, cidr := range network.Cidrs {
+			if cidr != "" {
+				cidrs = append(cidrs, cidr)
 			}
 		}
 	}
@@ -93,7 +89,7 @@ func extractNodeIPFromFlags(kubeletArgs []string) (net.IP, error) {
 	return nil, nil
 }
 
-func validateClusterRemoteNetworkConfig(cluster *eks.Cluster) error {
+func validateClusterRemoteNetworkConfig(cluster *types.Cluster) error {
 	if cluster.RemoteNetworkConfig == nil {
 		return fmt.Errorf("remote network config is not set for cluster %s", *cluster.Name)
 	}
@@ -192,7 +188,7 @@ func getNodeIP(kubeletArgs []string, nodeName string, network Network) (net.IP, 
 	return ipAddr, nil
 }
 
-func validateIPInRemoteNodeNetwork(ipAddr net.IP, remoteNodeNetwork []*eks.RemoteNodeNetwork) error {
+func validateIPInRemoteNodeNetwork(ipAddr net.IP, remoteNodeNetwork []types.RemoteNodeNetwork) error {
 	nodeNetworkCidrs := extractCIDRsFromNodeNetworks(remoteNodeNetwork)
 
 	if validIP, err := isIPInCIDRs(ipAddr, nodeNetworkCidrs); err != nil {

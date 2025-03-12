@@ -5,13 +5,13 @@ import (
 	"encoding/base64"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	eks_sdk "github.com/aws/aws-sdk-go-v2/service/eks/types"
+	"github.com/aws/aws-sdk-go-v2/service/eks"
+	"github.com/aws/aws-sdk-go-v2/service/eks/types"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
 
 	"github.com/aws/eks-hybrid/internal/api"
 	"github.com/aws/eks-hybrid/internal/aws/ecr"
-	"github.com/aws/eks-hybrid/internal/aws/eks"
 )
 
 func (hnp *HybridNodeProvider) Enrich(ctx context.Context) error {
@@ -36,8 +36,12 @@ func (hnp *HybridNodeProvider) Enrich(ctx context.Context) error {
 }
 
 // readCluster calls eks.DescribeCluster and returns the cluster
-func readCluster(ctx context.Context, awsConfig aws.Config, nodeConfig *api.NodeConfig) (*eks.Cluster, error) {
-	cluster, err := eks.DescribeCluster(ctx, eks.NewClient(awsConfig), nodeConfig.Spec.Cluster.Name)
+func readCluster(ctx context.Context, awsConfig aws.Config, nodeConfig *api.NodeConfig) (*types.Cluster, error) {
+	client := eks.NewFromConfig(awsConfig)
+	input := &eks.DescribeClusterInput{
+		Name: &nodeConfig.Spec.Cluster.Name,
+	}
+	cluster, err := client.DescribeCluster(ctx, input)
 	if err != nil {
 		return nil, err
 	}
@@ -55,7 +59,7 @@ func (hnp *HybridNodeProvider) ensureClusterDetails(ctx context.Context) error {
 		return err
 	}
 
-	if cluster.Status != eks_sdk.ClusterStatusActive {
+	if cluster.Status != types.ClusterStatusActive {
 		return errors.New("eks cluster is not active")
 	}
 

@@ -4,11 +4,11 @@ import (
 	"context"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/eks/types"
 	"go.uber.org/zap"
 	"k8s.io/utils/strings/slices"
 
 	"github.com/aws/eks-hybrid/internal/api"
-	"github.com/aws/eks-hybrid/internal/aws/eks"
 	"github.com/aws/eks-hybrid/internal/daemon"
 	"github.com/aws/eks-hybrid/internal/nodeprovider"
 )
@@ -21,7 +21,7 @@ type HybridNodeProvider struct {
 	awsConfig     *aws.Config
 	daemonManager daemon.DaemonManager
 	logger        *zap.Logger
-	cluster       *eks.Cluster
+	cluster       *types.Cluster
 	skipPhases    []string
 	network       Network
 }
@@ -54,7 +54,7 @@ func WithAWSConfig(config *aws.Config) NodeProviderOpt {
 }
 
 // WithCluster adds an EKS cluster to the HybridNodeProvider for testing purposes.
-func WithCluster(cluster *eks.Cluster) NodeProviderOpt {
+func WithCluster(cluster *types.Cluster) NodeProviderOpt {
 	return func(hnp *HybridNodeProvider) {
 		hnp.cluster = cluster
 	}
@@ -90,8 +90,8 @@ func (hnp *HybridNodeProvider) Cleanup() error {
 	return nil
 }
 
-// getCluster retrieves the eks.Cluster object or makes a DescribeCluster call to the EKS API and caches the result if not already present
-func (hnp *HybridNodeProvider) getCluster(ctx context.Context) (*eks.Cluster, error) {
+// getCluster retrieves the Cluster object or makes a DescribeCluster call to the EKS API and caches the result if not already present
+func (hnp *HybridNodeProvider) getCluster(ctx context.Context) (*types.Cluster, error) {
 	if hnp.cluster != nil {
 		return hnp.cluster, nil
 	}

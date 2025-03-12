@@ -6,11 +6,11 @@ import (
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/eks/types"
 	. "github.com/onsi/gomega"
 	"go.uber.org/zap"
 
 	"github.com/aws/eks-hybrid/internal/api"
-	"github.com/aws/eks-hybrid/internal/aws/eks"
 	"github.com/aws/eks-hybrid/internal/node/hybrid"
 )
 
@@ -18,7 +18,7 @@ func TestHybridNodeProvider_ValidateNodeIP(t *testing.T) {
 	tests := []struct {
 		name        string
 		nodeConfig  *api.NodeConfig
-		cluster     *eks.Cluster
+		cluster     *types.Cluster
 		network     hybrid.Network
 		expectedErr string
 	}{
@@ -35,12 +35,12 @@ func TestHybridNodeProvider_ValidateNodeIP(t *testing.T) {
 					},
 				},
 			},
-			cluster: &eks.Cluster{
+			cluster: &types.Cluster{
 				Name: aws.String("test-cluster"),
-				RemoteNetworkConfig: &eks.RemoteNetworkConfig{
-					RemoteNodeNetworks: []*eks.RemoteNodeNetwork{
+				RemoteNetworkConfig: &types.RemoteNetworkConfigResponse{
+					RemoteNodeNetworks: []types.RemoteNodeNetwork{
 						{
-							CIDRs: []*string{aws.String("10.0.0.0/24")},
+							Cidrs: []string{"10.0.0.0/24"},
 						},
 					},
 				},
@@ -75,12 +75,12 @@ func TestHybridNodeProvider_ValidateNodeIP(t *testing.T) {
 					},
 				},
 			},
-			cluster: &eks.Cluster{
+			cluster: &types.Cluster{
 				Name: aws.String("test-cluster"),
-				RemoteNetworkConfig: &eks.RemoteNetworkConfig{
-					RemoteNodeNetworks: []*eks.RemoteNodeNetwork{
+				RemoteNetworkConfig: &types.RemoteNetworkConfigResponse{
+					RemoteNodeNetworks: []types.RemoteNodeNetwork{
 						{
-							CIDRs: []*string{aws.String("10.0.0.0/24")},
+							Cidrs: []string{"10.0.0.0/24"},
 						},
 					},
 				},
@@ -111,10 +111,10 @@ func TestHybridNodeProvider_ValidateNodeIP(t *testing.T) {
 					},
 				},
 			},
-			cluster: &eks.Cluster{
-				RemoteNetworkConfig: &eks.RemoteNetworkConfig{
-					RemoteNodeNetworks: []*eks.RemoteNodeNetwork{
-						{CIDRs: []*string{aws.String("10.1.0.0/16"), aws.String("192.1.0.0/24")}},
+			cluster: &types.Cluster{
+				RemoteNetworkConfig: &types.RemoteNetworkConfigResponse{
+					RemoteNodeNetworks: []types.RemoteNodeNetwork{
+						{Cidrs: []string{"10.1.0.0/16", "192.1.0.0/24"}},
 					},
 				},
 			},
@@ -144,10 +144,10 @@ func TestHybridNodeProvider_ValidateNodeIP(t *testing.T) {
 					},
 				},
 			},
-			cluster: &eks.Cluster{
-				RemoteNetworkConfig: &eks.RemoteNetworkConfig{
-					RemoteNodeNetworks: []*eks.RemoteNodeNetwork{
-						{CIDRs: []*string{aws.String("10.1.0.0/16"), aws.String("192.1.0.0/24")}},
+			cluster: &types.Cluster{
+				RemoteNetworkConfig: &types.RemoteNetworkConfigResponse{
+					RemoteNodeNetworks: []types.RemoteNodeNetwork{
+						{Cidrs: []string{"10.1.0.0/16", "192.1.0.0/24"}},
 					},
 				},
 			},
@@ -177,10 +177,10 @@ func TestHybridNodeProvider_ValidateNodeIP(t *testing.T) {
 					},
 				},
 			},
-			cluster: &eks.Cluster{
-				RemoteNetworkConfig: &eks.RemoteNetworkConfig{
-					RemoteNodeNetworks: []*eks.RemoteNodeNetwork{
-						{CIDRs: []*string{aws.String("10.0.0.0/24")}},
+			cluster: &types.Cluster{
+				RemoteNetworkConfig: &types.RemoteNetworkConfigResponse{
+					RemoteNodeNetworks: []types.RemoteNodeNetwork{
+						{Cidrs: []string{"10.0.0.0/24"}},
 					},
 				},
 			},
@@ -222,10 +222,10 @@ func TestHybridNodeProvider_ValidateNodeIP(t *testing.T) {
 					},
 				},
 			},
-			cluster: &eks.Cluster{
-				RemoteNetworkConfig: &eks.RemoteNetworkConfig{
-					RemoteNodeNetworks: []*eks.RemoteNodeNetwork{
-						{CIDRs: []*string{aws.String("10.0.0.0/24")}},
+			cluster: &types.Cluster{
+				RemoteNetworkConfig: &types.RemoteNetworkConfigResponse{
+					RemoteNodeNetworks: []types.RemoteNodeNetwork{
+						{Cidrs: []string{"10.0.0.0/24"}},
 					},
 				},
 			},
@@ -269,10 +269,10 @@ func TestHybridNodeProvider_ValidateNodeIP(t *testing.T) {
 					},
 				},
 			},
-			cluster: &eks.Cluster{
-				RemoteNetworkConfig: &eks.RemoteNetworkConfig{
-					RemoteNodeNetworks: []*eks.RemoteNodeNetwork{
-						{CIDRs: []*string{aws.String("10.0.0.0/24")}},
+			cluster: &types.Cluster{
+				RemoteNetworkConfig: &types.RemoteNetworkConfigResponse{
+					RemoteNodeNetworks: []types.RemoteNodeNetwork{
+						{Cidrs: []string{"10.0.0.0/24"}},
 					},
 				},
 			},
@@ -316,10 +316,10 @@ func TestHybridNodeProvider_ValidateNodeIP(t *testing.T) {
 					},
 				},
 			},
-			cluster: &eks.Cluster{
-				RemoteNetworkConfig: &eks.RemoteNetworkConfig{
-					RemoteNodeNetworks: []*eks.RemoteNodeNetwork{
-						{CIDRs: []*string{aws.String("192.168.0.0/24")}},
+			cluster: &types.Cluster{
+				RemoteNetworkConfig: &types.RemoteNetworkConfigResponse{
+					RemoteNodeNetworks: []types.RemoteNodeNetwork{
+						{Cidrs: []string{"192.168.0.0/24"}},
 					},
 				},
 			},
@@ -361,10 +361,10 @@ func TestHybridNodeProvider_ValidateNodeIP(t *testing.T) {
 					},
 				},
 			},
-			cluster: &eks.Cluster{
-				RemoteNetworkConfig: &eks.RemoteNetworkConfig{
-					RemoteNodeNetworks: []*eks.RemoteNodeNetwork{
-						{CIDRs: []*string{aws.String("10.0.0.0/24")}},
+			cluster: &types.Cluster{
+				RemoteNetworkConfig: &types.RemoteNetworkConfigResponse{
+					RemoteNodeNetworks: []types.RemoteNodeNetwork{
+						{Cidrs: []string{"10.0.0.0/24"}},
 					},
 				},
 			},
@@ -410,10 +410,10 @@ func TestHybridNodeProvider_ValidateNodeIP(t *testing.T) {
 					},
 				},
 			},
-			cluster: &eks.Cluster{
-				RemoteNetworkConfig: &eks.RemoteNetworkConfig{
-					RemoteNodeNetworks: []*eks.RemoteNodeNetwork{
-						{CIDRs: []*string{aws.String("10.0.0.0/24")}},
+			cluster: &types.Cluster{
+				RemoteNetworkConfig: &types.RemoteNetworkConfigResponse{
+					RemoteNodeNetworks: []types.RemoteNodeNetwork{
+						{Cidrs: []string{"10.0.0.0/24"}},
 					},
 				},
 			},
