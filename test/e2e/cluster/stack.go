@@ -121,6 +121,20 @@ func (s *stack) deploy(ctx context.Context, test TestResources) (*resourcesStack
 			ParameterKey:   aws.String("RolePathPrefix"),
 			ParameterValue: aws.String(constants.TestRolePathPrefix),
 		},
+		{
+			// The VPC resources do not have a creation date, so we use the current time
+			// and set it as a tag on the resources. This is used during cleanup to
+			// determine if the resources are old enough to be deleted.
+			// This date can change during an rerun of the setup which will update the stack
+			// updating the stack is typically not done by tests and worst case the cleanup
+			// waits a bit longer to delete a dangling resource.
+			ParameterKey:   aws.String("CreationTime"),
+			ParameterValue: aws.String(time.Now().Format(time.RFC3339)),
+		},
+		{
+			ParameterKey:   aws.String("CreationTimeTagKey"),
+			ParameterValue: aws.String(constants.CreationTimeTagKey),
+		},
 	}
 
 	if resp == nil || resp.Stacks == nil {

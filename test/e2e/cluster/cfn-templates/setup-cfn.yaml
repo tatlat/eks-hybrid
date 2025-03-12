@@ -50,6 +50,14 @@ Parameters:
     Type: String
     Description: Path prefix for the IAM roles
 
+  CreationTime:
+    Type: String
+    Description: Creation time of the stack to tag the VPC
+
+  CreationTimeTagKey:
+    Type: String
+    Description: Tag key for the creation time of the stack
+
 Resources:
   ClusterRole:
     Type: AWS::IAM::Role
@@ -80,7 +88,9 @@ Resources:
           Value: !Sub ${ClusterName}-cluster-vpc
         - Key: !Ref TestClusterTagKey
           Value: !Ref ClusterName
-  
+        - Key: !Ref CreationTimeTagKey
+          Value: !Ref CreationTime
+
   ClusterVPCPublicSubnet:
     Type: AWS::EC2::Subnet
     Properties:
@@ -92,6 +102,8 @@ Resources:
           Value: !Sub ${ClusterName}-public-subnet
         - Key: !Ref TestClusterTagKey
           Value: !Ref ClusterName
+        - Key: !Ref CreationTimeTagKey
+          Value: !Ref CreationTime
       VpcId: !Ref ClusterVPC
   
   ClusterVPCPrivateSubnet:
@@ -104,6 +116,8 @@ Resources:
           Value: !Sub ${ClusterName}-private-subnet
         - Key: !Ref TestClusterTagKey
           Value: !Ref ClusterName
+        - Key: !Ref CreationTimeTagKey
+          Value: !Ref CreationTime
       VpcId: !Ref ClusterVPC
 
   ClusterPublicSubnetInternetGateway:
@@ -114,6 +128,8 @@ Resources:
           Value: !Sub ${ClusterName}-igw
         - Key: !Ref TestClusterTagKey
           Value: !Ref ClusterName
+        - Key: !Ref CreationTimeTagKey
+          Value: !Ref CreationTime
 
   ClusterInternetGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -130,6 +146,8 @@ Resources:
           Value: !Sub ${ClusterName}-route-table
         - Key: !Ref TestClusterTagKey
           Value: !Ref ClusterName
+        - Key: !Ref CreationTimeTagKey
+          Value: !Ref CreationTime
 
   ClusterRouteToInternet:
     Type: AWS::EC2::Route
@@ -153,6 +171,8 @@ Resources:
           Value: !Sub ${ClusterName}-private-route-table
         - Key: !Ref TestClusterTagKey
           Value: !Ref ClusterName
+        - Key: !Ref CreationTimeTagKey
+          Value: !Ref CreationTime
 
   ClusterPrivateSubnetRouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
@@ -191,6 +211,8 @@ Resources:
           Value: !Sub ${ClusterName}-hybrid-node-vpc
         - Key: !Ref TestClusterTagKey
           Value: !Ref ClusterName
+        - Key: !Ref CreationTimeTagKey
+          Value: !Ref CreationTime
   
   HybridNodeVPCPublicSubnet:
     Type: AWS::EC2::Subnet
@@ -203,6 +225,8 @@ Resources:
           Value: !Sub ${ClusterName}-public-subnet
         - Key: !Ref TestClusterTagKey
           Value: !Ref ClusterName
+        - Key: !Ref CreationTimeTagKey
+          Value: !Ref CreationTime
       VpcId: !Ref HybridNodeVPC
 
   HybridNodeVPCPrivateSubnet:
@@ -215,6 +239,8 @@ Resources:
           Value: !Sub ${ClusterName}-private-subnet
         - Key: !Ref TestClusterTagKey
           Value: !Ref ClusterName
+        - Key: !Ref CreationTimeTagKey
+          Value: !Ref CreationTime
       VpcId: !Ref HybridNodeVPC
 
   HybridNodePublicSubnetInternetGateway:
@@ -225,6 +251,8 @@ Resources:
           Value: !Sub ${ClusterName}-igw
         - Key: !Ref TestClusterTagKey
           Value: !Ref ClusterName
+        - Key: !Ref CreationTimeTagKey
+          Value: !Ref CreationTime
 
   HybridNodeInternetGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -241,6 +269,8 @@ Resources:
           Value: !Sub ${ClusterName}-route-table
         - Key: !Ref TestClusterTagKey
           Value: !Ref ClusterName
+        - Key: !Ref CreationTimeTagKey
+          Value: !Ref CreationTime
 
   HybridNodeRouteToInternet:
     Type: AWS::EC2::Route
@@ -274,6 +304,8 @@ Resources:
           Value: !Sub ${ClusterName}-vpc-peering
         - Key: !Ref TestClusterTagKey
           Value: !Ref ClusterName
+        - Key: !Ref CreationTimeTagKey
+          Value: !Ref CreationTime
     DependsOn:
       - ClusterVPC
       - HybridNodeVPC

@@ -1,0 +1,428 @@
+package cleanup
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"time"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/ec2"
+	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
+	"github.com/aws/smithy-go"
+	"github.com/go-logr/logr"
+
+	"github.com/aws/eks-hybrid/test/e2e/constants"
+)
+
+const (
+	vpcPeeringConnectionDeletedWaiterTimeout = 5 * time.Minute
+)
+
+// VPCCleaner is responsible for cleaning up AWS VPC resources
+type VPCCleaner struct {
+	ec2Client *ec2.Client
+	logger    logr.Logger
+}
+
+// NewVPCCleaner creates a new VPC cleaner
+func NewVPCCleaner(ec2Client *ec2.Client, logger logr.Logger) *VPCCleaner {
+	return &VPCCleaner{
+		ec2Client: ec2Client,
+		logger:    logger,
+	}
+}
+
+func (v *VPCCleaner) ListPeeringConnections(ctx context.Context, input FilterInput) ([]string, error) {
+	paginator := ec2.NewDescribeVpcPeeringConnectionsPaginator(v.ec2Client, &ec2.DescribeVpcPeeringConnectionsInput{
+		Filters: ec2Filters(input),
+	})
+
+	var peeringConnectionIDs []string
+	for paginator.HasMorePages() {
+		resp, err := paginator.NextPage(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("describing peering connections: %w", err)
+		}
+
+		for _, peeringConnection := range resp.VpcPeeringConnections {
+			if peeringConnection.Status.Code == types.VpcPeeringConnectionStateReasonCodeDeleted ||
+				peeringConnection.Status.Code == types.VpcPeeringConnectionStateReasonCodeDeleting {
+				continue
+			}
+
+			creationTime, err := creationTimeFromTags(peeringConnection.Tags)
+			if err != nil {
+				return nil, fmt.Errorf("getting creation time from tags: %w", err)
+			}
+			resource := ResourceWithTags{
+				ID:           aws.ToString(peeringConnection.VpcPeeringConnectionId),
+				Tags:         convertEC2Tags(peeringConnection.Tags),
+				CreationTime: creationTime,
+			}
+
+			if shouldDeleteResource(resource, input) {
+				peeringConnectionIDs = append(peeringConnectionIDs, *peeringConnection.VpcPeeringConnectionId)
+			}
+		}
+	}
+	return peeringConnectionIDs, nil
+}
+
+func (v *VPCCleaner) DeletePeeringConnection(ctx context.Context, peeringConnectionID string) error {
+	_, err := v.ec2Client.DeleteVpcPeeringConnection(ctx, &ec2.DeleteVpcPeeringConnectionInput{
+		VpcPeeringConnectionId: aws.String(peeringConnectionID),
+	})
+	if err != nil && isAwsError(err, "InvalidVpcPeeringConnectionId.NotFound") {
+		v.logger.Info("Peering connection already deleted", "peeringConnectionID", peeringConnectionID)
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("deleting peering connection %s: %w", peeringConnectionID, err)
+	}
+
+	waiter := ec2.NewVpcPeeringConnectionDeletedWaiter(v.ec2Client)
+	err = waiter.Wait(ctx, &ec2.DescribeVpcPeeringConnectionsInput{
+		VpcPeeringConnectionIds: []string{peeringConnectionID},
+	}, vpcPeeringConnectionDeletedWaiterTimeout)
+	if err != nil {
+		return fmt.Errorf("waiting for peering connection %s to be deleted: %w", peeringConnectionID, err)
+	}
+
+	v.logger.Info("Deleted peering connection", "peeringConnectionID", peeringConnectionID)
+	return nil
+}
+
+func (v *VPCCleaner) ListVPCs(ctx context.Context, input FilterInput) ([]string, error) {
+	paginator := ec2.NewDescribeVpcsPaginator(v.ec2Client, &ec2.DescribeVpcsInput{
+		Filters: ec2Filters(input),
+	})
+
+	var vpcIDs []string
+	for paginator.HasMorePages() {
+		resp, err := paginator.NextPage(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("describing VPCs: %w", err)
+		}
+
+		for _, vpc := range resp.Vpcs {
+			creationTime, err := creationTimeFromTags(vpc.Tags)
+			if err != nil {
+				return nil, fmt.Errorf("getting creation time from tags: %w", err)
+			}
+			resource := ResourceWithTags{
+				ID:           aws.ToString(vpc.VpcId),
+				Tags:         convertEC2Tags(vpc.Tags),
+				CreationTime: creationTime,
+			}
+
+			if shouldDeleteResource(resource, input) {
+				vpcIDs = append(vpcIDs, aws.ToString(vpc.VpcId))
+			}
+		}
+	}
+
+	return vpcIDs, nil
+}
+
+func (v *VPCCleaner) DeleteVPC(ctx context.Context, vpcID string) error {
+	_, err := v.ec2Client.DeleteVpc(ctx, &ec2.DeleteVpcInput{
+		VpcId: aws.String(vpcID),
+	})
+	if err != nil && isAwsError(err, "InvalidVpcID.NotFound") {
+		v.logger.Info("VPC already deleted", "vpcID", vpcID)
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("deleting VPC %s: %w", vpcID, err)
+	}
+
+	v.logger.Info("Deleted VPC", "vpcID", vpcID)
+	return nil
+}
+
+func (v *VPCCleaner) ListInternetGateways(ctx context.Context, input FilterInput) ([]string, error) {
+	paginator := ec2.NewDescribeInternetGatewaysPaginator(v.ec2Client, &ec2.DescribeInternetGatewaysInput{
+		Filters: ec2Filters(input),
+	})
+
+	var igwIDs []string
+	for paginator.HasMorePages() {
+		resp, err := paginator.NextPage(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("describing internet gateways: %w", err)
+		}
+
+		for _, igw := range resp.InternetGateways {
+			creationTime, err := creationTimeFromTags(igw.Tags)
+			if err != nil {
+				return nil, fmt.Errorf("getting creation time from tags: %w", err)
+			}
+			resource := ResourceWithTags{
+				ID:           aws.ToString(igw.InternetGatewayId),
+				Tags:         convertEC2Tags(igw.Tags),
+				CreationTime: creationTime,
+			}
+
+			if shouldDeleteResource(resource, input) {
+				igwIDs = append(igwIDs, *igw.InternetGatewayId)
+			}
+		}
+	}
+
+	return igwIDs, nil
+}
+
+func (v *VPCCleaner) DeleteInternetGateway(ctx context.Context, igwID string) error {
+	// Get the gateway to find its attachments
+	resp, err := v.ec2Client.DescribeInternetGateways(ctx, &ec2.DescribeInternetGatewaysInput{
+		InternetGatewayIds: []string{igwID},
+	})
+	if err != nil && isAwsError(err, "InvalidInternetGatewayID.NotFound") {
+		v.logger.Info("Internet gateway already deleted", "igwID", igwID)
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("describing internet gateway %s: %w", igwID, err)
+	}
+	if len(resp.InternetGateways) == 0 {
+		return nil
+	}
+
+	igw := resp.InternetGateways[0]
+	// Detach from any VPCs first
+	for _, attachment := range igw.Attachments {
+		vpcID := aws.ToString(attachment.VpcId)
+		v.logger.Info("Detaching internet gateway", "igwID", igwID, "vpcID", vpcID)
+
+		_, err := v.ec2Client.DetachInternetGateway(ctx, &ec2.DetachInternetGatewayInput{
+			InternetGatewayId: aws.String(igwID),
+			VpcId:             aws.String(vpcID),
+		})
+		if err != nil {
+			return fmt.Errorf("detaching internet gateway %s from VPC %s: %w", igwID, vpcID, err)
+		}
+	}
+
+	_, err = v.ec2Client.DeleteInternetGateway(ctx, &ec2.DeleteInternetGatewayInput{
+		InternetGatewayId: aws.String(igwID),
+	})
+	if err != nil && !isAwsError(err, "InvalidInternetGatewayID.NotFound") {
+		return fmt.Errorf("deleting internet gateway %s: %w", igwID, err)
+	}
+
+	v.logger.Info("Deleted internet gateway", "igwID", igwID)
+	return nil
+}
+
+func (v *VPCCleaner) ListSubnets(ctx context.Context, input FilterInput) ([]string, error) {
+	paginator := ec2.NewDescribeSubnetsPaginator(v.ec2Client, &ec2.DescribeSubnetsInput{
+		Filters: ec2Filters(input),
+	})
+
+	var subnetIDs []string
+	for paginator.HasMorePages() {
+		resp, err := paginator.NextPage(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("describing subnets: %w", err)
+		}
+
+		for _, subnet := range resp.Subnets {
+			creationTime, err := creationTimeFromTags(subnet.Tags)
+			if err != nil {
+				return nil, fmt.Errorf("getting creation time from tags: %w", err)
+			}
+			resource := ResourceWithTags{
+				ID:           aws.ToString(subnet.SubnetId),
+				Tags:         convertEC2Tags(subnet.Tags),
+				CreationTime: creationTime,
+			}
+
+			if shouldDeleteResource(resource, input) {
+				subnetIDs = append(subnetIDs, *subnet.SubnetId)
+			}
+		}
+	}
+
+	return subnetIDs, nil
+}
+
+func (v *VPCCleaner) DeleteSubnet(ctx context.Context, subnetID string) error {
+	_, err := v.ec2Client.DeleteSubnet(ctx, &ec2.DeleteSubnetInput{
+		SubnetId: aws.String(subnetID),
+	})
+	if err != nil && (isAwsError(err, "InvalidSubnetID.NotFound") || isAwsError(err, "InvalidSubnetId.NotFound")) {
+		v.logger.Info("Subnet already deleted", "subnetID", subnetID)
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("deleting subnet %s: %w", subnetID, err)
+	}
+
+	v.logger.Info("Deleted subnet", "subnetID", subnetID)
+	return nil
+}
+
+func (v *VPCCleaner) ListRouteTables(ctx context.Context, input FilterInput) ([]string, error) {
+	paginator := ec2.NewDescribeRouteTablesPaginator(v.ec2Client, &ec2.DescribeRouteTablesInput{
+		Filters: ec2Filters(input),
+	})
+
+	var routeTableIDs []string
+	for paginator.HasMorePages() {
+		resp, err := paginator.NextPage(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("describing route tables: %w", err)
+		}
+
+		for _, rt := range resp.RouteTables {
+			creationTime, err := creationTimeFromTags(rt.Tags)
+			if err != nil {
+				return nil, fmt.Errorf("getting creation time from tags: %w", err)
+			}
+			resource := ResourceWithTags{
+				ID:           aws.ToString(rt.RouteTableId),
+				Tags:         convertEC2Tags(rt.Tags),
+				CreationTime: creationTime,
+			}
+
+			// Skip main route tables - we'll handle them when deleting the VPC
+			isMain := false
+			for _, assoc := range rt.Associations {
+				if aws.ToBool(assoc.Main) {
+					isMain = true
+					break
+				}
+			}
+
+			if !isMain && shouldDeleteResource(resource, input) {
+				routeTableIDs = append(routeTableIDs, *rt.RouteTableId)
+			}
+		}
+	}
+
+	return routeTableIDs, nil
+}
+
+func (v *VPCCleaner) DeleteRouteTable(ctx context.Context, routeTableID string) error {
+	_, err := v.ec2Client.DeleteRouteTable(ctx, &ec2.DeleteRouteTableInput{
+		RouteTableId: aws.String(routeTableID),
+	})
+	if err != nil && isAwsError(err, "InvalidRouteTableID.NotFound") {
+		v.logger.Info("Route table already deleted", "routeTableID", routeTableID)
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("deleting route table %s: %w", routeTableID, err)
+	}
+
+	v.logger.Info("Deleted route table", "routeTableID", routeTableID)
+	return nil
+}
+
+func (v *VPCCleaner) ListSecurityGroups(ctx context.Context, input FilterInput) ([]string, error) {
+	paginator := ec2.NewDescribeSecurityGroupsPaginator(v.ec2Client, &ec2.DescribeSecurityGroupsInput{
+		Filters: ec2Filters(input),
+	})
+
+	var securityGroupIDs []string
+	for paginator.HasMorePages() {
+		resp, err := paginator.NextPage(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("describing security groups: %w", err)
+		}
+
+		for _, sg := range resp.SecurityGroups {
+			if aws.ToString(sg.GroupName) == "default" {
+				continue
+			}
+
+			creationTime, err := creationTimeFromTags(sg.Tags)
+			if err != nil {
+				return nil, fmt.Errorf("getting creation time from tags: %w", err)
+			}
+			resource := ResourceWithTags{
+				ID:           aws.ToString(sg.GroupId),
+				Tags:         convertEC2Tags(sg.Tags),
+				CreationTime: creationTime,
+			}
+
+			if shouldDeleteResource(resource, input) {
+				securityGroupIDs = append(securityGroupIDs, *sg.GroupId)
+			}
+		}
+	}
+
+	return securityGroupIDs, nil
+}
+
+func (v *VPCCleaner) DeleteSecurityGroup(ctx context.Context, securityGroupID string) error {
+	_, err := v.ec2Client.DeleteSecurityGroup(ctx, &ec2.DeleteSecurityGroupInput{
+		GroupId: aws.String(securityGroupID),
+	})
+	if err != nil && isAwsError(err, "InvalidSecurityGroupId.NotFound") {
+		v.logger.Info("Security group already deleted", "securityGroupID", securityGroupID)
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("deleting security group %s: %w", securityGroupID, err)
+	}
+
+	v.logger.Info("Deleted security group", "securityGroupID", securityGroupID)
+	return nil
+}
+
+func ec2Filters(input FilterInput) []types.Filter {
+	filters := []types.Filter{
+		{
+			Name:   aws.String("tag-key"),
+			Values: []string{constants.TestClusterTagKey},
+		},
+	}
+	clusterNameFilter := input.ClusterName
+	if input.ClusterNamePrefix != "" {
+		clusterNameFilter = input.ClusterNamePrefix + "*"
+	}
+	if clusterNameFilter != "" {
+		filters = append(filters, types.Filter{
+			Name:   aws.String("tag:" + constants.TestClusterTagKey),
+			Values: []string{clusterNameFilter},
+		})
+	}
+	return filters
+}
+
+func convertEC2Tags(ec2Tags []types.Tag) []Tag {
+	tags := make([]Tag, 0, len(ec2Tags))
+	for _, tag := range ec2Tags {
+		tags = append(tags, Tag{
+			Key:   aws.ToString(tag.Key),
+			Value: aws.ToString(tag.Value),
+		})
+	}
+	return tags
+}
+
+// creationTimeFromTags parses the creation time from the tags since
+// most vpc resources don't have a creation time
+func creationTimeFromTags(tags []types.Tag) (time.Time, error) {
+	for _, tag := range tags {
+		if aws.ToString(tag.Key) == constants.CreationTimeTagKey {
+			creationTime, err := time.Parse(time.RFC3339, aws.ToString(tag.Value))
+			if err != nil {
+				return creationTime, fmt.Errorf("parsing creation time from tag: %w", err)
+			}
+			return creationTime, nil
+		}
+	}
+	// if we don't find a creation time tag, return the current time
+	// if we are cleaning by cluster-name it will get deleted
+	// if its the sweeper based on age of resources it will be left
+	return time.Now(), nil
+}
+
+func isAwsError(err error, code string) bool {
+	var awsErr smithy.APIError
+	ok := errors.As(err, &awsErr)
+	return err != nil && ok && awsErr.ErrorCode() == code
+}

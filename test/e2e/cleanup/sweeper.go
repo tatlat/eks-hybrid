@@ -116,6 +116,30 @@ func (c *Sweeper) Run(ctx context.Context, input SweeperInput) error {
 		return fmt.Errorf("cleaning up IAM roles: %w", err)
 	}
 
+	if err := c.cleanupPeeringConnections(ctx, filterInput); err != nil {
+		return fmt.Errorf("cleaning up peering connections: %w", err)
+	}
+
+	if err := c.cleanupInternetGateways(ctx, filterInput); err != nil {
+		return fmt.Errorf("cleaning up internet gateways: %w", err)
+	}
+
+	if err := c.cleanupSubnets(ctx, filterInput); err != nil {
+		return fmt.Errorf("cleaning up subnets: %w", err)
+	}
+
+	if err := c.cleanupRouteTables(ctx, filterInput); err != nil {
+		return fmt.Errorf("cleaning up route tables: %w", err)
+	}
+
+	if err := c.cleanupSecurityGroups(ctx, filterInput); err != nil {
+		return fmt.Errorf("cleaning up security groups: %w", err)
+	}
+
+	if err := c.cleanupVPCs(ctx, filterInput); err != nil {
+		return fmt.Errorf("cleaning up VPCs: %w", err)
+	}
+
 	if err := c.cleanupS3PodIdentityBuckets(ctx, filterInput); err != nil {
 		return fmt.Errorf("cleaning up S3 pod identity buckets: %w", err)
 	}
@@ -430,6 +454,126 @@ func (c *Sweeper) cleanupKeyPairs(ctx context.Context, filterInput FilterInput) 
 	for _, keyPairID := range keyPairIDs {
 		if err := ec2Cleaner.DeleteKeyPair(ctx, keyPairID); err != nil {
 			return fmt.Errorf("deleting key pair %s: %w", keyPairID, err)
+		}
+	}
+	return nil
+}
+
+func (c *Sweeper) cleanupPeeringConnections(ctx context.Context, filterInput FilterInput) error {
+	vpcCleaner := NewVPCCleaner(c.ec2Client, c.logger)
+	peeringConnectionIDs, err := vpcCleaner.ListPeeringConnections(ctx, filterInput)
+	if err != nil {
+		return fmt.Errorf("listing peering connections: %w", err)
+	}
+
+	c.logger.Info("Deleting peering connections", "peeringConnectionIDs", peeringConnectionIDs)
+	if filterInput.DryRun {
+		return nil
+	}
+
+	for _, peeringConnectionID := range peeringConnectionIDs {
+		if err := vpcCleaner.DeletePeeringConnection(ctx, peeringConnectionID); err != nil {
+			return fmt.Errorf("deleting peering connection %s: %w", peeringConnectionID, err)
+		}
+	}
+	return nil
+}
+
+func (c *Sweeper) cleanupInternetGateways(ctx context.Context, filterInput FilterInput) error {
+	vpcCleaner := NewVPCCleaner(c.ec2Client, c.logger)
+	internetGatewayIDs, err := vpcCleaner.ListInternetGateways(ctx, filterInput)
+	if err != nil {
+		return fmt.Errorf("listing internet gateways: %w", err)
+	}
+
+	c.logger.Info("Deleting internet gateways", "internetGatewayIDs", internetGatewayIDs)
+	if filterInput.DryRun {
+		return nil
+	}
+
+	for _, internetGatewayID := range internetGatewayIDs {
+		if err := vpcCleaner.DeleteInternetGateway(ctx, internetGatewayID); err != nil {
+			return fmt.Errorf("deleting internet gateway %s: %w", internetGatewayID, err)
+		}
+	}
+	return nil
+}
+
+func (c *Sweeper) cleanupSubnets(ctx context.Context, filterInput FilterInput) error {
+	vpcCleaner := NewVPCCleaner(c.ec2Client, c.logger)
+	subnetIDs, err := vpcCleaner.ListSubnets(ctx, filterInput)
+	if err != nil {
+		return fmt.Errorf("listing subnets: %w", err)
+	}
+
+	c.logger.Info("Deleting subnets", "subnetIDs", subnetIDs)
+	if filterInput.DryRun {
+		return nil
+	}
+
+	for _, subnetID := range subnetIDs {
+		if err := vpcCleaner.DeleteSubnet(ctx, subnetID); err != nil {
+			return fmt.Errorf("deleting subnet %s: %w", subnetID, err)
+		}
+	}
+	return nil
+}
+
+func (c *Sweeper) cleanupVPCs(ctx context.Context, filterInput FilterInput) error {
+	vpcCleaner := NewVPCCleaner(c.ec2Client, c.logger)
+	vpcIDs, err := vpcCleaner.ListVPCs(ctx, filterInput)
+	if err != nil {
+		return fmt.Errorf("listing VPCs: %w", err)
+	}
+
+	c.logger.Info("Deleting VPCs", "vpcIDs", vpcIDs)
+	if filterInput.DryRun {
+		return nil
+	}
+
+	for _, vpcID := range vpcIDs {
+		if err := vpcCleaner.DeleteVPC(ctx, vpcID); err != nil {
+			return fmt.Errorf("deleting VPC %s: %w", vpcID, err)
+		}
+	}
+	return nil
+}
+
+func (c *Sweeper) cleanupRouteTables(ctx context.Context, filterInput FilterInput) error {
+	vpcCleaner := NewVPCCleaner(c.ec2Client, c.logger)
+	routeTableIDs, err := vpcCleaner.ListRouteTables(ctx, filterInput)
+	if err != nil {
+		return fmt.Errorf("listing route tables: %w", err)
+	}
+
+	c.logger.Info("Deleting route tables", "routeTableIDs", routeTableIDs)
+	if filterInput.DryRun {
+		return nil
+	}
+
+	for _, routeTableID := range routeTableIDs {
+		if err := vpcCleaner.DeleteRouteTable(ctx, routeTableID); err != nil {
+			return fmt.Errorf("deleting route table %s: %w", routeTableID, err)
+		}
+	}
+	return nil
+}
+
+func (c *Sweeper) cleanupSecurityGroups(ctx context.Context, filterInput FilterInput) error {
+	vpcCleaner := NewVPCCleaner(c.ec2Client, c.logger)
+	securityGroupIDs, err := vpcCleaner.ListSecurityGroups(ctx, filterInput)
+	if err != nil {
+		return fmt.Errorf("listing security groups: %w", err)
+	}
+
+	c.logger.Info("Deleting security groups", "securityGroupIDs", securityGroupIDs)
+	if filterInput.DryRun {
+		return nil
+	}
+
+	for _, securityGroupID := range securityGroupIDs {
+		if err := vpcCleaner.DeleteSecurityGroup(ctx, securityGroupID); err != nil {
+			return fmt.Errorf("deleting security group %s: %w", securityGroupID, err)
 		}
 	}
 	return nil

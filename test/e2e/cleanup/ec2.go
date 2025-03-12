@@ -9,8 +9,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/go-logr/logr"
-
-	"github.com/aws/eks-hybrid/test/e2e/constants"
 )
 
 const (
@@ -34,44 +32,18 @@ func shouldTerminateInstance(instance types.Instance, input FilterInput) bool {
 		return false
 	}
 
-	var tags []Tag
-	for _, tag := range instance.Tags {
-		tags = append(tags, Tag{
-			Key:   *tag.Key,
-			Value: *tag.Value,
-		})
-	}
-
 	resource := ResourceWithTags{
 		ID:           *instance.InstanceId,
 		CreationTime: aws.ToTime(instance.LaunchTime),
-		Tags:         tags,
+		Tags:         convertEC2Tags(instance.Tags),
 	}
 	return shouldDeleteResource(resource, input)
 }
 
 func (e *EC2Cleaner) ListTaggedInstances(ctx context.Context, input FilterInput) ([]string, error) {
-	describeInput := &ec2.DescribeInstancesInput{
-		Filters: []types.Filter{
-			{
-				Name:   aws.String("tag-key"),
-				Values: []string{constants.TestClusterTagKey},
-			},
-		},
-	}
-
-	clusterNameFilter := input.ClusterName
-	if input.ClusterNamePrefix != "" {
-		clusterNameFilter = input.ClusterNamePrefix + "*"
-	}
-	if clusterNameFilter != "" {
-		describeInput.Filters = append(describeInput.Filters, types.Filter{
-			Name:   aws.String("tag:" + constants.TestClusterTagKey),
-			Values: []string{clusterNameFilter},
-		})
-	}
-
-	paginator := ec2.NewDescribeInstancesPaginator(e.ec2Client, describeInput)
+	paginator := ec2.NewDescribeInstancesPaginator(e.ec2Client, &ec2.DescribeInstancesInput{
+		Filters: ec2Filters(input),
+	})
 
 	var instanceIDs []string
 
@@ -116,27 +88,9 @@ func (e *EC2Cleaner) DeleteInstances(ctx context.Context, instanceIDs []string) 
 }
 
 func (e *EC2Cleaner) ListKeyPairs(ctx context.Context, input FilterInput) ([]string, error) {
-	describeInput := &ec2.DescribeKeyPairsInput{
-		Filters: []types.Filter{
-			{
-				Name:   aws.String("tag-key"),
-				Values: []string{constants.TestClusterTagKey},
-			},
-		},
-	}
-
-	clusterNameFilter := input.ClusterName
-	if input.ClusterNamePrefix != "" {
-		clusterNameFilter = input.ClusterNamePrefix + "*"
-	}
-	if clusterNameFilter != "" {
-		describeInput.Filters = append(describeInput.Filters, types.Filter{
-			Name:   aws.String("tag:" + constants.TestClusterTagKey),
-			Values: []string{clusterNameFilter},
-		})
-	}
-
-	keyPairs, err := e.ec2Client.DescribeKeyPairs(ctx, describeInput)
+	keyPairs, err := e.ec2Client.DescribeKeyPairs(ctx, &ec2.DescribeKeyPairsInput{
+		Filters: ec2Filters(input),
+	})
 	if err != nil {
 		return nil, fmt.Errorf("describing key pairs: %w", err)
 	}
@@ -162,18 +116,10 @@ func (e *EC2Cleaner) DeleteKeyPair(ctx context.Context, keyPairID string) error 
 }
 
 func shouldDeleteKeyPair(keyPair types.KeyPairInfo, input FilterInput) bool {
-	var tags []Tag
-	for _, tag := range keyPair.Tags {
-		tags = append(tags, Tag{
-			Key:   *tag.Key,
-			Value: *tag.Value,
-		})
-	}
-
 	resource := ResourceWithTags{
 		ID:           *keyPair.KeyPairId,
 		CreationTime: aws.ToTime(keyPair.CreateTime),
-		Tags:         tags,
+		Tags:         convertEC2Tags(keyPair.Tags),
 	}
 	return shouldDeleteResource(resource, input)
 }
