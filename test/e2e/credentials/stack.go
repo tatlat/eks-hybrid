@@ -19,6 +19,7 @@ import (
 	"github.com/aws/smithy-go"
 	"github.com/go-logr/logr"
 
+	"github.com/aws/eks-hybrid/test/e2e/cleanup"
 	"github.com/aws/eks-hybrid/test/e2e/constants"
 	e2errors "github.com/aws/eks-hybrid/test/e2e/errors"
 )
@@ -135,6 +136,10 @@ func (s *Stack) deployStack(ctx context.Context, logger logr.Logger) error {
 			ParameterKey:   aws.String("caBundleCert"),
 			ParameterValue: aws.String(string(s.IAMRolesAnywhereCACert)),
 		},
+		{
+			ParameterKey:   aws.String("rolePathPrefix"),
+			ParameterValue: aws.String(constants.TestRolePathPrefix),
+		},
 	}
 
 	var buf bytes.Buffer
@@ -219,7 +224,7 @@ func (s *Stack) createInstanceProfile(ctx context.Context, logger logr.Logger, r
 		logger.Info("Creating instance profile", "instanceProfileName", instanceProfileName)
 		instanceProfileArnOut, err := s.IAM.CreateInstanceProfile(ctx, &iam.CreateInstanceProfileInput{
 			InstanceProfileName: aws.String(instanceProfileName),
-			Path:                aws.String("/"),
+			Path:                aws.String(constants.TestRolePathPrefix),
 			Tags: []iamTypes.Tag{{
 				Key:   aws.String(constants.TestClusterTagKey),
 				Value: aws.String(s.ClusterName),
@@ -332,22 +337,12 @@ func (s *Stack) Delete(ctx context.Context, logger logr.Logger, output *StackOut
 		return fmt.Errorf("deleting iam-ra access entry: %w", err)
 	}
 
-	_, err = s.CFN.DeleteStack(ctx, &cloudformation.DeleteStackInput{
-		StackName: aws.String(s.Name),
-	})
+	cfnCleaner := cleanup.NewCFNStackCleanup(s.CFN, logger)
+	err = cfnCleaner.DeleteStack(ctx, s.Name)
 	if err != nil {
 		return fmt.Errorf("deleting hybrid nodes cfn stack: %w", err)
 	}
-	waiter := cloudformation.NewStackDeleteCompleteWaiter(s.CFN, func(opts *cloudformation.StackDeleteCompleteWaiterOptions) {
-		opts.MinDelay = stackRetryDelay
-		opts.MaxDelay = stackRetryDelay
-	})
-	err = waiter.Wait(ctx,
-		&cloudformation.DescribeStacksInput{StackName: aws.String(s.Name)},
-		stackDeletionTimeout)
-	if err != nil {
-		return fmt.Errorf("waiting for hybrid nodes cfn stack: %w", err)
-	}
+
 	logger.Info("E2E resources stack deleted successfully", "stackName", s.Name)
 	return nil
 }

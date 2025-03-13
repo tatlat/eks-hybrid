@@ -56,10 +56,18 @@ hybridNetwork:
 EOF
 
 function cleanup(){
+  local exit_code=$?
+  
+  # run all three cleanup steps, but return non-zero if any fail
   if [ -f $RESOURCES_YAML ]; then
-    $BIN_DIR/e2e-test cleanup -f $RESOURCES_YAML || true
+    $BIN_DIR/e2e-test cleanup -f $RESOURCES_YAML || ((exit_code++)) || true
   fi
-  $REPO_ROOT/hack/e2e-cleanup.sh $CLUSTER_NAME
+  $BIN_DIR/e2e-test sweeper --cluster-name $CLUSTER_NAME || ((exit_code++)) || true
+
+  # TODO: remove this once the sweeper is fully implemented
+  $REPO_ROOT/hack/e2e-cleanup.sh $CLUSTER_NAME || ((exit_code++)) || true
+
+  exit $exit_code
 }
 
 trap "cleanup" EXIT
