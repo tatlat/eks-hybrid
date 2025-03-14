@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"path/filepath"
 	"time"
 
 	"github.com/ProtonMail/gopenpgp/v3/crypto"
@@ -18,6 +19,7 @@ import (
 
 	"github.com/aws/eks-hybrid/internal/artifact"
 	"github.com/aws/eks-hybrid/internal/tracker"
+	"github.com/aws/eks-hybrid/internal/util"
 	"github.com/aws/eks-hybrid/internal/util/cmd"
 )
 
@@ -25,6 +27,11 @@ const (
 	defaultInstallerPath = "/opt/ssm/ssm-setup-cli"
 	configRoot           = "/etc/amazon"
 	artifactName         = "ssm"
+
+	rootDir            = "/root"
+	gpgConfigDirName   = ".gnupg"
+	gpgConfigFileName  = "gpg.conf"
+	gpgConfigFilePerms = 0o755
 )
 
 // Source serves an SSM installer binary for the target platform.
@@ -58,6 +65,10 @@ func Install(ctx context.Context, opts InstallOptions) error {
 func installFromSource(ctx context.Context, opts InstallOptions) error {
 	if opts.InstallerPath == "" {
 		opts.InstallerPath = defaultInstallerPath
+	}
+
+	if err := writeGpgConfig(); err != nil {
+		return errors.Wrapf(err, "writing gpg config file")
 	}
 
 	if err := downloadFileWithRetries(ctx, opts.Source, opts.Logger, opts.InstallerPath); err != nil {
@@ -194,12 +205,14 @@ func DeregisterAndUninstall(ctx context.Context, logger *zap.Logger, pkgSource P
 	return os.RemoveAll(symlinkedAWSConfigPath)
 }
 
-// Uninstall uninstall the ssm agent package and removes the setup-cli binary.
-// It does not de-register the managed instance and it leaves the registration and
-// credentials file.
-func Uninstall(ctx context.Context, logger *zap.Logger, pkgSource PkgSource) error {
-	logger.Info("Uninstalling SSM agent...")
-	return uninstallPreRegisterComponents(ctx, pkgSource)
+func writeGpgConfig() error {
+	// In some environments, HOME will not be defined like while running cloud-init
+	homeDir, set := os.LookupEnv("HOME")
+	if !set {
+		homeDir = rootDir
+	}
+	gpgConfigFile := filepath.Join(homeDir, gpgConfigDirName, gpgConfigFileName)
+	return util.WriteFileUniqueLine(gpgConfigFile, []byte("no-tty"), gpgConfigFilePerms)
 }
 
 func uninstallPreRegisterComponents(ctx context.Context, pkgSource PkgSource) error {
