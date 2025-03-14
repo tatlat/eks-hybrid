@@ -201,10 +201,18 @@ func GetStackFailureReason(ctx context.Context, client *cloudformation.Client, s
 			if event.ResourceStatusReason == nil {
 				continue
 			}
+
 			timestamp := aws.ToTime(event.Timestamp)
 			if timestamp.Before(firstFailedEventTimestamp) {
 				firstFailedEventTimestamp = timestamp
-				firstFailedEventReason = *event.ResourceStatusReason
+
+				var resourceID string
+				if event.LogicalResourceId != nil {
+					resourceID = *event.LogicalResourceId
+				} else {
+					resourceID = "UnknownResource"
+				}
+				firstFailedEventReason = fmt.Sprintf("%s for %s: %s", event.ResourceStatus, resourceID, *event.ResourceStatusReason)
 			}
 		}
 	}
