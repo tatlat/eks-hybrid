@@ -74,7 +74,10 @@ func (s *SsmProvider) createSSMActivation(ctx context.Context, clusterName, node
 	}
 
 	// Call CreateActivation to create the SSM activation
-	result, err := s.SSM.CreateActivation(ctx, input)
+	result, err := s.SSM.CreateActivation(ctx, input, func(o *ssm.Options) {
+		o.RetryMaxAttempts = 20
+		o.RetryMode = aws.RetryModeAdaptive
+	})
 	if err != nil {
 		return nil, fmt.Errorf("creating SSM activation: %v", err)
 	}
