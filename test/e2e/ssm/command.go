@@ -47,7 +47,8 @@ func (s *SSHOnSSM) Run(ctx context.Context, ip string, commands []string) (e2eCo
 }
 
 func RunCommand(ctx context.Context, client *ssm.Client, instanceId, command string, logger logr.Logger) (e2eCommands.RemoteCommandOutput, error) {
-	logger.Info(fmt.Sprintf("Running command: %v\n", command))
+	sanitizedCommand := sanitizeS3PresignedURL(command)
+	logger.Info(fmt.Sprintf("Running command: %v\n", sanitizedCommand))
 	input := &ssm.SendCommandInput{
 		DocumentName: aws.String("AWS-RunShellScript"),
 		Parameters: map[string][]string{
@@ -89,6 +90,20 @@ func RunCommand(ctx context.Context, client *ssm.Client, instanceId, command str
 	logger.Info(fmt.Sprintf("Stderr: %s", commandOutput.StandardError))
 
 	return commandOutput, nil
+}
+
+// sanitizeS3PresignedURL strips off the S3 presigned URL query parameters to avoid exposing sensitive information in logs
+func sanitizeS3PresignedURL(command string) string {
+	if !strings.Contains(command, "log-collector.sh") {
+		return command
+	}
+
+	// Find the position of the query string in the URL
+	questionMarkPos := strings.Index(command, "?")
+	if questionMarkPos == -1 {
+		return command
+	}
+	return command[:questionMarkPos] + "?[REDACTED]'\""
 }
 
 // WaitForInstance uses DescribeInstanceInformation in a loop to wait for it be registered
