@@ -372,6 +372,55 @@ func (v *VPCCleaner) DeleteSecurityGroup(ctx context.Context, securityGroupID st
 	return nil
 }
 
+func (v *VPCCleaner) ListNetworkInterfaces(ctx context.Context, vpcID string) ([]string, error) {
+	paginator := ec2.NewDescribeNetworkInterfacesPaginator(v.ec2Client, &ec2.DescribeNetworkInterfacesInput{
+		Filters: []types.Filter{
+			{
+				Name:   aws.String("vpc-id"),
+				Values: []string{vpcID},
+			},
+		},
+	})
+
+	var networkInterfaceIDs []string
+	for paginator.HasMorePages() {
+		resp, err := paginator.NextPage(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("describing network interfaces: %w", err)
+		}
+
+		for _, eni := range resp.NetworkInterfaces {
+			// Skip interfaces with attachments
+			if eni.Attachment != nil && eni.Attachment.AttachmentId != nil {
+				v.logger.Info("Skipping network interface with attachment",
+					"networkInterfaceID", aws.ToString(eni.NetworkInterfaceId),
+					"attachmentID", aws.ToString(eni.Attachment.AttachmentId))
+				continue
+			}
+
+			networkInterfaceIDs = append(networkInterfaceIDs, aws.ToString(eni.NetworkInterfaceId))
+		}
+	}
+
+	return networkInterfaceIDs, nil
+}
+
+func (v *VPCCleaner) DeleteNetworkInterface(ctx context.Context, networkInterfaceID string) error {
+	_, err := v.ec2Client.DeleteNetworkInterface(ctx, &ec2.DeleteNetworkInterfaceInput{
+		NetworkInterfaceId: aws.String(networkInterfaceID),
+	})
+	if err != nil && isAwsError(err, "InvalidNetworkInterfaceID.NotFound") {
+		v.logger.Info("Network interface already deleted", "networkInterfaceID", networkInterfaceID)
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("deleting network interface %s: %w", networkInterfaceID, err)
+	}
+
+	v.logger.Info("Deleted network interface", "networkInterfaceID", networkInterfaceID)
+	return nil
+}
+
 func ec2Filters(input FilterInput) []types.Filter {
 	filters := []types.Filter{
 		{

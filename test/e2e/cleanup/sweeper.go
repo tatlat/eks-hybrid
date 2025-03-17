@@ -124,6 +124,10 @@ func (c *Sweeper) Run(ctx context.Context, input SweeperInput) error {
 		return fmt.Errorf("cleaning up internet gateways: %w", err)
 	}
 
+	if err := c.cleanupNetworkInterfaces(ctx, filterInput); err != nil {
+		return fmt.Errorf("cleaning up network interfaces: %w", err)
+	}
+
 	if err := c.cleanupSubnets(ctx, filterInput); err != nil {
 		return fmt.Errorf("cleaning up subnets: %w", err)
 	}
@@ -496,6 +500,41 @@ func (c *Sweeper) cleanupInternetGateways(ctx context.Context, filterInput Filte
 			return fmt.Errorf("deleting internet gateway %s: %w", internetGatewayID, err)
 		}
 	}
+	return nil
+}
+
+func (c *Sweeper) cleanupNetworkInterfaces(ctx context.Context, filterInput FilterInput) error {
+	vpcCleaner := NewVPCCleaner(c.ec2Client, c.logger)
+
+	// ENIs are likely not be tagged with our tag, nor should they ever be left around
+	// after the instance is deleted, but just in case we attempt to find any orphaned ENIs
+	// from VPC IDs
+	vpcIDs, err := vpcCleaner.ListVPCs(ctx, filterInput)
+	if err != nil {
+		return fmt.Errorf("listing VPCs: %w", err)
+	}
+	interfaceIds := []string{}
+
+	for _, vpcID := range vpcIDs {
+		networkInterfaceIDs, err := vpcCleaner.ListNetworkInterfaces(ctx, vpcID)
+		if err != nil {
+			return fmt.Errorf("listing network interfaces for VPC %s: %w", vpcID, err)
+		}
+
+		interfaceIds = append(interfaceIds, networkInterfaceIDs...)
+	}
+
+	c.logger.Info("Deleting network interfaces", "interfaceIds", interfaceIds)
+	if filterInput.DryRun {
+		return nil
+	}
+
+	for _, interfaceID := range interfaceIds {
+		if err := vpcCleaner.DeleteNetworkInterface(ctx, interfaceID); err != nil {
+			return fmt.Errorf("deleting network interface %s: %w", interfaceID, err)
+		}
+	}
+
 	return nil
 }
 
