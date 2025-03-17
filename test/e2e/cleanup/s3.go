@@ -40,7 +40,7 @@ func (s *S3Cleaner) ListBuckets(ctx context.Context, filterInput FilterInput) ([
 			tags, err := s.s3Client.GetBucketTagging(ctx, &s3.GetBucketTaggingInput{
 				Bucket: bucket.Name,
 			})
-			if err != nil && errors.IsType(err, &types.NoSuchBucket{}) {
+			if err != nil && errors.IsS3BucketNotFound(err) {
 				// skipping log since we are possiblying checking buckets we do not
 				// intend to delete
 				continue
