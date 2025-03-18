@@ -369,6 +369,9 @@ Resources:
   
   Jumpbox:
     Type: AWS::EC2::Instance
+    CreationPolicy:   
+      ResourceSignal:
+        Timeout: PT5M
     DeletionPolicy: Delete
     Properties:
       ImageId: resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64
@@ -404,6 +407,8 @@ Resources:
                   chmod 0600 /root/.ssh/id_rsa
                 path: /root/download-private-key.sh
                 permissions: "0755"
+            runcmd:
+              - cfn-signal --stack ${AWS::StackName} --resource Jumpbox --region ${AWS::Region}
 
   PodIdentityS3Bucket:
     Type: AWS::S3::Bucket

@@ -32,7 +32,7 @@ import (
 var setupTemplateBody []byte
 
 const (
-	stackWaitTimeout  = 5 * time.Minute
+	stackWaitTimeout  = 7 * time.Minute
 	stackWaitInterval = 10 * time.Second
 )
 
