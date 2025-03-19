@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 
 	"github.com/go-logr/logr"
-	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
 
 	"github.com/aws/eks-hybrid/test/e2e"
@@ -21,6 +20,7 @@ import (
 // The serial console output is also saved to a file until Close is called, no matter if you are running a test block or not.
 // This is very useful to help debugging issues with the node joining the cluster, specially if the process runs as part of the node initialization.
 type SerialOutputBlock struct {
+	by           func(description string, callback ...func())
 	serial       *ssh.SerialConsole
 	logsFile     io.WriteCloser
 	serialOutout *e2e.SwitchWriter
@@ -28,6 +28,7 @@ type SerialOutputBlock struct {
 }
 
 type SerialOutputConfig struct {
+	By           func(description string, callback ...func())
 	PeeredNode   *Node
 	Instance     ec2.Instance
 	TestLogger   e2e.PausableLogger
@@ -55,6 +56,7 @@ func NewSerialOutputBlock(ctx context.Context, config *SerialOutputConfig) (*Ser
 	}
 
 	return &SerialOutputBlock{
+		by:           config.By,
 		serial:       serial,
 		logsFile:     file,
 		testLogger:   config.TestLogger,
@@ -74,7 +76,7 @@ func (b *SerialOutputBlock) It(description string, body func()) {
 		gomega.Expect(b.testLogger.Resume()).To(gomega.Succeed())
 	}()
 
-	ginkgo.By(description, func() {
+	b.by(description, func() {
 		b.testLogger.Info(
 			fmt.Sprintf("Streaming Node serial output while the node %s. Test logs are paused in the meantime and will resume later.", description),
 		)
@@ -104,10 +106,11 @@ func (b *SerialOutputBlock) Close() {
 // stream the serial output and it will keep the test logs unpaused.
 type serialOutoutBlockNoop struct {
 	testLogger logr.Logger
+	by         func(description string, callback ...func())
 }
 
 func (b serialOutoutBlockNoop) It(description string, body func()) {
-	ginkgo.By(description, func() {
+	b.by(description, func() {
 		b.testLogger.Info("Serial console not available, skipping serial output stream and leaving test logs unpaused.")
 		body()
 	})
@@ -124,7 +127,10 @@ type ItBlockCloser interface {
 func NewSerialOutputBlockBestEffort(ctx context.Context, config *SerialOutputConfig) ItBlockCloser {
 	block, err := NewSerialOutputBlock(ctx, config)
 	if err != nil {
-		return serialOutoutBlockNoop{config.TestLogger.Logger}
+		return serialOutoutBlockNoop{
+			testLogger: config.TestLogger.Logger,
+			by:         config.By,
+		}
 	}
 
 	return block

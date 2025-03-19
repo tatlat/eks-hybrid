@@ -48,7 +48,7 @@ var (
 )
 
 type suiteConfiguration struct {
-	TestConfig             *TestConfig              `json:"testConfig"`
+	TestConfig             *e2e.TestConfig          `json:"testConfig"`
 	SkipCleanup            bool                     `json:"skipCleanup"`
 	CredentialsStackOutput *credentials.StackOutput `json:"ec2StackOutput"`
 	RolesAnywhereCACertPEM []byte                   `json:"rolesAnywhereCACertPEM"`
@@ -107,7 +107,7 @@ var _ = SynchronizedBeforeSuite(
 	// In this case, we use a struct marshalled in json.
 	func(ctx context.Context) []byte {
 		Expect(filePath).NotTo(BeEmpty(), "filepath should be configured") // Fail the test if the filepath flag is not provided
-		config, err := ReadConfig(filePath)
+		config, err := e2e.ReadConfig(filePath)
 		Expect(err).NotTo(HaveOccurred(), "should read valid test configuration")
 
 		logger := newLoggerForTests().Logger
@@ -271,6 +271,7 @@ var _ = Describe("Hybrid Nodes", func() {
 								verifyNode = test.newVerifyNode(instance.IP)
 
 								serialOutput = peered.NewSerialOutputBlockBestEffort(ctx, &peered.SerialOutputConfig{
+									By:           By,
 									PeeredNode:   peeredNode,
 									Instance:     instance,
 									TestLogger:   test.loggerControl,
@@ -386,6 +387,7 @@ var _ = Describe("Hybrid Nodes", func() {
 								verifyNode = test.newVerifyNode(instance.IP)
 
 								serialOutput = peered.NewSerialOutputBlockBestEffort(ctx, &peered.SerialOutputConfig{
+									By:           By,
 									PeeredNode:   peeredNode,
 									Instance:     instance,
 									TestLogger:   test.loggerControl,
