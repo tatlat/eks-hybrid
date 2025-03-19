@@ -65,14 +65,50 @@ type stack struct {
 
 func (s *stack) deploy(ctx context.Context, test TestResources) (*resourcesStackOutput, error) {
 	stackName := stackName(test.ClusterName)
+
+	params := s.prepareStackParameters(test)
+
+	// There are occasional race conditions when creating the cfn stack
+	// retrying once allows to potentially resolve them on the second attempt
+	// avoiding the need to retry the entire test suite.
+	var err error
+	for range 2 {
+		err = s.createOrUpdateStack(ctx, stackName, params, test)
+		if err == nil {
+			break
+		}
+		s.logger.Error(err, "Error deploying stack, retrying")
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("creating or updating hybrid nodes setup cfn stack: %w", err)
+	}
+
+	// We explictly fetch the keypair/jumpbox instead of relying on outputs
+	// from the cfn stack. We have seen cases across different regions
+	// where the outputs have been unreliable
+	if err := s.tagKeyPair(ctx, test.ClusterName); err != nil {
+		return nil, fmt.Errorf("tagging key pair: %w", err)
+	}
+
+	if err := s.setupJumpbox(ctx, test.ClusterName); err != nil {
+		return nil, fmt.Errorf("setting up jumpbox: %w", err)
+	}
+
 	resp, err := s.cfn.DescribeStacks(ctx, &cloudformation.DescribeStacksInput{
 		StackName: aws.String(stackName),
 	})
-	if err != nil && !e2eErrors.IsCFNStackNotFound(err) {
-		return nil, fmt.Errorf("looking for hybrid nodes cfn stack: %w", err)
+	if err != nil {
+		return nil, fmt.Errorf("describing hybrid nodes setup cfn stack: %w", err)
 	}
+	result := s.processStackOutputs(resp.Stacks[0].Outputs)
 
-	params := []types.Parameter{
+	s.logger.Info("E2E resources stack deployed successfully", "stackName", stackName)
+	return result, nil
+}
+
+func (s *stack) prepareStackParameters(test TestResources) []types.Parameter {
+	return []types.Parameter{
 		{
 			ParameterKey:   aws.String("ClusterName"),
 			ParameterValue: aws.String(test.ClusterName),
@@ -136,13 +172,23 @@ func (s *stack) deploy(ctx context.Context, test TestResources) (*resourcesStack
 			ParameterValue: aws.String(constants.CreationTimeTagKey),
 		},
 	}
+}
+
+func (s *stack) createOrUpdateStack(ctx context.Context, stackName string, params []types.Parameter, test TestResources) error {
+	resp, err := s.cfn.DescribeStacks(ctx, &cloudformation.DescribeStacksInput{
+		StackName: aws.String(stackName),
+	})
+	if err != nil && !e2eErrors.IsCFNStackNotFound(err) {
+		return fmt.Errorf("looking for hybrid nodes cfn stack: %w", err)
+	}
 
 	if resp == nil || resp.Stacks == nil {
 		s.logger.Info("Creating hybrid nodes setup stack", "stackName", stackName)
 		_, err = s.cfn.CreateStack(ctx, &cloudformation.CreateStackInput{
-			StackName:    aws.String(stackName),
-			TemplateBody: aws.String(string(setupTemplateBody)),
-			Parameters:   params,
+			DisableRollback: aws.Bool(true),
+			StackName:       aws.String(stackName),
+			TemplateBody:    aws.String(string(setupTemplateBody)),
+			Parameters:      params,
 			Capabilities: []types.Capability{
 				types.CapabilityCapabilityIam,
 				types.CapabilityCapabilityNamedIam,
@@ -153,24 +199,25 @@ func (s *stack) deploy(ctx context.Context, test TestResources) (*resourcesStack
 			}},
 		})
 		if err != nil {
-			return nil, fmt.Errorf("creating hybrid nodes setup cfn stack: %w", err)
+			return fmt.Errorf("creating hybrid nodes setup cfn stack: %w", err)
 		}
 
 		s.logger.Info("Waiting for hybrid nodes setup stack to be created", "stackName", stackName)
 		err = waitForStackOperation(ctx, s.cfn, stackName)
 		if err != nil {
-			return nil, fmt.Errorf("waiting for hybrid nodes setup cfn stack: %w", err)
+			return fmt.Errorf("waiting for hybrid nodes setup cfn stack: %w", err)
 		}
 	} else if resp.Stacks[0].StackStatus == types.StackStatusCreateInProgress {
 		s.logger.Info("Waiting for hybrid nodes setup stack to be created", "stackName", stackName)
 		err = waitForStackOperation(ctx, s.cfn, stackName)
 		if err != nil {
-			return nil, fmt.Errorf("waiting for hybrid nodes setup cfn stack: %w", err)
+			return fmt.Errorf("waiting for hybrid nodes setup cfn stack: %w", err)
 		}
 	} else {
 		s.logger.Info("Updating hybrid nodes setup stack", "stackName", stackName)
 		_, err = s.cfn.UpdateStack(ctx, &cloudformation.UpdateStackInput{
-			StackName: aws.String(stackName),
+			DisableRollback: aws.Bool(true),
+			StackName:       aws.String(stackName),
 			Capabilities: []types.Capability{
 				types.CapabilityCapabilityIam,
 				types.CapabilityCapabilityNamedIam,
@@ -183,27 +230,23 @@ func (s *stack) deploy(ctx context.Context, test TestResources) (*resourcesStack
 			if strings.Contains(err.Error(), "No updates are to be performed") {
 				s.logger.Info("No changes detected in the stack, no update necessary.")
 			} else {
-				return nil, fmt.Errorf("updating CloudFormation stack: %w", err)
+				return fmt.Errorf("updating CloudFormation stack: %w", err)
 			}
 		}
 
 		s.logger.Info("Waiting for hybrid nodes setup stack to be updated", "stackName", stackName)
 		err = waitForStackOperation(ctx, s.cfn, stackName)
 		if err != nil {
-			return nil, fmt.Errorf("waiting for hybrid nodes setup cfn stack: %w", err)
+			return fmt.Errorf("waiting for hybrid nodes setup cfn stack: %w", err)
 		}
 	}
+	return nil
+}
 
-	resp, err = s.cfn.DescribeStacks(ctx, &cloudformation.DescribeStacksInput{
-		StackName: aws.String(stackName),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("describing hybrid nodes setup cfn stack: %w", err)
-	}
-
+func (s *stack) processStackOutputs(outputs []types.Output) *resourcesStackOutput {
 	result := &resourcesStackOutput{}
 	// extract relevant stack outputs
-	for _, output := range resp.Stacks[0].Outputs {
+	for _, output := range outputs {
 		switch aws.ToString(output.OutputKey) {
 		case "ClusterRole":
 			result.clusterRole = *output.OutputValue
@@ -221,13 +264,13 @@ func (s *stack) deploy(ctx context.Context, test TestResources) (*resourcesStack
 			result.podIdentity.s3Bucket = *output.OutputValue
 		}
 	}
+	return result
+}
 
-	// We explictly fetch the keypair/jumpbox instead of relying on outputs
-	// from the cfn stack. We have seen cases across different regions
-	// where the outputs have been unreliable
-	keyPair, err := peered.KeyPair(ctx, s.ec2Client, test.ClusterName)
+func (s *stack) tagKeyPair(ctx context.Context, clusterName string) error {
+	keyPair, err := peered.KeyPair(ctx, s.ec2Client, clusterName)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	_, err = s.ssmClient.AddTagsToResource(ctx, &ssm.AddTagsToResourceInput{
 		ResourceId:   aws.String("/ec2/keypair/" + *keyPair.KeyPairId),
@@ -235,17 +278,20 @@ func (s *stack) deploy(ctx context.Context, test TestResources) (*resourcesStack
 		Tags: []ssmTypes.Tag{
 			{
 				Key:   aws.String(constants.TestClusterTagKey),
-				Value: aws.String(test.ClusterName),
+				Value: aws.String(clusterName),
 			},
 		},
 	})
 	if err != nil {
-		return nil, fmt.Errorf("tagging private key ssm parameter: %w", err)
+		return fmt.Errorf("tagging private key ssm parameter: %w", err)
 	}
+	return nil
+}
 
-	jumpbox, err := peered.JumpboxInstance(ctx, s.ec2Client, test.ClusterName)
+func (s *stack) setupJumpbox(ctx context.Context, clusterName string) error {
+	jumpbox, err := peered.JumpboxInstance(ctx, s.ec2Client, clusterName)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	instanceProfileName := strings.Split(*jumpbox.IamInstanceProfile.Arn, "/")[2]
@@ -254,29 +300,28 @@ func (s *stack) deploy(ctx context.Context, test TestResources) (*resourcesStack
 		Tags: []iamTypes.Tag{
 			{
 				Key:   aws.String(constants.TestClusterTagKey),
-				Value: aws.String(test.ClusterName),
+				Value: aws.String(clusterName),
 			},
 		},
 	})
 	if err != nil {
-		return nil, fmt.Errorf("tagging jumpbox instance profile: %w", err)
+		return fmt.Errorf("tagging jumpbox instance profile: %w", err)
 	}
 
 	if err := e2eSSM.WaitForInstance(ctx, s.ssmClient, *jumpbox.InstanceId, s.logger); err != nil {
-		return nil, err
+		return fmt.Errorf("waiting for jumpbox instance to be registered with ssm: %w", err)
 	}
 
 	command := "/root/download-private-key.sh"
 	output, err := e2eSSM.RunCommand(ctx, s.ssmClient, *jumpbox.InstanceId, command, s.logger)
 	if err != nil {
-		return nil, fmt.Errorf("jumpbox getting private key from ssm: %w", err)
+		return fmt.Errorf("jumpbox getting private key from ssm: %w", err)
 	}
 	if output.Status != "Success" {
-		return nil, fmt.Errorf("jumpbox getting private key from ssm")
+		return fmt.Errorf("jumpbox getting private key from ssm")
 	}
 
-	s.logger.Info("E2E resources stack deployed successfully", "stackName", stackName)
-	return result, nil
+	return nil
 }
 
 func stackName(clusterName string) string {
