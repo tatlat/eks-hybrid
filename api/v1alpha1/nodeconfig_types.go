@@ -107,8 +107,8 @@ const (
 // HybridOptions defines the options specific to hybrid node enrollment.
 type HybridOptions struct {
 	// EnableCredentialsFile enables a shared credentials file on the host at /eks-hybrid/.aws/credentials
-	// For SSM, this means that nodeadm will not create symlink from `/root/.aws/credentials` to `/eks-hybrid/.aws/credentials`.
-	// For IAM Roles Anywhere, this means that nodeadm will not set up a systemd service to write and refresh the credentials to `/eks-hybrid/.aws/credentials`.
+	// For SSM, this means that nodeadm will create a symlink from `/root/.aws/credentials` to `/eks-hybrid/.aws/credentials`.
+	// For IAM Roles Anywhere, this means that nodeadm will set up a systemd service to write and refresh the credentials to `/eks-hybrid/.aws/credentials`.
 	EnableCredentialsFile bool `json:"enableCredentialsFile,omitempty"`
 
 	// IAMRolesAnywhere includes IAM Roles Anywhere specific configuration and is mutually exclusive
