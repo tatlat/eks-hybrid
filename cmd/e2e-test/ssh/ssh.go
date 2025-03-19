@@ -7,12 +7,12 @@ import (
 	"os/exec"
 	"os/signal"
 
-	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/integrii/flaggy"
 	"go.uber.org/zap"
 
 	"github.com/aws/eks-hybrid/internal/cli"
+	"github.com/aws/eks-hybrid/test/e2e"
 	"github.com/aws/eks-hybrid/test/e2e/constants"
 	"github.com/aws/eks-hybrid/test/e2e/peered"
 )
@@ -45,7 +45,7 @@ func (c *Command) Commands() []cli.Command {
 func (s *Command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	ctx := context.Background()
 
-	cfg, err := config.LoadDefaultConfig(ctx)
+	cfg, err := e2e.NewAWSConfig(ctx)
 	if err != nil {
 		return fmt.Errorf("reading AWS configuration: %w", err)
 	}

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 
-	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/eks"
 	s3sdk "github.com/aws/aws-sdk-go-v2/service/s3"
@@ -69,7 +68,7 @@ func (c *create) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	}
 
 	logger := e2e.NewLogger()
-	aws, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(config.ClusterRegion))
+	aws, err := e2e.NewAWSConfig(ctx)
 	if err != nil {
 		return fmt.Errorf("reading AWS configuration: %w", err)
 	}

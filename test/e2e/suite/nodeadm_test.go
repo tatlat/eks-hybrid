@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/cloudformation"
 	ec2v2 "github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/eks"
@@ -112,7 +111,7 @@ var _ = SynchronizedBeforeSuite(
 		Expect(err).NotTo(HaveOccurred(), "should read valid test configuration")
 
 		logger := newLoggerForTests().Logger
-		aws, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(config.ClusterRegion))
+		aws, err := e2e.NewAWSConfig(ctx)
 		Expect(err).NotTo(HaveOccurred())
 
 		infra, err := peered.Setup(ctx, logger, aws, config.ClusterName, config.Endpoint)
@@ -459,7 +458,7 @@ func buildPeeredVPCTestForSuite(ctx context.Context, suite *suiteConfiguration) 
 		skipCleanup:            suite.SkipCleanup,
 	}
 
-	aws, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(suite.TestConfig.ClusterRegion), awsconfig.WithRetryMaxAttempts(20), awsconfig.WithRetryMode(aws.RetryModeAdaptive))
+	aws, err := e2e.NewAWSConfig(ctx)
 	if err != nil {
 		return nil, err
 	}
