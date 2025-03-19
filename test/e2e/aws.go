@@ -24,7 +24,7 @@ func Truncate(name string, limit int) string {
 	return name
 }
 
-func NewAWSConfig(ctx context.Context) (aws.Config, error) {
+func NewAWSConfig(ctx context.Context, optFns ...func(*config.LoadOptions) error) (aws.Config, error) {
 	return config.LoadDefaultConfig(ctx, config.WithRetryer(func() aws.Retryer {
 		return retry.NewAdaptiveMode(func(o *retry.AdaptiveModeOptions) {
 			// the adaptive retryer wraps the standard retryer but implements a custom rate limiterfor getting the AttemptToken
