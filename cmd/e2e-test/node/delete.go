@@ -21,7 +21,6 @@ import (
 	"github.com/aws/eks-hybrid/test/e2e/ec2"
 	"github.com/aws/eks-hybrid/test/e2e/peered"
 	"github.com/aws/eks-hybrid/test/e2e/ssm"
-	"github.com/aws/eks-hybrid/test/e2e/suite"
 )
 
 type Delete struct {
@@ -49,7 +48,7 @@ func (d *Delete) Flaggy() *flaggy.Subcommand {
 
 func (d *Delete) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	ctx := context.Background()
-	config, err := suite.ReadConfig(d.configFile)
+	config, err := e2e.ReadConfig(d.configFile)
 	if err != nil {
 		return err
 	}

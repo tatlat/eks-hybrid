@@ -24,7 +24,6 @@ import (
 	osystem "github.com/aws/eks-hybrid/test/e2e/os"
 	"github.com/aws/eks-hybrid/test/e2e/peered"
 	"github.com/aws/eks-hybrid/test/e2e/s3"
-	"github.com/aws/eks-hybrid/test/e2e/suite"
 )
 
 type create struct {
@@ -63,7 +62,7 @@ func (c *create) Flaggy() *flaggy.Subcommand {
 
 func (c *create) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	ctx := context.Background()
-	config, err := suite.ReadConfig(c.configFile)
+	config, err := e2e.ReadConfig(c.configFile)
 	if err != nil {
 		return err
 	}
