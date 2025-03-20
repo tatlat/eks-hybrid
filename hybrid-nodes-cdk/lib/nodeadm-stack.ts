@@ -7,7 +7,7 @@ import s3 = require('aws-cdk-lib/aws-s3');
 import iam = require('aws-cdk-lib/aws-iam');
 import codepipeline_actions = require('aws-cdk-lib/aws-codepipeline-actions');
 import * as fs from 'fs';
-import { kubernetesVersions, cnis, eksHybridBetaBucketARN, eksReleaseManifestHost, builderBaseImage, githubRepo, githubBranch, requiredEnvVars, betaEksEndpoint, betaKubeVersions } from './constants';
+import * as constants from './constants';
 
 export class NodeadmBuildStack extends cdk.Stack {
   constructor(scope: cdk.App, id: string, props?: cdk.StackProps) {
@@ -30,7 +30,7 @@ export class NodeadmBuildStack extends cdk.Stack {
         [`aws:ResourceTag/${testClusterTagKey}`]: `${testClusterPrefix}-*`
       } 
     }
-    for (const envVar of requiredEnvVars) {
+    for (const envVar of constants.requiredEnvVars) {
       if (process.env[envVar] === undefined) {
         throw new Error(`Required environment variable '${envVar}' not set`);
       }
@@ -108,8 +108,8 @@ export class NodeadmBuildStack extends cdk.Stack {
     const sourceAction = new codepipeline_actions.GitHubSourceAction({
       actionName: 'GitHubSource',
       owner: devStackConfig.github_username,
-      repo: githubRepo,
-      branch: githubBranch,
+      repo: constants.githubRepo,
+      branch: constants.githubBranch,
       oauthToken: githubTokenSecret.secretValueFromJson('github-token'),
       output: sourceOutput,
       trigger: codepipeline_actions.GitHubTrigger.NONE,
@@ -129,11 +129,11 @@ export class NodeadmBuildStack extends cdk.Stack {
         },
         MANIFEST_HOST: {
           type: codebuild.BuildEnvironmentVariableType.PLAINTEXT,
-          value: eksReleaseManifestHost,
+          value: constants.eksReleaseManifestHost,
         },
       },
       environment: {
-        buildImage: codebuild.LinuxBuildImage.fromDockerRegistry(builderBaseImage),
+        buildImage: codebuild.LinuxBuildImage.fromDockerRegistry(constants.builderBaseImage),
         computeType: codebuild.ComputeType.LARGE,
       },
     });
@@ -158,7 +158,7 @@ export class NodeadmBuildStack extends cdk.Stack {
       projectName: 'ecr-cache',
       buildSpec: codebuild.BuildSpec.fromSourceFilename('buildspecs/ecr-cache.yml'),
       environment: {
-        buildImage: codebuild.LinuxBuildImage.fromDockerRegistry(builderBaseImage),
+        buildImage: codebuild.LinuxBuildImage.fromDockerRegistry(constants.builderBaseImage),
         computeType: codebuild.ComputeType.SMALL,
       },
     });
@@ -175,7 +175,7 @@ export class NodeadmBuildStack extends cdk.Stack {
       projectName: 'nodeadm-cleanup',
       buildSpec: codebuild.BuildSpec.fromSourceFilename('buildspecs/cleanup-nodeadm.yml'),
       environment: {
-        buildImage: codebuild.LinuxBuildImage.fromDockerRegistry(builderBaseImage),
+        buildImage: codebuild.LinuxBuildImage.fromDockerRegistry(constants.builderBaseImage),
         computeType: codebuild.ComputeType.SMALL,
       },
     });
@@ -190,22 +190,41 @@ export class NodeadmBuildStack extends cdk.Stack {
       projectName: 'nodeadm-e2e-tests',
       buildSpec: codebuild.BuildSpec.fromSourceFilename('buildspecs/test-nodeadm.yml'),
       environment: {
-        buildImage: codebuild.LinuxBuildImage.fromDockerRegistry(builderBaseImage),
+        buildImage: codebuild.LinuxBuildImage.fromDockerRegistry(constants.builderBaseImage),
         environmentVariables: {
           AWS_REGION: {
             value: this.region,
           },
           ARTIFACTS_BUCKET: {
-            type: codebuild.BuildEnvironmentVariableType.PLAINTEXT,
             value: nodeadmBinaryBucket.bucketName,
           },
           LOGS_BUCKET: {
-            type: codebuild.BuildEnvironmentVariableType.PLAINTEXT,
             value: nodeadmLogsBucket.bucketName,
           },
           GOPROXY: {
             type: codebuild.BuildEnvironmentVariableType.SECRETS_MANAGER,
             value: `${goproxySecret.secretArn}:endpoint`,
+          },
+          CLUSTER_VPC_CIDR: {
+            value: constants.clusterVpcCidr,
+          },
+          CLUSTER_PUBLIC_SUBNET_CIDR: {
+            value: constants.clusterPublicSubnetCidr,
+          },
+          CLUSTER_PRIVATE_SUBNET_CIDR: {
+            value: constants.clusterPrivateSubnetCidr,
+          },
+          HYBRID_VPC_CIDR: {
+            value: constants.hybridVpcCidr,
+          },
+          HYBRID_PUBLIC_SUBNET_CIDR: {
+            value: constants.hybridPublicSubnetCidr,
+          },
+          HYBRID_PRIVATE_SUBNET_CIDR: {
+            value: constants.hybridPrivateSubnetCidr,
+          },
+          HYBRID_POD_CIDR: {
+            value: constants.hybridPodCidr,
           },
         },
       },
@@ -420,7 +439,7 @@ export class NodeadmBuildStack extends cdk.Stack {
         new iam.PolicyStatement({
           effect: iam.Effect.ALLOW,
           actions: ['s3:GetObject', 's3:ListBucket'],
-          resources: [eksHybridBetaBucketARN, `${eksHybridBetaBucketARN}/*`, nodeadmBinaryBucket.bucketArn, `${nodeadmBinaryBucket.bucketArn}/*`],
+          resources: [constants.eksHybridBetaBucketARN, `${constants.eksHybridBetaBucketARN}/*`, nodeadmBinaryBucket.bucketArn, `${nodeadmBinaryBucket.bucketArn}/*`],
         }),
         new iam.PolicyStatement({
           effect: iam.Effect.ALLOW,
@@ -582,8 +601,8 @@ export class NodeadmBuildStack extends cdk.Stack {
     testsCleanupProject.role!.attachInlinePolicy(testCreationCleanupPolicy);
 
     const e2eTestsActions: Array<codepipeline_actions.CodeBuildAction> = [];
-    for (const kubeVersion of kubernetesVersions) {
-      for (const cni of cnis) {
+    for (const kubeVersion of constants.kubernetesVersions) {
+      for (const cni of constants.cnis) {
         const actionName = `kube-${kubeVersion.replace('.', '-')}-${cni}`;
 
         const e2eTestsAction = new codepipeline_actions.CodeBuildAction({
@@ -597,10 +616,10 @@ export class NodeadmBuildStack extends cdk.Stack {
             CNI: {
               value: cni,
             },
-            ...(betaKubeVersions.includes(kubeVersion)
+            ...(constants.betaKubeVersions.includes(kubeVersion)
               ? {
                   ENDPOINT: {
-                    value: betaEksEndpoint,
+                    value: constants.betaEksEndpoint,
                   },
                 }
               : {}),
@@ -620,7 +639,7 @@ export class NodeadmBuildStack extends cdk.Stack {
         },
       },
       environment: {
-        buildImage: codebuild.LinuxBuildImage.fromDockerRegistry(builderBaseImage),
+        buildImage: codebuild.LinuxBuildImage.fromDockerRegistry(constants.builderBaseImage),
       },
     });
     codeBuildReleaseProject.role!.addToPrincipalPolicy(
