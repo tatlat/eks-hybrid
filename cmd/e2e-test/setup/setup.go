@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/integrii/flaggy"
 	"go.uber.org/zap"
 	"gopkg.in/yaml.v2"
@@ -54,7 +55,7 @@ func (s *Command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return fmt.Errorf("unmarshaling test infra configuration: %w", err)
 	}
 
-	aws, err := e2e.NewAWSConfig(ctx)
+	aws, err := e2e.NewAWSConfig(ctx, config.WithRegion(testResources.ClusterRegion))
 	if err != nil {
 		return fmt.Errorf("reading AWS configuration: %w", err)
 	}
