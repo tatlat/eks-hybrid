@@ -72,7 +72,7 @@ export class NodeadmBuildStack extends cdk.Stack {
       console.warn(`'RHEL_PASSWORD' env var not set or is empty. This will cause Red Hat credentials secret creation to get skipped, which could cause RHEL tests to fail'`);
     }
 
-    if (rhelUsername !== '' && rhelUsername !== '') {
+    if (rhelUsername !== '' && rhelPassword !== '') {
       const redhatCredentialsSecret = new secretsmanager.Secret(this, 'NodeadmE2ERedHatCredentials', {
         secretName: 'nodeadm-e2e-tests-redhat-credentials',
         description: 'Username and password for authenticating with Red Hat Subscription Manager ',
