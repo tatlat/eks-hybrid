@@ -164,3 +164,78 @@ func TestWriteAWSConfigValidation(t *testing.T) {
 		})
 	}
 }
+
+func TestWriteAWSConfigProxy(t *testing.T) {
+	testCases := []struct {
+		name          string
+		envVars       map[string]string
+		expectedProxy bool
+	}{
+		{
+			name: "proxy enabled via HTTP_PROXY",
+			envVars: map[string]string{
+				"HTTP_PROXY": "http://proxy.example.com:8080",
+			},
+			expectedProxy: true,
+		},
+		{
+			name: "proxy enabled via HTTPS_PROXY",
+			envVars: map[string]string{
+				"HTTPS_PROXY": "https://proxy.example.com:8080",
+			},
+			expectedProxy: true,
+		},
+		{
+			name:          "proxy disabled",
+			envVars:       map[string]string{},
+			expectedProxy: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Set up environment variables
+			for k, v := range tc.envVars {
+				os.Setenv(k, v)
+			}
+			defer func() {
+				// Clean up environment variables
+				for env := range tc.envVars {
+					os.Unsetenv(env)
+				}
+			}()
+
+			dir := t.TempDir()
+			path := filepath.Join(dir, "aws-config")
+
+			cfg := iamrolesanywhere.AWSConfig{
+				TrustAnchorARN:       "trust-anchor",
+				ProfileARN:           "profile",
+				RoleARN:              "role",
+				Region:               "region",
+				NodeName:             "test01",
+				ConfigPath:           path,
+				SigningHelperBinPath: "/random/path",
+				CertificatePath:      "/etc/certificates/iam/pki/my-server.crt",
+				PrivateKeyPath:       "/etc/certificates/iam/pki/my-server.key",
+			}
+
+			err := iamrolesanywhere.WriteAWSConfig(cfg)
+			if err != nil {
+				t.Fatalf("WriteAWSConfig failed: %v", err)
+			}
+
+			// Read the generated config file
+			content, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatalf("Failed to read config file: %v", err)
+			}
+
+			// Check if proxy settings are present in the config
+			hasProxy := bytes.Contains(content, []byte("--with-proxy"))
+			if hasProxy != tc.expectedProxy {
+				t.Errorf("Expected proxy to be %v, but found %v in config", tc.expectedProxy, hasProxy)
+			}
+		})
+	}
+}

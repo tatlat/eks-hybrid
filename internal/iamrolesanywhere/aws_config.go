@@ -53,12 +53,19 @@ type AWSConfig struct {
 
 	// PrivateKeyPath is the location on disk for the certificate's private key.
 	PrivateKeyPath string `json:"privateKeyPath,omitempty"`
+
+	// ProxyEnabled marks if proxy is enabled on the host
+	ProxyEnabled bool `json:"proxyEnabled,omitempty"`
 }
 
 // WriteAWSConfig writes an AWS configuration file with contents appropriate for node config
 func WriteAWSConfig(cfg AWSConfig) error {
 	if cfg.ConfigPath == "" {
 		cfg.ConfigPath = DefaultAWSConfigPath
+	}
+
+	if httpProxy, httpsProxy := os.Getenv("HTTP_PROXY"), os.Getenv("HTTPS_PROXY"); httpProxy != "" || httpsProxy != "" {
+		cfg.ProxyEnabled = true
 	}
 
 	if err := validateAWSConfig(cfg); err != nil {
