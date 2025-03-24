@@ -30,7 +30,7 @@ const (
 
 type VerifyPodIdentityAddon struct {
 	Cluster             string
-	NodeIP              string
+	NodeName            string
 	PodIdentityS3Bucket string
 	K8S                 clientgo.Interface
 	EKSClient           *eks.Client
@@ -72,9 +72,9 @@ func (v VerifyPodIdentityAddon) Run(ctx context.Context) error {
 		return fmt.Errorf("getting daemon set %s: %w", podIdentityDaemonSet, err)
 	}
 
-	node, err := kubernetes.WaitForNode(ctx, v.K8S, v.NodeIP, v.Logger)
+	node, err := kubernetes.WaitForNode(ctx, v.K8S, v.NodeName, v.Logger)
 	if err != nil {
-		return fmt.Errorf("waiting for node %s to be ready: %w", v.NodeIP, err)
+		return fmt.Errorf("waiting for node %s to be ready: %w", v.NodeName, err)
 	}
 
 	if err := kubernetes.WaitForDaemonSetPodToBeRunning(ctx, v.K8S, "kube-system", podIdentityDaemonSet, node.Name, v.Logger); err != nil {
