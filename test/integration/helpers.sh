@@ -263,6 +263,11 @@ function mock::kubelet() {
   chmod +x /usr/bin/kubelet
 }
 
+function mock::aws_signing_helper() {
+  printf "#!/usr/bin/env bash\necho '{\"Version\": 1, \"AccessKeyId\": \"${AWS_ACCESS_KEY_ID}\", \"SecretAccessKey\": \"${AWS_SECRET_ACCESS_KEY}\", \"SessionToken\": \"${AWS_SESSION_TOKEN}\"}'" > /usr/local/bin/aws_signing_helper
+  chmod +x /usr/local/bin/aws_signing_helper
+}
+
 function mock::ssm() {
   # mock ssm agent binary
   if [ -e  /usr/bin/amazon-ssm-agent]; then
