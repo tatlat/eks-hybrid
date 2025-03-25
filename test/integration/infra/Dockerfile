@@ -15,7 +15,7 @@ RUN mv _bin/nodeadm /nodeadm
 
 FROM public.ecr.aws/amazonlinux/amazonlinux:2023
 RUN dnf -y update && \
-    dnf -y install systemd containerd jq python3 tar procps zip && \
+    dnf -y install systemd containerd jq git-core python3 tar procps zip && \
     dnf clean all
 RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-$(uname -m).zip" -o "awscliv2.zip" && \
     unzip awscliv2.zip && \
@@ -24,7 +24,11 @@ RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-$(uname -m).zip" -o "aws
 RUN curl -O https://bootstrap.pypa.io/get-pip.py && \
     python3 get-pip.py && \
     rm get-pip.py
-RUN pip install --user 'moto[server]'
+# install moto from main to fix eks timestamp issue
+# remove when there is a new moto release with this commit included
+RUN pip install --user 'moto[server] @ git+https://github.com/getmoto/moto.git@5edb0c50b88db96d3a90b3f69096317ba2daf04c'
+
+
 # I know how this looks, but it lets us use moto with our mocked IMDS and for now the simplicity is worth the hack
 RUN sed -i 's/= random_instance_id()/= "i-1234567890abcdef0"/g' $HOME/.local/lib/python*/site-packages/moto/ec2/models/instances.py
 COPY --from=imds-mock-build /imds-mock /usr/local/bin/imds-mock
