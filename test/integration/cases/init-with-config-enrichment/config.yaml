@@ -1,0 +1,14 @@
+---
+apiVersion: node.eks.aws/v1alpha1
+kind: NodeConfig
+spec:
+  cluster:
+    name: my-cluster
+    region: us-west-2
+  hybrid:
+    enableCredentialsFile: true
+    iamRolesAnywhere:
+      nodeName: mock-hybrid-node
+      roleArn: arn:aws:iam::123456789010:role/mockHybridNodeRole
+      profileArn: arn:aws:iam::123456789010:instance-profile/mockHybridNodeRole
+      trustAnchorArn: arn:aws:acm-pca:us-west-2:123456789010:certificate-authority/fc32b514-4aca-4a4b-91a5-602294a6f4b7
