@@ -11,10 +11,10 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/utils/strings/slices"
 	"sigs.k8s.io/yaml"
-
-	"github.com/aws/eks-hybrid/internal/kubelet"
 )
 
 type podFilter func([]corev1.Pod) ([]corev1.Pod, error)
@@ -86,19 +86,28 @@ func getStaticPodsOnNode() ([]string, error) {
 	return staticPodNames, nil
 }
 
-func getPodsOnNode(ctx context.Context, nodeName string) ([]corev1.Pod, error) {
-	clientset, err := kubelet.GetKubeClientFromKubeConfig()
+// GetPodsOnNode makes 5 attempts to list pods before erroring unless it times out.
+func GetPodsOnNode(ctx context.Context, nodeName string, clientset kubernetes.Interface) ([]corev1.Pod, error) {
+	var pods *corev1.PodList
+	var err error
+	consecutiveErrors := 0
+	err = wait.PollUntilContextTimeout(ctx, nodeValidationInterval, nodeValidationTimeout, true, func(ctx context.Context) (bool, error) {
+		pods, err = clientset.CoreV1().Pods("").List(ctx,
+			metav1.ListOptions{
+				FieldSelector: fmt.Sprintf("spec.nodeName=%s", nodeName),
+			},
+		)
+		if err != nil {
+			consecutiveErrors += 1
+			if consecutiveErrors == nodeValidationMaxRetries {
+				return false, errors.Wrap(err, "failed to list all pods running on the node")
+			}
+			return false, nil // continue polling
+		}
+		return true, nil
+	})
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to create kubernetes client")
-	}
-
-	pods, err := clientset.CoreV1().Pods("").List(ctx,
-		metav1.ListOptions{
-			FieldSelector: fmt.Sprintf("spec.nodeName=%s", nodeName),
-		},
-	)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to list all pods running on the node")
+		return nil, err
 	}
 
 	return pods.Items, nil
