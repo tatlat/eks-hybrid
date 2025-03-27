@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/aws/aws-sdk-go-v2/config"
+	awsSsm "github.com/aws/aws-sdk-go-v2/service/ssm"
 	"go.uber.org/zap"
 
 	"github.com/aws/eks-hybrid/internal/containerd"
@@ -23,7 +25,6 @@ import (
 const eksConfigDir = "/etc/eks"
 
 type (
-	SSMUninstall func(ctx context.Context, logger *zap.Logger, pm ssm.PkgSource) error
 	CNIUninstall func() error
 )
 
@@ -31,7 +32,6 @@ type Uninstaller struct {
 	Artifacts      *tracker.InstalledArtifacts
 	DaemonManager  daemon.DaemonManager
 	PackageManager *packagemanager.DistroPackageManager
-	SSMUninstall   SSMUninstall
 	Logger         *zap.Logger
 	CNIUninstall   CNIUninstall
 }
@@ -70,7 +70,24 @@ func (u *Uninstaller) uninstallDaemons(ctx context.Context) error {
 			return err
 		}
 
-		if err := u.SSMUninstall(ctx, u.Logger, u.PackageManager); err != nil {
+		ssmRegistration := ssm.NewSSMRegistration()
+		region := ssmRegistration.GetRegion()
+		opts := []func(*config.LoadOptions) error{}
+		if region != "" {
+			opts = append(opts, config.WithRegion(region))
+		}
+
+		awsConfig, err := config.LoadDefaultConfig(ctx, opts...)
+		if err != nil {
+			return err
+		}
+
+		if err := ssm.Uninstall(ctx, ssm.UninstallOptions{
+			Logger:          u.Logger,
+			SSMRegistration: ssmRegistration,
+			PkgSource:       u.PackageManager,
+			SSMClient:       awsSsm.NewFromConfig(awsConfig),
+		}); err != nil {
 			return fmt.Errorf("uninstalling SSM: %w", err)
 		}
 	}
