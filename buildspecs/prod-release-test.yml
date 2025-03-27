@@ -1,0 +1,35 @@
+version: 0.2
+
+phases:
+  pre_build:
+    commands:
+      - echo "Downloading artifacts from staging bucket..."
+      - aws s3 sync --no-progress s3://${STAGING_BUCKET}/latest/linux/amd64/ _bin/amd64/
+      - aws s3 sync --no-progress s3://${STAGING_BUCKET}/latest/linux/arm64/ _bin/arm64/
+      - aws s3 cp --no-progress s3://${STAGING_BUCKET}/latest/GIT_VERSION _bin/GIT_VERSION
+
+      - export VERSION=$(cat _bin/GIT_VERSION)
+      - echo "Using version: ${VERSION}"
+
+  build:
+    commands:
+      - echo "Uploading e2e test binaries and hack to test bucket..."
+      - aws s3 cp --no-progress _bin/amd64/e2e-test s3://${PROD_TEST_BUCKET}/releases/${VERSION}/bin/linux/amd64/e2e-test --acl public-read
+      - aws s3 cp --no-progress _bin/arm64/e2e-test s3://${PROD_TEST_BUCKET}/releases/${VERSION}/bin/linux/arm64/e2e-test --acl public-read
+      - aws s3 cp --no-progress _bin/amd64/e2e.test s3://${PROD_TEST_BUCKET}/releases/${VERSION}/bin/linux/amd64/e2e.test --acl public-read
+      - aws s3 cp --no-progress _bin/arm64/e2e.test s3://${PROD_TEST_BUCKET}/releases/${VERSION}/bin/linux/arm64/e2e.test --acl public-read
+      - aws s3 cp --no-progress _bin/amd64/ginkgo s3://${PROD_TEST_BUCKET}/releases/${VERSION}/bin/linux/amd64/ginkgo --acl public-read
+      - aws s3 cp --no-progress _bin/arm64/ginkgo s3://${PROD_TEST_BUCKET}/releases/${VERSION}/bin/linux/arm64/ginkgo --acl public-read
+
+      - echo "Updating latest symlinks for e2e test binaries..."
+      - aws s3 cp --no-progress s3://${PROD_TEST_BUCKET}/releases/${VERSION}/bin/linux/amd64/e2e-test s3://${PROD_TEST_BUCKET}/latest/bin/linux/amd64/e2e-test --acl public-read
+      - aws s3 cp --no-progress s3://${PROD_TEST_BUCKET}/releases/${VERSION}/bin/linux/arm64/e2e-test s3://${PROD_TEST_BUCKET}/latest/bin/linux/arm64/e2e-test --acl public-read
+      - aws s3 cp --no-progress s3://${PROD_TEST_BUCKET}/releases/${VERSION}/bin/linux/amd64/e2e.test s3://${PROD_TEST_BUCKET}/latest/bin/linux/amd64/e2e.test --acl public-read
+      - aws s3 cp --no-progress s3://${PROD_TEST_BUCKET}/releases/${VERSION}/bin/linux/arm64/e2e.test s3://${PROD_TEST_BUCKET}/latest/bin/linux/arm64/e2e.test --acl public-read
+      - aws s3 cp --no-progress s3://${PROD_TEST_BUCKET}/releases/${VERSION}/bin/linux/amd64/ginkgo s3://${PROD_TEST_BUCKET}/latest/bin/linux/amd64/ginkgo --acl public-read
+      - aws s3 cp --no-progress s3://${PROD_TEST_BUCKET}/releases/${VERSION}/bin/linux/arm64/ginkgo s3://${PROD_TEST_BUCKET}/latest/bin/linux/arm64/ginkgo --acl public-read
+
+  post_build:
+    commands:
+      - echo "Test artifacts production release completed successfully"
+      - echo "Version: ${VERSION}"
