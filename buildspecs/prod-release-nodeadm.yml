@@ -1,0 +1,50 @@
+version: 0.2
+
+phases:
+  pre_build:
+    commands:
+      - echo "Downloading artifacts from staging bucket..."
+      - aws s3 sync --no-progress s3://${STAGING_BUCKET}/latest/linux/amd64/ _bin/amd64/
+      - aws s3 sync --no-progress s3://${STAGING_BUCKET}/latest/linux/arm64/ _bin/arm64/
+      - aws s3 cp --no-progress s3://${STAGING_BUCKET}/latest/GIT_VERSION _bin/GIT_VERSION
+
+      - export VERSION=$(cat _bin/GIT_VERSION)
+      - echo "Using version: ${VERSION}"
+
+      - echo "Setting up AWS config for role assumption..."
+      - |
+        cat << EOF > awscliconfig
+        [profile artifacts-production]
+        role_arn=${PROD_ARTIFACT_DEPLOYMENT_ROLE}
+        region=us-east-1
+        credential_source=EcsContainer
+        EOF
+      - export AWS_CONFIG_FILE=$(pwd)/awscliconfig
+      - aws configure list-profiles
+
+  build:
+    commands:
+      - echo "Uploading nodeadm to production..."
+      - aws s3 cp --no-progress _bin/amd64/nodeadm s3://${PROD_BUCKET}/releases/${VERSION}/bin/linux/amd64/nodeadm --acl public-read --profile artifacts-production
+      - aws s3 cp --no-progress _bin/arm64/nodeadm s3://${PROD_BUCKET}/releases/${VERSION}/bin/linux/arm64/nodeadm --acl public-read --profile artifacts-production
+
+      - echo "Generating and uploading nodeadm checksums..."
+      - for file in _bin/amd64/nodeadm _bin/arm64/nodeadm; do
+          sha256sum $file > ${file}.sha256
+          aws s3 cp --no-progress ${file}.sha256 s3://${PROD_BUCKET}/releases/${VERSION}/bin/linux/$(basename $(dirname $file))/$(basename $file).sha256 --acl public-read --profile artifacts-production
+          sha512sum $file > ${file}.sha512
+          aws s3 cp --no-progress ${file}.sha512 s3://${PROD_BUCKET}/releases/${VERSION}/bin/linux/$(basename $(dirname $file))/$(basename $file).sha512 --acl public-read --profile artifacts-production
+        done
+
+      - echo "Updating latest symlinks for nodeadm..."
+      - aws s3 cp --no-progress s3://${PROD_BUCKET}/releases/${VERSION}/bin/linux/amd64/nodeadm s3://${PROD_BUCKET}/latest/bin/linux/amd64/nodeadm --acl public-read --profile artifacts-production
+      - aws s3 cp --no-progress s3://${PROD_BUCKET}/releases/${VERSION}/bin/linux/arm64/nodeadm s3://${PROD_BUCKET}/latest/bin/linux/arm64/nodeadm --acl public-read --profile artifacts-production
+      - aws s3 cp --no-progress s3://${PROD_BUCKET}/releases/${VERSION}/bin/linux/amd64/nodeadm.sha256 s3://${PROD_BUCKET}/latest/bin/linux/amd64/nodeadm.sha256 --acl public-read --profile artifacts-production
+      - aws s3 cp --no-progress s3://${PROD_BUCKET}/releases/${VERSION}/bin/linux/arm64/nodeadm.sha256 s3://${PROD_BUCKET}/latest/bin/linux/arm64/nodeadm.sha256 --acl public-read --profile artifacts-production
+      - aws s3 cp --no-progress s3://${PROD_BUCKET}/releases/${VERSION}/bin/linux/amd64/nodeadm.sha512 s3://${PROD_BUCKET}/latest/bin/linux/amd64/nodeadm.sha512 --acl public-read --profile artifacts-production
+      - aws s3 cp --no-progress s3://${PROD_BUCKET}/releases/${VERSION}/bin/linux/arm64/nodeadm.sha512 s3://${PROD_BUCKET}/latest/bin/linux/arm64/nodeadm.sha512 --acl public-read --profile artifacts-production
+
+  post_build:
+    commands:
+      - echo "Production release completed successfully"
+      - echo "Version: ${VERSION}"
