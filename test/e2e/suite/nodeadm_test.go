@@ -595,6 +595,7 @@ func (t *peeredVPCTest) newVerifyPodIdentityAddon(nodeIP string) *addon.VerifyPo
 		S3Client:            t.s3Client,
 		Logger:              t.logger,
 		K8SConfig:           t.k8sClientConfig,
+		Region:              t.cluster.Region,
 	}
 }
 
