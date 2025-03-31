@@ -15,6 +15,7 @@ import (
 	clientgo "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
+	"github.com/aws/eks-hybrid/test/e2e/constants"
 	"github.com/aws/eks-hybrid/test/e2e/kubernetes"
 )
 
@@ -37,6 +38,7 @@ type VerifyPodIdentityAddon struct {
 	S3Client            *s3.Client
 	Logger              logr.Logger
 	K8SConfig           *rest.Config
+	Region              string
 }
 
 type PolicyDocument struct {
@@ -90,7 +92,7 @@ func (v VerifyPodIdentityAddon) Run(ctx context.Context) error {
 			Containers: []corev1.Container{
 				{
 					Name:  podName,
-					Image: "public.ecr.aws/aws-cli/aws-cli",
+					Image: fmt.Sprintf("%s.dkr.ecr.%s.amazonaws.com/ecr-public/aws-cli/aws-cli:latest", constants.EcrAccounId, v.Region),
 					Command: []string{
 						"/bin/bash",
 						"-c",
