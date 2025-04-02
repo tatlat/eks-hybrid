@@ -151,7 +151,7 @@ func (s *stack) prepareStackParameters(test TestResources) []types.Parameter {
 		},
 		{
 			ParameterKey:   aws.String("PodIdentityS3BucketPrefix"),
-			ParameterValue: aws.String(strings.ToLower(addon.PodIdentityS3Bucket)),
+			ParameterValue: aws.String(addon.PodIdentityS3BucketPrefix),
 		},
 		{
 			ParameterKey:   aws.String("RolePathPrefix"),

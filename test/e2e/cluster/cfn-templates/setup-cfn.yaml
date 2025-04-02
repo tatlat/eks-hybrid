@@ -420,20 +420,10 @@ Resources:
     Properties:
       # use a predictable prefix for PodIdentity S3 bucket while maintaining uniqueness requirement for S3 bucket name
       BucketName:
-        Fn::Join:
-        - '-'
-        - - !Ref PodIdentityS3BucketPrefix
-          - !Ref AWS::AccountId
-          - !Ref AWS::Region
-          - Fn::Select:
-            - 0
-            - Fn::Split:
-              - '-'
-              - Fn::Select:
-                - 2
-                - Fn::Split:
-                  - /
-                  - !Ref AWS::StackId
+        !Sub
+          - '${PodIdentityS3BucketPrefix}-${AWS::AccountId}${TrimmedRegion}${UUID}' # podid-111111111uswest26d51lki0f4111f0b84e0a85c34565b7
+          - TrimmedRegion: !Join ['', !Split ['-', !Ref AWS::Region ]] # us-west-2 -> uswest2
+            UUID: !Join ['', !Split ['-', !Select [2, !Split [/, !Ref AWS::StackId ]]]] # arn:aws:cloudformation:us-west-2:111111111:stack/EKSHybridCI-Arch-name/6d51lki0-0f41-11f0-b84e-0a85c34565b7 -> 6d51lki0f4111f0b84e0a85c34565b7
       Tags:
         - Key: !Ref TestClusterTagKey
           Value: !Ref ClusterName
