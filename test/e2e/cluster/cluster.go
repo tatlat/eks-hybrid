@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	createClusterTimeout = 30 * time.Minute
+	createClusterTimeout = 40 * time.Minute
 )
 
 type hybridCluster struct {
@@ -112,6 +112,7 @@ func waitForCluster(ctx context.Context, client *eks.Client, clusterName string,
 	statusCh := make(chan bool)
 	errCh := make(chan error)
 
+	retries := 0
 	go func(ctx context.Context) {
 		defer close(statusCh)
 		defer close(errCh)
@@ -124,6 +125,7 @@ func waitForCluster(ctx context.Context, client *eks.Client, clusterName string,
 				errCh <- err
 				return
 			}
+			retries++
 
 			if done {
 				return
@@ -131,7 +133,7 @@ func waitForCluster(ctx context.Context, client *eks.Client, clusterName string,
 
 			select {
 			case <-ctx.Done(): // Check if the context is done (timeout/canceled)
-				errCh <- fmt.Errorf("context canceled or timed out while waiting for cluster %s: %v", clusterName, ctx.Err())
+				errCh <- fmt.Errorf("context canceled or timed out while waiting for cluster %s after %d retries: %v", clusterName, retries, ctx.Err())
 				return
 			case <-time.After(30 * time.Second):
 			}
