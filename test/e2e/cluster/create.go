@@ -88,13 +88,13 @@ func (c *Create) Run(ctx context.Context, test TestResources) error {
 	}
 
 	c.logger.Info("Creating EKS cluster..", "cluster", test.ClusterName)
-	err = hybridCluster.create(ctx, c.eks, c.logger)
+	cluster, err := hybridCluster.create(ctx, c.eks, c.logger)
 	if err != nil {
 		return fmt.Errorf("creating %s EKS cluster: %w", test.KubernetesVersion, err)
 	}
 
 	kubeconfig := KubeconfigPath(test.ClusterName)
-	err = hybridCluster.UpdateKubeconfig(kubeconfig)
+	err = hybridCluster.UpdateKubeconfig(cluster, kubeconfig)
 	if err != nil {
 		return fmt.Errorf("saving kubeconfig for %s EKS cluster: %w", test.KubernetesVersion, err)
 	}

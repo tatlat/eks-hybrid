@@ -2,6 +2,8 @@ package cluster
 
 import (
 	"context"
+	"encoding/base64"
+	stdErr "errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -12,6 +14,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/eks/types"
 	"github.com/aws/aws-sdk-go/aws/awsutil"
 	"github.com/go-logr/logr"
+	"k8s.io/client-go/tools/clientcmd"
+	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 
 	"github.com/aws/eks-hybrid/test/e2e/constants"
 	"github.com/aws/eks-hybrid/test/e2e/errors"
@@ -31,7 +35,7 @@ type hybridCluster struct {
 	HybridNetwork     NetworkConfig
 }
 
-func (h *hybridCluster) create(ctx context.Context, client *eks.Client, logger logr.Logger) error {
+func (h *hybridCluster) create(ctx context.Context, client *eks.Client, logger logr.Logger) (*types.Cluster, error) {
 	hybridCluster := &eks.CreateClusterInput{
 		Name:    aws.String(h.Name),
 		Version: aws.String(h.KubernetesVersion),
@@ -61,7 +65,7 @@ func (h *hybridCluster) create(ctx context.Context, client *eks.Client, logger l
 	}
 	_, err := client.CreateCluster(ctx, hybridCluster)
 	if err != nil && !errors.IsType(err, &types.ResourceInUseException{}) {
-		return fmt.Errorf("creating EKS hybrid cluster: %w", err)
+		return nil, fmt.Errorf("creating EKS hybrid cluster: %w", err)
 	}
 
 	logger.Info("Waiting for cluster to be active", "cluster", h.Name)
@@ -70,12 +74,12 @@ func (h *hybridCluster) create(ctx context.Context, client *eks.Client, logger l
 		logger.Info(awsutil.Prettify(cluster))
 	}
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	logger.Info("Successfully started EKS hybrid cluster")
 
-	return nil
+	return cluster, nil
 }
 
 // waitForActiveCluster waits until the cluster is in the 'ACTIVE' state.
@@ -101,11 +105,67 @@ func waitForActiveCluster(ctx context.Context, client *eks.Client, clusterName s
 	return cluster, err
 }
 
-func (h *hybridCluster) UpdateKubeconfig(kubeconfig string) error {
-	cmd := exec.Command("aws", "eks", "update-kubeconfig", "--name", h.Name, "--region", h.Region, "--kubeconfig", kubeconfig)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
+func (h *hybridCluster) UpdateKubeconfig(cluster *types.Cluster, kubeconfig string) error {
+	// data is already base64 encoded from the API
+	// when the kubeconfig is written out it will be base64 encoded
+	caPEMData, err := base64.StdEncoding.DecodeString(*cluster.CertificateAuthority.Data)
+	if err != nil {
+		return fmt.Errorf("decoding certificate authority data: %w", err)
+	}
+
+	clientConfig := clientcmdapi.Config{
+		Clusters: map[string]*clientcmdapi.Cluster{
+			*cluster.Arn: {
+				Server:                   *cluster.Endpoint,
+				CertificateAuthorityData: caPEMData,
+			},
+		},
+		Contexts: map[string]*clientcmdapi.Context{
+			*cluster.Arn: {
+				Cluster:  *cluster.Arn,
+				AuthInfo: *cluster.Arn,
+			},
+		},
+		CurrentContext: *cluster.Arn,
+		AuthInfos: map[string]*clientcmdapi.AuthInfo{
+			*cluster.Arn: {
+				Exec: &clientcmdapi.ExecConfig{
+					APIVersion: "client.authentication.k8s.io/v1beta1",
+				},
+			},
+		},
+	}
+
+	awsProfile := os.Getenv("AWS_PROFILE")
+	if awsProfile == "" {
+		awsProfile = os.Getenv("AWS_DEFAULT_PROFILE")
+	}
+	if awsProfile != "" {
+		clientConfig.AuthInfos[*cluster.Arn].Exec.Env = []clientcmdapi.ExecEnvVar{
+			{Name: "AWS_PROFILE", Value: awsProfile},
+		}
+	}
+
+	// in the canaries the aws cli may not be installed, but aws-iam-authenticator will be available
+	// fall back to aws-iam-authenticator if aws cli is not found
+	_, awsCliErr := exec.LookPath("aws")
+	_, iamAuthErr := exec.LookPath("aws-iam-authenticator")
+	if awsCliErr != nil && iamAuthErr != nil {
+		return fmt.Errorf("neither aws cli nor aws-iam-authenticator found in PATH: %w", stdErr.Join(awsCliErr, iamAuthErr))
+	}
+
+	if awsCliErr == nil {
+		clientConfig.AuthInfos[*cluster.Arn].Exec.Command = "aws"
+		clientConfig.AuthInfos[*cluster.Arn].Exec.Args = []string{"eks", "get-token", "--cluster-name", h.Name, "--output", "json"}
+	} else {
+		clientConfig.AuthInfos[*cluster.Arn].Exec.Command = "aws-iam-authenticator"
+		clientConfig.AuthInfos[*cluster.Arn].Exec.Args = []string{"token", "-i", h.Name}
+	}
+
+	if err := clientcmd.WriteToFile(clientConfig, kubeconfig); err != nil {
+		return fmt.Errorf("writing file: %w", err)
+	}
+	return nil
 }
 
 func waitForCluster(ctx context.Context, client *eks.Client, clusterName string, check func(*eks.DescribeClusterOutput, error) (bool, error)) error {
