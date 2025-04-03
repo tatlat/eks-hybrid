@@ -24,8 +24,7 @@ const (
 	podIdentityDaemonSet      = "eks-pod-identity-agent-hybrid"
 	podIdentityToken          = "eks-pod-identity-token"
 	policyName                = "pod-identity-association-role-policy"
-	PodIdentityS3Bucket       = "PodIdentityS3Bucket"
-	PodIdentityS3BucketPrefix = "podidentitys3bucket"
+	PodIdentityS3BucketPrefix = "podid"
 )
 
 type VerifyPodIdentityAddon struct {
