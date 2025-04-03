@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/go-logr/logr"
@@ -30,6 +31,7 @@ const (
 	phaseNameSetupTestInfrastructure = "SetupTestInfrastructure"
 	phaseNameUploadArtifactsToS3     = "UploadArtifactsToS3"
 	phaseNameWriteTestConfigs        = "WriteTestConfigs"
+	reportingBuffer                  = time.Minute * 2
 	testCleanupLogFile               = "cleanup-output.log"
 	testGinkgoOutputLog              = "ginkgo-output.log"
 	testSetupLogFile                 = "setup-output.log"
@@ -93,13 +95,17 @@ type E2E struct {
 	TestConfig      e2e.TestConfig
 	TestLabelFilter string
 	TestProcs       int
-	TestTimeout     string
+	Timeout         time.Duration
 	TestResources   cluster.TestResources
 	SkipCleanup     bool
 	SkippedTests    string
 }
 
 func (e *E2E) Run(ctx context.Context) (E2EResult, error) {
+	deadline := time.Now().Add(e.Timeout)
+	ctx, cancelFunc := context.WithDeadline(ctx, deadline)
+	defer cancelFunc()
+
 	e.initPaths()
 
 	phases, err := e.preTestSetup()
@@ -111,7 +117,11 @@ func (e *E2E) Run(ctx context.Context) (E2EResult, error) {
 	// and will collect all errors to return them at the end
 	allErrors := []error{}
 
-	runTestsPhases, err := e.runTests(ctx)
+	// save 2 minutes for reporting/s3 uploading
+	runTestsDeadline := deadline.Add(-reportingBuffer)
+	runTestsCtx, runTestsCancelFunc := context.WithDeadline(ctx, runTestsDeadline)
+	defer runTestsCancelFunc()
+	runTestsPhases, err := e.runTests(runTestsCtx)
 	if err != nil {
 		allErrors = append(allErrors, err)
 	}
@@ -181,7 +191,6 @@ func (e *E2E) runTests(ctx context.Context) ([]Phase, error) {
 		Paths:           e.Paths,
 		TestLabelFilter: e.TestLabelFilter,
 		TestProcs:       e.TestProcs,
-		TestTimeout:     e.TestTimeout,
 		TestResources:   e.TestResources,
 		SkipCleanup:     e.SkipCleanup,
 		SkippedTests:    e.SkippedTests,

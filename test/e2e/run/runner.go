@@ -10,12 +10,19 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/go-logr/logr"
 
 	"github.com/aws/eks-hybrid/test/e2e"
 	"github.com/aws/eks-hybrid/test/e2e/cluster"
+)
+
+const (
+	cleanupBuffer       = time.Minute * 5
+	defaultTestTimeout  = time.Hour * 24
+	ginkgoCleanupBuffer = time.Minute * 1
 )
 
 type E2ERunner struct {
@@ -54,13 +61,30 @@ func (e *E2ERunner) Run(ctx context.Context) ([]Phase, error) {
 		}
 	}()
 
-	setupErr := e.setupTestInfrastructure(ctx)
+	overallDeadline, ok := ctx.Deadline()
+	if !ok {
+		// no deadline set, use 24 hours as default
+		overallDeadline = time.Now().Add(defaultTestTimeout)
+	}
+
+	// set the setup and test deadline to the overall deadline minus 5 minutes reserved for cleanup
+	setupAndTestDeadline := overallDeadline
+	if !e.SkipCleanup {
+		setupAndTestDeadline = setupAndTestDeadline.Add(-cleanupBuffer)
+	}
+	setupAndTestCtx, cancelFunc := context.WithDeadline(ctx, setupAndTestDeadline)
+	defer cancelFunc()
+
+	setupErr := e.setupTestInfrastructure(setupAndTestCtx)
 	phases, setupErr = phaseCompleted(phases, phaseNameSetupTestInfrastructure, "setting up test infrastructure", setupErr)
 	if setupErr != nil {
 		err = setupErr
 		return phases, err
 	}
-	testsErr := e.executeTests(ctx)
+
+	// give the tests the remaining time after setup but reserve 1 minute for ginkgo suite cleanup
+	ginkgoTimeout := (time.Until(setupAndTestDeadline) - ginkgoCleanupBuffer).Round(time.Second)
+	testsErr := e.executeTests(setupAndTestCtx, ginkgoTimeout)
 	phases, testsErr = phaseCompleted(phases, phaseNameExecuteTests, "executing tests", testsErr)
 	if testsErr != nil {
 		err = testsErr
@@ -83,10 +107,14 @@ func (e *E2ERunner) setupTestInfrastructure(ctx context.Context) error {
 	return nil
 }
 
-func (e *E2ERunner) executeTests(ctx context.Context) error {
+func (e *E2ERunner) executeTests(ctx context.Context, timeout time.Duration) error {
 	pwd, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("getting working directory: %w", err)
+	}
+
+	if timeout <= 0 {
+		return fmt.Errorf("not enought time to run tests: %s", timeout)
 	}
 
 	noColorArg := ""
@@ -102,7 +130,7 @@ func (e *E2ERunner) executeTests(ctx context.Context) error {
 		fmt.Sprintf("--output-dir=%s", e.Paths.Reports),
 		fmt.Sprintf("--junit-report=%s", e2eReportsFile),
 		fmt.Sprintf("--json-report=%s", e2eReportsFileJSON),
-		fmt.Sprintf("--timeout=%s", e.TestTimeout),
+		fmt.Sprintf("--timeout=%s", timeout),
 		"--fail-on-empty",
 		noColorArg,
 		e.Paths.TestsBinaryOrSource,
