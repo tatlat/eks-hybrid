@@ -12,7 +12,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/eks"
 	"github.com/aws/aws-sdk-go-v2/service/eks/types"
-	"github.com/aws/aws-sdk-go/aws/awsutil"
 	"github.com/go-logr/logr"
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
@@ -70,14 +69,14 @@ func (h *hybridCluster) create(ctx context.Context, client *eks.Client, logger l
 
 	logger.Info("Waiting for cluster to be active", "cluster", h.Name)
 	cluster, err := waitForActiveCluster(ctx, client, h.Name)
-	if cluster != nil {
-		logger.Info(awsutil.Prettify(cluster))
-	}
 	if err != nil {
+		if cluster != nil {
+			logger.Error(err, "Failed waiting for cluster to be active", "cluster", cluster)
+		}
 		return nil, err
 	}
 
-	logger.Info("Successfully started EKS hybrid cluster")
+	logger.Info("Successfully started EKS hybrid cluster", "cluster", cluster)
 
 	return cluster, nil
 }
@@ -98,6 +97,8 @@ func waitForActiveCluster(ctx context.Context, client *eks.Client, clusterName s
 			return true, nil
 		case types.ClusterStatusFailed:
 			return false, fmt.Errorf("cluster %s creation failed", clusterName)
+		case types.ClusterStatusDeleting:
+			return false, fmt.Errorf("cluster %s is being deleted", clusterName)
 		default:
 			return false, nil
 		}
