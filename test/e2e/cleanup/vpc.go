@@ -2,17 +2,16 @@ package cleanup
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
-	"github.com/aws/smithy-go"
 	"github.com/go-logr/logr"
 
 	"github.com/aws/eks-hybrid/test/e2e/constants"
+	"github.com/aws/eks-hybrid/test/e2e/errors"
 )
 
 const (
@@ -73,7 +72,7 @@ func (v *VPCCleaner) DeletePeeringConnection(ctx context.Context, peeringConnect
 	_, err := v.ec2Client.DeleteVpcPeeringConnection(ctx, &ec2.DeleteVpcPeeringConnectionInput{
 		VpcPeeringConnectionId: aws.String(peeringConnectionID),
 	})
-	if err != nil && isAwsError(err, "InvalidVpcPeeringConnectionId.NotFound") {
+	if err != nil && errors.IsAwsError(err, "InvalidVpcPeeringConnectionId.NotFound") {
 		v.logger.Info("Peering connection already deleted", "peeringConnectionID", peeringConnectionID)
 		return nil
 	}
@@ -129,7 +128,7 @@ func (v *VPCCleaner) DeleteVPC(ctx context.Context, vpcID string) error {
 	_, err := v.ec2Client.DeleteVpc(ctx, &ec2.DeleteVpcInput{
 		VpcId: aws.String(vpcID),
 	})
-	if err != nil && isAwsError(err, "InvalidVpcID.NotFound") {
+	if err != nil && errors.IsAwsError(err, "InvalidVpcID.NotFound") {
 		v.logger.Info("VPC already deleted", "vpcID", vpcID)
 		return nil
 	}
@@ -178,7 +177,7 @@ func (v *VPCCleaner) DeleteInternetGateway(ctx context.Context, igwID string) er
 	resp, err := v.ec2Client.DescribeInternetGateways(ctx, &ec2.DescribeInternetGatewaysInput{
 		InternetGatewayIds: []string{igwID},
 	})
-	if err != nil && isAwsError(err, "InvalidInternetGatewayID.NotFound") {
+	if err != nil && errors.IsAwsError(err, "InvalidInternetGatewayID.NotFound") {
 		v.logger.Info("Internet gateway already deleted", "igwID", igwID)
 		return nil
 	}
@@ -207,7 +206,7 @@ func (v *VPCCleaner) DeleteInternetGateway(ctx context.Context, igwID string) er
 	_, err = v.ec2Client.DeleteInternetGateway(ctx, &ec2.DeleteInternetGatewayInput{
 		InternetGatewayId: aws.String(igwID),
 	})
-	if err != nil && !isAwsError(err, "InvalidInternetGatewayID.NotFound") {
+	if err != nil && !errors.IsAwsError(err, "InvalidInternetGatewayID.NotFound") {
 		return fmt.Errorf("deleting internet gateway %s: %w", igwID, err)
 	}
 
@@ -251,7 +250,7 @@ func (v *VPCCleaner) DeleteSubnet(ctx context.Context, subnetID string) error {
 	_, err := v.ec2Client.DeleteSubnet(ctx, &ec2.DeleteSubnetInput{
 		SubnetId: aws.String(subnetID),
 	})
-	if err != nil && (isAwsError(err, "InvalidSubnetID.NotFound") || isAwsError(err, "InvalidSubnetId.NotFound")) {
+	if err != nil && (errors.IsAwsError(err, "InvalidSubnetID.NotFound") || errors.IsAwsError(err, "InvalidSubnetId.NotFound")) {
 		v.logger.Info("Subnet already deleted", "subnetID", subnetID)
 		return nil
 	}
@@ -308,7 +307,7 @@ func (v *VPCCleaner) DeleteRouteTable(ctx context.Context, routeTableID string) 
 	_, err := v.ec2Client.DeleteRouteTable(ctx, &ec2.DeleteRouteTableInput{
 		RouteTableId: aws.String(routeTableID),
 	})
-	if err != nil && isAwsError(err, "InvalidRouteTableID.NotFound") {
+	if err != nil && errors.IsAwsError(err, "InvalidRouteTableID.NotFound") {
 		v.logger.Info("Route table already deleted", "routeTableID", routeTableID)
 		return nil
 	}
@@ -360,7 +359,7 @@ func (v *VPCCleaner) DeleteSecurityGroup(ctx context.Context, securityGroupID st
 	_, err := v.ec2Client.DeleteSecurityGroup(ctx, &ec2.DeleteSecurityGroupInput{
 		GroupId: aws.String(securityGroupID),
 	})
-	if err != nil && isAwsError(err, "InvalidSecurityGroupId.NotFound") {
+	if err != nil && errors.IsAwsError(err, "InvalidSecurityGroupId.NotFound") {
 		v.logger.Info("Security group already deleted", "securityGroupID", securityGroupID)
 		return nil
 	}
@@ -409,7 +408,7 @@ func (v *VPCCleaner) DeleteNetworkInterface(ctx context.Context, networkInterfac
 	_, err := v.ec2Client.DeleteNetworkInterface(ctx, &ec2.DeleteNetworkInterfaceInput{
 		NetworkInterfaceId: aws.String(networkInterfaceID),
 	})
-	if err != nil && isAwsError(err, "InvalidNetworkInterfaceID.NotFound") {
+	if err != nil && errors.IsAwsError(err, "InvalidNetworkInterfaceID.NotFound") {
 		v.logger.Info("Network interface already deleted", "networkInterfaceID", networkInterfaceID)
 		return nil
 	}
@@ -468,10 +467,4 @@ func creationTimeFromTags(tags []types.Tag) (time.Time, error) {
 	// if we are cleaning by cluster-name it will get deleted
 	// if its the sweeper based on age of resources it will be left
 	return time.Now(), nil
-}
-
-func isAwsError(err error, code string) bool {
-	var awsErr smithy.APIError
-	ok := errors.As(err, &awsErr)
-	return err != nil && ok && awsErr.ErrorCode() == code
 }

@@ -28,7 +28,7 @@ func PodIdentityBucket(ctx context.Context, client *s3.Client, cluster string) (
 		getBucketTaggingOutput, err := client.GetBucketTagging(ctx, &s3.GetBucketTaggingInput{
 			Bucket: bucket.Name,
 		})
-		if err != nil && e2eErrors.IsS3BucketNotFound(err) {
+		if err != nil && (e2eErrors.IsS3BucketNotFound(err) || e2eErrors.IsAwsError(err, "NoSuchTagSet")) {
 			// We have to pull all buckets and then get the tags
 			// the bucket could get deleted between the list and get tags call
 			continue
