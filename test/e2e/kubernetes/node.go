@@ -265,13 +265,15 @@ func DrainNode(ctx context.Context, k8s kubernetes.Interface, node *corev1.Node)
 		Out:                             os.Stdout,
 		ErrOut:                          os.Stderr,
 	}
-
-	err := drain.RunNodeDrain(helper, node.Name)
-	if err != nil {
-		return fmt.Errorf("draining node %s: %v", node.Name, err)
-	}
-
-	return nil
+	return retry.OnError(retry.DefaultBackoff, func(err error) bool {
+		return true
+	}, func() error {
+		err := drain.RunNodeDrain(helper, node.Name)
+		if err != nil {
+			return fmt.Errorf("draining node %s: %v", node.Name, err)
+		}
+		return nil
+	})
 }
 
 func UncordonNode(ctx context.Context, k8s kubernetes.Interface, node *corev1.Node) error {
@@ -279,13 +281,15 @@ func UncordonNode(ctx context.Context, k8s kubernetes.Interface, node *corev1.No
 		Ctx:    ctx,
 		Client: k8s,
 	}
-
-	err := drain.RunCordonOrUncordon(helper, node, false)
-	if err != nil {
-		return fmt.Errorf("cordoning node %s: %v", node.Name, err)
-	}
-
-	return nil
+	return retry.OnError(retry.DefaultBackoff, func(err error) bool {
+		return true
+	}, func() error {
+		err := drain.RunCordonOrUncordon(helper, node, false)
+		if err != nil {
+			return fmt.Errorf("cordoning node %s: %v", node.Name, err)
+		}
+		return nil
+	})
 }
 
 func CordonNode(ctx context.Context, k8s kubernetes.Interface, node *corev1.Node, logger logr.Logger) error {
@@ -293,10 +297,17 @@ func CordonNode(ctx context.Context, k8s kubernetes.Interface, node *corev1.Node
 		Ctx:    ctx,
 		Client: k8s,
 	}
-
-	err := drain.RunCordonOrUncordon(helper, node, true)
+	err := retry.OnError(retry.DefaultBackoff, func(err error) bool {
+		return true
+	}, func() error {
+		err := drain.RunCordonOrUncordon(helper, node, true)
+		if err != nil {
+			return fmt.Errorf("cordoning node %s: %v", node.Name, err)
+		}
+		return nil
+	})
 	if err != nil {
-		return fmt.Errorf("cordoning node %s: %v", node.Name, err)
+		return err
 	}
 
 	// Cordon returns before the node has been tainted and since we immediately run
