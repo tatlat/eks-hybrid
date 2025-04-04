@@ -46,5 +46,8 @@ phases:
 
   post_build:
     commands:
+      - echo "Invalidating CloudFront cache..."
+      - aws cloudfront create-invalidation --distribution-id ${CLOUDFRONT_DISTRIBUTION_ID} --paths "/*" --profile artifacts-production
+
       - echo "Production release completed successfully"
       - echo "Version: ${VERSION}"
