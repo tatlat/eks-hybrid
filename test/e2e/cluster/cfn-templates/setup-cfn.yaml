@@ -376,6 +376,8 @@ Resources:
     CreationPolicy:   
       ResourceSignal:
         Timeout: PT5M
+    DependsOn:
+      - JumpboxKeyPair
     DeletionPolicy: Delete
     Properties:
       ImageId: resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64

@@ -87,7 +87,7 @@ func (s *stack) deploy(ctx context.Context, test TestResources) (*resourcesStack
 	// We explictly fetch the keypair/jumpbox instead of relying on outputs
 	// from the cfn stack. We have seen cases across different regions
 	// where the outputs have been unreliable
-	if err := s.tagKeyPair(ctx, test.ClusterName); err != nil {
+	if err := s.tagKeyPairSSMParameter(ctx, test.ClusterName); err != nil {
 		return nil, fmt.Errorf("tagging key pair: %w", err)
 	}
 
@@ -267,7 +267,7 @@ func (s *stack) processStackOutputs(outputs []types.Output) *resourcesStackOutpu
 	return result
 }
 
-func (s *stack) tagKeyPair(ctx context.Context, clusterName string) error {
+func (s *stack) tagKeyPairSSMParameter(ctx context.Context, clusterName string) error {
 	keyPair, err := peered.KeyPair(ctx, s.ec2Client, clusterName)
 	if err != nil {
 		return err
