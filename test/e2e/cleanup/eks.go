@@ -61,10 +61,21 @@ func (c *EKSClusterCleanup) DeleteCluster(ctx context.Context, clusterName strin
 	_, err := c.eksClient.DeleteCluster(ctx, &eks.DeleteClusterInput{
 		Name: aws.String(clusterName),
 	})
+
+	if err != nil && errors.IsAwsError(err, "AccessDeniedException") {
+		// if the cluster deleted, the role policy may return a 403 since its
+		// restricted by tag, which since the cluseter is deleted
+		// there are no tags
+		_, err = c.eksClient.DescribeCluster(ctx, &eks.DescribeClusterInput{
+			Name: aws.String(clusterName),
+		})
+	}
+
 	if err != nil && errors.IsType(err, &types.ResourceNotFoundException{}) {
 		c.logger.Info("Cluster already deleted", "cluster", clusterName)
 		return nil
 	}
+
 	if err != nil {
 		return fmt.Errorf("deleting cluster %s: %w", clusterName, err)
 	}

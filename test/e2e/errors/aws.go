@@ -27,3 +27,9 @@ func IsS3BucketNotFound(err error) bool {
 	return errors.As(err, &ae) &&
 		ae.ErrorCode() == "NoSuchBucket"
 }
+
+func IsAwsError(err error, code string) bool {
+	var awsErr smithy.APIError
+	ok := errors.As(err, &awsErr)
+	return err != nil && ok && awsErr.ErrorCode() == code
+}
