@@ -1,13 +1,18 @@
 package kubelet_test
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
 
 	. "github.com/onsi/gomega"
+	"go.uber.org/zap"
 
+	"github.com/aws/eks-hybrid/internal/aws"
 	"github.com/aws/eks-hybrid/internal/kubelet"
+	"github.com/aws/eks-hybrid/internal/test"
+	"github.com/aws/eks-hybrid/internal/tracker"
 )
 
 func TestUninstall(t *testing.T) {
@@ -102,4 +107,26 @@ func TestUninstall(t *testing.T) {
 			g.Expect(filepath.Join(tmpDir, currentCertFile)).NotTo(BeAnExistingFile())
 		})
 	}
+}
+
+func TestInstall(t *testing.T) {
+	kubectlData := []byte("test kubectl binary")
+
+	test.RunInstallTest(t, test.TestData{
+		ArtifactName: "kubelet",
+		BinaryName:   "kubelet",
+		Data:         kubectlData,
+		Install: func(ctx context.Context, tempDir string, source aws.Source, tr *tracker.Tracker) error {
+			return kubelet.Install(ctx, kubelet.InstallOptions{
+				InstallRoot: tempDir,
+				Tracker:     tr,
+				Source:      source,
+				Logger:      zap.NewNop(),
+			})
+		},
+		Verify: func(g *GomegaWithT, tempDir string, tr *tracker.Tracker) {
+			g.Expect(tr.Artifacts.Kubelet).To(BeTrue())
+		},
+		VerifyFilePaths: []string{kubelet.BinPath, kubelet.UnitPath},
+	})
 }
