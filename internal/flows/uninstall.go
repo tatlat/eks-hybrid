@@ -60,7 +60,7 @@ func (u *Uninstaller) uninstallDaemons(ctx context.Context) error {
 		if err := u.DaemonManager.StopDaemon(kubelet.KubeletDaemonName); err != nil {
 			return err
 		}
-		if err := kubelet.Uninstall(); err != nil {
+		if err := kubelet.Uninstall(kubelet.UninstallOptions{}); err != nil {
 			return err
 		}
 	}

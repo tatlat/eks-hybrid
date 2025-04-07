@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	_ "embed"
+	stdErrors "errors"
 	"os"
 	"path"
+	"path/filepath"
 
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
@@ -24,6 +26,8 @@ const (
 	artifactName      = "kubelet"
 	artifactFilePerms = 0o755
 )
+
+var kubeletCurrentCertPath = path.Join(kubeconfigRoot, "pki", "kubelet-server-current.pem")
 
 //go:embed kubelet.service
 var kubeletUnitFile []byte
@@ -62,18 +66,39 @@ func Install(ctx context.Context, tracker *tracker.Tracker, src Source) error {
 	return nil
 }
 
-func Uninstall() error {
+type UninstallOptions struct {
+	// InstallRoot is optionally the root directory of the installation
+	// If not provided, the default will be /
+	InstallRoot string
+}
+
+func Uninstall(opts UninstallOptions) error {
 	pathsToRemove := []string{
-		BinPath,
-		UnitPath,
-		kubeconfigPath,
-		path.Dir(kubeletConfigRoot),
+		filepath.Join(opts.InstallRoot, BinPath),
+		filepath.Join(opts.InstallRoot, UnitPath),
+		filepath.Join(opts.InstallRoot, kubeconfigPath),
+		filepath.Join(opts.InstallRoot, path.Dir(kubeletConfigRoot)),
+		filepath.Join(opts.InstallRoot, kubeletCurrentCertPath),
+	}
+
+	allErrors := []error{}
+
+	// resolve the symlink and add actual file to remove
+	actualCertPath, err := filepath.EvalSymlinks(filepath.Join(opts.InstallRoot, kubeletCurrentCertPath))
+	if err != nil && !os.IsNotExist(err) {
+		allErrors = append(allErrors, errors.Wrap(err, "resolving symlink for kubelet cert"))
+	}
+	if actualCertPath != "" {
+		pathsToRemove = append(pathsToRemove, actualCertPath)
 	}
 
 	for _, path := range pathsToRemove {
 		if err := os.RemoveAll(path); err != nil {
-			return err
+			allErrors = append(allErrors, err)
 		}
+	}
+	if len(allErrors) > 0 {
+		return stdErrors.Join(allErrors...)
 	}
 	return nil
 }
