@@ -3,6 +3,7 @@ package kubectl
 import (
 	"context"
 	"os"
+	"path/filepath"
 
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
@@ -24,22 +25,64 @@ type Source interface {
 	GetKubectl(context.Context) (artifact.Source, error)
 }
 
+// InstallOptions contains options for installing kubectl
+type InstallOptions struct {
+	InstallRoot string
+	Tracker     *tracker.Tracker
+	Source      Source
+	Logger      *zap.Logger
+}
+
 // Install installs kubectl at BinPath.
-func Install(ctx context.Context, tracker *tracker.Tracker, src Source) error {
-	kubectl, err := src.GetKubectl(ctx)
+func Install(ctx context.Context, opts InstallOptions) error {
+	if err := installFromSource(ctx, opts); err != nil {
+		return errors.Wrap(err, "installing kubectl")
+	}
+
+	if err := opts.Tracker.Add(artifact.Kubectl); err != nil {
+		return errors.Wrap(err, "adding kubectl to tracker")
+	}
+
+	return nil
+}
+
+func installFromSource(ctx context.Context, opts InstallOptions) error {
+	if err := downloadFileWithRetries(ctx, opts); err != nil {
+		return errors.Wrap(err, "downloading kubectl")
+	}
+
+	return nil
+}
+
+func downloadFileWithRetries(ctx context.Context, opts InstallOptions) error {
+	// Retry up to 3 times to download and validate the checksum
+	var err error
+	for range 3 {
+		err = downloadFileTo(ctx, opts)
+		if err == nil {
+			break
+		}
+		opts.Logger.Error("Downloading kubectl failed. Retrying...", zap.Error(err))
+	}
+	return err
+}
+
+func downloadFileTo(ctx context.Context, opts InstallOptions) error {
+	kubectl, err := opts.Source.GetKubectl(ctx)
 	if err != nil {
-		return errors.Wrap(err, "failed to get kubectl source")
+		return errors.Wrap(err, "getting kubectl source")
 	}
 	defer kubectl.Close()
 
-	if err := artifact.InstallFile(BinPath, kubectl, artifactFilePerms); err != nil {
-		return errors.Wrap(err, "failed to install kubectl")
+	if err := artifact.InstallFile(filepath.Join(opts.InstallRoot, BinPath), kubectl, artifactFilePerms); err != nil {
+		return errors.Wrap(err, "installing kubectl")
 	}
 
 	if !kubectl.VerifyChecksum() {
 		return errors.Errorf("kubectl checksum mismatch: %v", artifact.NewChecksumError(kubectl))
 	}
-	return tracker.Add(artifact.Kubectl)
+
+	return nil
 }
 
 func Uninstall() error {

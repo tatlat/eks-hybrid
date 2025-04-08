@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	// BinPath is the path to the Kubelet binary.
+	// DefaultBinPath is the path to the Kubelet binary.
 	BinPath = "/usr/bin/kubelet"
 
 	// UnitPath is the path to the Kubelet systemd unit file.
@@ -37,32 +37,67 @@ type Source interface {
 	GetKubelet(context.Context) (artifact.Source, error)
 }
 
+type InstallOptions struct {
+	InstallRoot string
+	Tracker     *tracker.Tracker
+	Source      Source
+	Logger      *zap.Logger
+}
+
 // Install installs kubelet at BinPath and installs a systemd unit file at UnitPath. The systemd
 // unit is configured to launch the kubelet binary.
-func Install(ctx context.Context, tracker *tracker.Tracker, src Source) error {
-	kubelet, err := src.GetKubelet(ctx)
+func Install(ctx context.Context, opts InstallOptions) error {
+	if err := installFromSource(ctx, opts); err != nil {
+		return errors.Wrap(err, "installing kubelet")
+	}
+
+	if err := installSystemdUnit(filepath.Join(opts.InstallRoot, UnitPath)); err != nil {
+		return errors.Wrap(err, "installing systemd unit")
+	}
+
+	if err := opts.Tracker.Add(artifact.Kubelet); err != nil {
+		return errors.Wrap(err, "adding kubelet to tracker")
+	}
+
+	return nil
+}
+
+func installFromSource(ctx context.Context, opts InstallOptions) error {
+	// Retry up to 3 times to download and validate the checksum
+	var err error
+	for range 3 {
+		err = downloadFileTo(ctx, opts)
+		if err == nil {
+			break
+		}
+		opts.Logger.Error("Downloading kubelet failed. Retrying...", zap.Error(err))
+	}
+	return err
+}
+
+func downloadFileTo(ctx context.Context, opts InstallOptions) error {
+	kubelet, err := opts.Source.GetKubelet(ctx)
 	if err != nil {
-		return errors.Wrap(err, "failed to get kubelet source")
+		return errors.Wrap(err, "getting kubelet source")
 	}
 	defer kubelet.Close()
 
-	if err := artifact.InstallFile(BinPath, kubelet, artifactFilePerms); err != nil {
-		return errors.Wrap(err, "failed to install kubelet")
+	if err := artifact.InstallFile(filepath.Join(opts.InstallRoot, BinPath), kubelet, artifactFilePerms); err != nil {
+		return errors.Wrap(err, "installing kubelet")
 	}
 
 	if !kubelet.VerifyChecksum() {
 		return errors.Errorf("kubelet checksum mismatch: %v", artifact.NewChecksumError(kubelet))
 	}
-	if err = tracker.Add(artifact.Kubelet); err != nil {
-		return err
-	}
 
+	return nil
+}
+
+func installSystemdUnit(unitPath string) error {
 	buf := bytes.NewBuffer(kubeletUnitFile)
-
-	if err := artifact.InstallFile(UnitPath, buf, 0o644); err != nil {
+	if err := artifact.InstallFile(unitPath, buf, 0o644); err != nil {
 		return errors.Errorf("failed to install kubelet systemd unit: %v", err)
 	}
-
 	return nil
 }
 
