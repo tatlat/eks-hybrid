@@ -96,7 +96,7 @@ func (w *InstanceConditionWaiter) WaitForOutput(ctx context.Context, params *ec2
 	}
 
 	if options.MinDelay > options.MaxDelay {
-		return nil, fmt.Errorf("minimum waiter delay %v must be lesser than or equal to maximum waiter delay of %v.", options.MinDelay, options.MaxDelay)
+		return nil, fmt.Errorf("minimum waiter delay %v must be lesser than or equal to maximum waiter delay of %v", options.MinDelay, options.MaxDelay)
 	}
 
 	ctx, cancelFn := context.WithTimeout(ctx, maxWaitDur)
@@ -172,7 +172,7 @@ func instanceRetryable(err error) (bool, error) {
 			return false, fmt.Errorf("expected err to be of type smithy.APIError, got %w", err)
 		}
 
-		if "InvalidInstanceID.NotFound" == apiErr.ErrorCode() {
+		if apiErr.ErrorCode() == "InvalidInstanceID.NotFound" {
 			return true, nil
 		}
 	}

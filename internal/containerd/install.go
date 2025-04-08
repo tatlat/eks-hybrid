@@ -75,13 +75,14 @@ func Upgrade(ctx context.Context, source Source) error {
 
 func ValidateContainerdSource(source SourceName) error {
 	osName := system.GetOsName()
-	if source == ContainerdSourceNone {
+	switch source {
+	case ContainerdSourceNone:
 		return nil
-	} else if source == ContainerdSourceDocker {
+	case ContainerdSourceDocker:
 		if osName == system.AmazonOsName {
 			return fmt.Errorf("docker source for containerd is not supported on AL2023. Please provide `none` or `distro` to the --containerd-source flag")
 		}
-	} else if source == ContainerdSourceDistro {
+	case ContainerdSourceDistro:
 		if osName == system.RhelOsName {
 			return fmt.Errorf("distro source for containerd is not supported on RHEL. Please provide `none` or `docker` to the --containerd-source flag")
 		}

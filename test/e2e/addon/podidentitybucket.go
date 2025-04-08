@@ -12,7 +12,7 @@ import (
 	e2eErrors "github.com/aws/eks-hybrid/test/e2e/errors"
 )
 
-var PodIdentityBucketNotFound = errors.New("pod identity bucket not found")
+var ErrPodIdentityBucketNotFound = errors.New("pod identity bucket not found")
 
 // PodIdentityBucket returns the pod identity bucket for the given cluster.
 func PodIdentityBucket(ctx context.Context, client *s3.Client, cluster string) (string, error) {
@@ -58,7 +58,7 @@ func PodIdentityBucket(ctx context.Context, client *s3.Client, cluster string) (
 	}
 
 	if len(foundBuckets) == 0 {
-		return "", PodIdentityBucketNotFound
+		return "", ErrPodIdentityBucketNotFound
 	}
 
 	return foundBuckets[0], nil

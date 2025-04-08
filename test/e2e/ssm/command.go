@@ -24,7 +24,7 @@ const (
 
 // ssm commands run as root user on jumpbox
 func makeSshCommand(instanceIP string, commands []string) string {
-	return fmt.Sprintf("ssh %s \"%s\"", instanceIP, strings.Replace(strings.Join(commands, ";"), "\"", "\\\"", -1))
+	return fmt.Sprintf("ssh %s \"%s\"", instanceIP, strings.ReplaceAll(strings.Join(commands, ";"), "\"", "\\\""))
 }
 
 type SSHOnSSM struct {
