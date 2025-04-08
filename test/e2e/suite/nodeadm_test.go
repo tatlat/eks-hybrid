@@ -299,7 +299,7 @@ var _ = Describe("Hybrid Nodes", func() {
 
 								serialOutput.It("joins the cluster", func() {
 									test.logger.Info("Waiting for EC2 Instance to be Running...")
-									Expect(ec2.WaitForEC2InstanceRunning(ctx, test.ec2Client, node.Instance.ID)).To(Succeed(), "EC2 Instance should have been reached Running status")
+									flakeRun.RetryableExpect(ec2.WaitForEC2InstanceRunning(ctx, test.ec2Client, node.Instance.ID)).To(Succeed(), "EC2 Instance should have been reached Running status")
 									_, err := verifyNode.WaitForNodeReady(ctx)
 									if err != nil {
 										// an ec2 node is considered impaired if the reachability health check fails
@@ -423,7 +423,7 @@ var _ = Describe("Hybrid Nodes", func() {
 
 								serialOutput.It("joins the cluster", func() {
 									test.logger.Info("Waiting for EC2 Instance to be Running...")
-									Expect(ec2.WaitForEC2InstanceRunning(ctx, test.ec2Client, node.Instance.ID)).To(Succeed(), "EC2 Instance should have been reached Running status")
+									flakeRun.RetryableExpect(ec2.WaitForEC2InstanceRunning(ctx, test.ec2Client, node.Instance.ID)).To(Succeed(), "EC2 Instance should have been reached Running status")
 									_, err := verifyNode.WaitForNodeReady(ctx)
 									if err != nil {
 										// an ec2 node is considered impaired if the reachability health check fails
