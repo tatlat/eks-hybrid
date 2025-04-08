@@ -20,7 +20,8 @@ const retryableHeading = "Retryable FlakyCode failure"
 // If the test block fails, the deferred cleanups will be run.
 // If the test block succeeds, the deferred cleanups will not be run until the end of the entire test.
 type FlakyCode struct {
-	Logger logr.Logger
+	Logger      logr.Logger
+	FailHandler func(message string, callerSkip ...int)
 }
 type FlakeRun struct {
 	DeferCleanup    func(func(context.Context), ...interface{})
@@ -33,7 +34,7 @@ type retryable struct {
 	testGoMega     Gomega
 }
 
-func newRetryable(attempt, maxAttempts int) *retryable {
+func newRetryable(attempt, maxAttempts int, failHandler func(message string, callerSkip ...int)) *retryable {
 	return &retryable{
 		testGoMega: NewGomega(func(message string, callerSkip ...int) {
 			skip := 0
@@ -52,10 +53,9 @@ func newRetryable(attempt, maxAttempts int) *retryable {
 					CodeLocation: cl,
 				})
 			}
-
 			// if we arent retrying, we call Fail directly which triggers
 			// ginkgo to store the error and stacktrace as a normal test failure
-			Fail(message, skip+1)
+			failHandler(message, skip+1)
 		}),
 	}
 }
@@ -108,7 +108,7 @@ func (f *FlakyCode) It(ctx context.Context, description string, flakeAttempts in
 			DeferCleanup(onced, args)
 		}
 
-		retry := newRetryable(attempt, flakeAttempts)
+		retry := newRetryable(attempt, flakeAttempts, f.FailHandler)
 
 		flakeRun := FlakeRun{
 			DeferCleanup:    deferCleanup,
@@ -140,13 +140,13 @@ func (f *FlakyCode) It(ctx context.Context, description string, flakeAttempts in
 			return
 		}
 
-		// run cleans before next attempt
+		f.Logger.Info(fmt.Sprintf("Failed attempt %d/%d", attempt+1, flakeAttempts))
+		f.Logger.Error(nil, retry.retryableError.Error())
+
+		f.Logger.Info("Running deferred cleanup")
 		for _, f := range slices.Backward(cleanups) {
 			f(ctx)
 		}
-
-		f.Logger.Info(fmt.Sprintf("Failed attempt %d/%d", attempt+1, flakeAttempts))
-		f.Logger.Error(nil, retry.retryableError.Error())
 		time.Sleep(time.Second * time.Duration(attempt))
 
 	}

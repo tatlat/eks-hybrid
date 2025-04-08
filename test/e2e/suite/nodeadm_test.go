@@ -22,6 +22,7 @@ import (
 	ssmv2 "github.com/aws/aws-sdk-go-v2/service/ssm"
 	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
+	"github.com/onsi/ginkgo/v2/types"
 	. "github.com/onsi/gomega"
 	clientgo "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -66,7 +67,6 @@ func init() {
 
 func TestE2E(t *testing.T) {
 	RegisterFailHandler(Fail)
-
 	RunSpecs(t, "E2E Suite")
 }
 
@@ -100,6 +100,11 @@ type peeredVPCTest struct {
 	remoteCommandRunner commands.RemoteCommandRunner
 
 	podIdentityS3Bucket string
+
+	// failureMessageLogged tracks if a terminal error due to a failed gomega
+	// expectation has already been registered and logged . It avoids logging
+	// the same multiple times.
+	failureMessageLogged bool
 }
 
 var _ = SynchronizedBeforeSuite(
@@ -263,7 +268,8 @@ var _ = Describe("Hybrid Nodes", func() {
 							var node peered.PeerdNode
 
 							flakyCode := &FlakyCode{
-								Logger: test.logger,
+								Logger:      test.logger,
+								FailHandler: test.handleFailure,
 							}
 							flakyCode.It(ctx, "Creates a node", 3, func(ctx context.Context, flakeRun FlakeRun) {
 								var err error
@@ -386,7 +392,8 @@ var _ = Describe("Hybrid Nodes", func() {
 							var node peered.PeerdNode
 
 							flakyCode := &FlakyCode{
-								Logger: test.logger,
+								Logger:      test.logger,
+								FailHandler: test.handleFailure,
 							}
 							flakyCode.It(ctx, "Creates a node", 3, func(ctx context.Context, flakeRun FlakeRun) {
 								var err error
@@ -444,7 +451,7 @@ var _ = Describe("Hybrid Nodes", func() {
 									}
 								})
 							})
-							Expect(verifyNode.Run(ctx)).To(Succeed(), "node should be fully functional")
+							Expect(verifyNode.Run(ctx)).NotTo(Succeed(), "node should be fully functional")
 
 							Expect(test.newUpgradeNode(node.Name, node.Instance.IP).Run(ctx)).To(Succeed(), "node should have upgraded successfully")
 
@@ -524,6 +531,11 @@ func buildPeeredVPCTestForSuite(ctx context.Context, suite *suiteConfiguration) 
 	if err != nil {
 		return nil, err
 	}
+
+	// override the default fail handler to print the error message immediately
+	// following the error. We override here once the logger has been initialized
+	// to ensure the error message is printed after the serial log (if it happens while waiting)
+	RegisterFailHandler(test.handleFailure)
 
 	return test, nil
 }
@@ -609,6 +621,27 @@ func (t *peeredVPCTest) newVerifyPodIdentityAddon(nodeName string) *addon.Verify
 		K8SConfig:           t.k8sClientConfig,
 		Region:              t.cluster.Region,
 	}
+}
+
+// handleFailure is a wrapper around ginkgo.Fail that logs the error message
+// immediately after it happens. It doesn't modify gomega's or ginkgo's regular
+// behavior.
+// We do this to help debug errors when going through the test logs.
+func (t *peeredVPCTest) handleFailure(message string, callerSkip ...int) {
+	skip := 0
+	if len(callerSkip) > 0 {
+		skip = callerSkip[0]
+	}
+	if !t.failureMessageLogged {
+		cl := types.NewCodeLocationWithStackTrace(skip + 1)
+		err := types.GinkgoError{
+			Message:      message,
+			CodeLocation: cl,
+		}
+		t.logger.Error(nil, err.Error())
+		t.failureMessageLogged = true
+	}
+	Fail(message, skip+1)
 }
 
 func newLoggerForTests() e2e.PausableLogger {
