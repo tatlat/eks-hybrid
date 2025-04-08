@@ -2,7 +2,6 @@ package run
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -15,7 +14,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/go-logr/logr"
 
-	"github.com/aws/eks-hybrid/test/e2e"
 	"github.com/aws/eks-hybrid/test/e2e/cluster"
 )
 
@@ -34,67 +32,37 @@ type E2ERunner struct {
 	TestProcs       int
 	TestTimeout     string
 	TestResources   cluster.TestResources
-	SkipCleanup     bool
 	SkippedTests    string
 }
 
 // Run runs the E2E tests and returns the failure phase with the error
-func (e *E2ERunner) Run(ctx context.Context) ([]Phase, error) {
+func (e *E2ERunner) Run(ctx context.Context) []Phase {
 	phases := []Phase{}
-	// After this point, return err so that the defer cleanup can combine all potential
-	// errors into what is finally returned
-	var err error
-	defer func() {
-		if e.SkipCleanup {
-			e.Logger.Info("Skipping cluster and infrastructure cleanup via stack deletion")
-			return
-		}
-		cleaner := E2ECleanup{
-			AwsCfg:        e.AwsCfg,
-			Logger:        e.newFileLogger(e.Paths.CleanupLog),
-			TestResources: e.TestResources,
-		}
-		cleanupErr := cleaner.Run(ctx)
-		phases, cleanupErr = phaseCompleted(phases, phaseNameCleanupCluster, "cleaning up cluster", cleanupErr)
-		if cleanupErr != nil {
-			err = errors.Join(err, cleanupErr)
-		}
-	}()
 
-	overallDeadline, ok := ctx.Deadline()
+	err := e.setupTestInfrastructure(ctx)
+	phases = phaseCompleted(phases, phaseNameSetupTestInfrastructure, "setting up test infrastructure", err)
+	if err != nil {
+		e.Logger.Error(err, "Failed creating test infrastructure")
+		return phases
+	}
+
+	deadline, ok := ctx.Deadline()
 	if !ok {
 		// no deadline set, use 24 hours as default
-		overallDeadline = time.Now().Add(defaultTestTimeout)
+		deadline = time.Now().Add(defaultTestTimeout)
+	}
+	ginkgoTimeout := (time.Until(deadline) - ginkgoCleanupBuffer).Round(time.Second)
+	err = e.executeTests(ctx, ginkgoTimeout)
+	phases = phaseCompleted(phases, phaseNameExecuteTests, "executing tests", err)
+	if err != nil {
+		e.Logger.Error(err, "Failed executing tests")
 	}
 
-	// set the setup and test deadline to the overall deadline minus 5 minutes reserved for cleanup
-	setupAndTestDeadline := overallDeadline
-	if !e.SkipCleanup {
-		setupAndTestDeadline = setupAndTestDeadline.Add(-cleanupBuffer)
-	}
-	setupAndTestCtx, cancelFunc := context.WithDeadline(ctx, setupAndTestDeadline)
-	defer cancelFunc()
-
-	setupErr := e.setupTestInfrastructure(setupAndTestCtx)
-	phases, setupErr = phaseCompleted(phases, phaseNameSetupTestInfrastructure, "setting up test infrastructure", setupErr)
-	if setupErr != nil {
-		err = setupErr
-		return phases, err
-	}
-
-	// give the tests the remaining time after setup but reserve 1 minute for ginkgo suite cleanup
-	ginkgoTimeout := (time.Until(setupAndTestDeadline) - ginkgoCleanupBuffer).Round(time.Second)
-	testsErr := e.executeTests(setupAndTestCtx, ginkgoTimeout)
-	phases, testsErr = phaseCompleted(phases, phaseNameExecuteTests, "executing tests", testsErr)
-	if testsErr != nil {
-		err = testsErr
-		return phases, err
-	}
-	return phases, nil
+	return phases
 }
 
 func (e *E2ERunner) setupTestInfrastructure(ctx context.Context) error {
-	logger := e.newFileLogger(e.Paths.SetupLog)
+	logger := newFileLogger(e.Paths.SetupLog, e.NoColor)
 	create := cluster.NewCreate(e.AwsCfg, logger, e.TestResources.Endpoint)
 
 	logger.Info("Creating cluster infrastructure for E2E tests...")
@@ -178,8 +146,4 @@ func (e *E2ERunner) executeTests(ctx context.Context, timeout time.Duration) err
 	}
 
 	return nil
-}
-
-func (e *E2ERunner) newFileLogger(fileName string) logr.Logger {
-	return e2e.NewLogger(e2e.LoggerConfig{NoColor: e.NoColor}, e2e.WithOutputFile(fileName))
 }
