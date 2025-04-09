@@ -27,7 +27,7 @@ const (
 	artifactFilePerms = 0o755
 )
 
-var kubeletCurrentCertPath = path.Join(kubeconfigRoot, "pki", "kubelet-server-current.pem")
+var KubeletCurrentCertPath = path.Join(kubeconfigRoot, "pki", "kubelet-server-current.pem")
 
 //go:embed kubelet.service
 var kubeletUnitFile []byte
@@ -113,13 +113,13 @@ func Uninstall(opts UninstallOptions) error {
 		filepath.Join(opts.InstallRoot, UnitPath),
 		filepath.Join(opts.InstallRoot, kubeconfigPath),
 		filepath.Join(opts.InstallRoot, path.Dir(kubeletConfigRoot)),
-		filepath.Join(opts.InstallRoot, kubeletCurrentCertPath),
+		filepath.Join(opts.InstallRoot, KubeletCurrentCertPath),
 	}
 
 	allErrors := []error{}
 
 	// resolve the symlink and add actual file to remove
-	actualCertPath, err := filepath.EvalSymlinks(filepath.Join(opts.InstallRoot, kubeletCurrentCertPath))
+	actualCertPath, err := filepath.EvalSymlinks(filepath.Join(opts.InstallRoot, KubeletCurrentCertPath))
 	if err != nil && !os.IsNotExist(err) {
 		allErrors = append(allErrors, errors.Wrap(err, "resolving symlink for kubelet cert"))
 	}
