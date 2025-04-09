@@ -1,21 +1,39 @@
+version: "2"
 run:
-  timeout: 5m
   build-tags:
     - e2e
-issues:
-  exclude-files:
-  - "zz_generated.*\\.go$"
 linters:
+  exclusions:
+    presets:
+      - std-error-handling
+    paths:
+      - zz_generated.*\.go$
+  settings:
+    staticcheck:
+        checks:
+        - all # default
+        - '-ST1000' # default       
+        - '-ST1003' # default
+        - '-ST1016' # default
+        - '-ST1020' # default
+        - '-ST1021' # default
+        - '-ST1022' # default
+        - '-ST1001' # ST1001: should not use dot imports
+        - '-ST1005' # ST1005: error strings should not be capitalized
+formatters:
   enable:
-    - gofumpt
     - gci
-linters-settings:
-  gofumpt:
-    extra-rules: true
-  gci:
-    sections:
-      - standard
-      - default
-      - prefix(github.com/aws/eks-hybrid)
-    custom-order: true
-    skip-generated: false
+    - gofumpt
+  settings:
+    gci:
+      sections:
+        - standard
+        - default
+        - prefix(github.com/aws/eks-hybrid)
+      custom-order: true
+    gofumpt:
+      extra-rules: true
+  exclusions:
+    paths:
+      - zz_generated.*\.go$
+

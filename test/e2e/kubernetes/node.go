@@ -314,7 +314,7 @@ func CordonNode(ctx context.Context, k8s kubernetes.Interface, node *corev1.Node
 	// drain, its possible (common) during our tests that pods get scheduled on the node after
 	// drain gets the list of pods to evict and before the taint has been fully applied
 	// leading to an error during nodeadm upgrade/uninstall due to non-daemonset pods running
-	nodeName := node.ObjectMeta.Name
+	nodeName := node.Name
 	consecutiveErrors := 0
 	err = wait.PollUntilContextTimeout(ctx, nodeCordonDelayInterval, nodeCordonTimeout, true, func(ctx context.Context) (done bool, err error) {
 		node, err := k8s.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})

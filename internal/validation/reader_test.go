@@ -70,11 +70,11 @@ func TestFileCaptureInit(t *testing.T) {
 	g.Expect(err).To(BeNil())
 	g.Expect(fileCapture.File).NotTo(BeNil())
 
-	_, err = fileCapture.File.WriteString("line 1\n")
+	_, err = fileCapture.WriteString("line 1\n")
 	g.Expect(err).To(BeNil())
-	_, err = fileCapture.File.WriteString("line 2\n")
+	_, err = fileCapture.WriteString("line 2\n")
 	g.Expect(err).To(BeNil())
-	_, err = fileCapture.File.WriteString("line 3\n")
+	_, err = fileCapture.WriteString("line 3\n")
 	g.Expect(err).To(BeNil())
 
 	g.Expect(<-out).To(Equal("line 1"))

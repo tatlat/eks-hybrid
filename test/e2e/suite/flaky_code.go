@@ -10,7 +10,6 @@ import (
 	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/onsi/ginkgo/v2/types"
-	"github.com/onsi/gomega"
 	. "github.com/onsi/gomega"
 )
 
@@ -31,12 +30,12 @@ type FlakeRun struct {
 type retryable struct {
 	panicableError error
 	retryableError error
-	testGoMega     gomega.Gomega
+	testGoMega     Gomega
 }
 
 func newRetryable(attempt, maxAttempts int) *retryable {
 	return &retryable{
-		testGoMega: gomega.NewGomega(func(message string, callerSkip ...int) {
+		testGoMega: NewGomega(func(message string, callerSkip ...int) {
 			skip := 0
 			if len(callerSkip) > 0 {
 				skip = callerSkip[0]

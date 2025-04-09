@@ -37,7 +37,7 @@ func templateFuncMap() map[string]interface{} {
 	return map[string]interface{}{
 		"indent": func(spaces int, v string) string {
 			pad := strings.Repeat(" ", spaces)
-			return pad + strings.Replace(v, "\n", "\n"+pad, -1)
+			return pad + strings.ReplaceAll(v, "\n", "\n"+pad)
 		},
 	}
 }

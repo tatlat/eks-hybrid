@@ -103,12 +103,13 @@ func TestInstall(t *testing.T) {
 					return
 				}
 
-				if r.URL.Path == "/latest/linux_amd64/ssm-setup-cli" {
+				switch r.URL.Path {
+				case "/latest/linux_amd64/ssm-setup-cli":
 					if _, err := w.Write(tt.installerData); err != nil {
 						w.WriteHeader(http.StatusInternalServerError)
 						return
 					}
-				} else if r.URL.Path == "/latest/linux_amd64/ssm-setup-cli.sig" {
+				case "/latest/linux_amd64/ssm-setup-cli.sig":
 					if _, err := w.Write(tt.signature); err != nil {
 						w.WriteHeader(http.StatusInternalServerError)
 						return

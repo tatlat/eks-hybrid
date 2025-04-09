@@ -378,7 +378,7 @@ func (s *stack) delete(ctx context.Context, clusterName string) error {
 func (s *stack) emptyPodIdentityS3Bucket(ctx context.Context, clusterName string) error {
 	podIdentityBucket, err := addon.PodIdentityBucket(ctx, s.s3Client, clusterName)
 	if err != nil {
-		if errors.Is(err, addon.PodIdentityBucketNotFound) {
+		if errors.Is(err, addon.ErrPodIdentityBucketNotFound) {
 			return nil
 		}
 		return fmt.Errorf("getting pod identity s3 bucket: %w", err)

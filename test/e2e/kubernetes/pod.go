@@ -73,8 +73,8 @@ func CreateNginxPodInNode(ctx context.Context, k8s kubernetes.Interface, nodeNam
 }
 
 func CreatePod(ctx context.Context, k8s kubernetes.Interface, pod *corev1.Pod, logger logr.Logger) error {
-	podName := pod.ObjectMeta.Name
-	namespace := pod.ObjectMeta.Namespace
+	podName := pod.Name
+	namespace := pod.Namespace
 
 	_, err := k8s.CoreV1().Pods(namespace).Create(ctx, pod, metav1.CreateOptions{})
 	if err != nil {
