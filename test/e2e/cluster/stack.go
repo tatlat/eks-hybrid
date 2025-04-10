@@ -32,8 +32,9 @@ import (
 var setupTemplateBody []byte
 
 const (
-	stackWaitTimeout  = 7 * time.Minute
-	stackWaitInterval = 10 * time.Second
+	creationTimeParameterKey = "CreationTime"
+	stackWaitTimeout         = 7 * time.Minute
+	stackWaitInterval        = 10 * time.Second
 )
 
 type vpcConfig struct {
@@ -164,7 +165,7 @@ func (s *stack) prepareStackParameters(test TestResources) []types.Parameter {
 			// This date can change during an rerun of the setup which will update the stack
 			// updating the stack is typically not done by tests and worst case the cleanup
 			// waits a bit longer to delete a dangling resource.
-			ParameterKey:   aws.String("CreationTime"),
+			ParameterKey:   aws.String(creationTimeParameterKey),
 			ParameterValue: aws.String(time.Now().Format(time.RFC3339)),
 		},
 		{
@@ -214,6 +215,7 @@ func (s *stack) createOrUpdateStack(ctx context.Context, stackName string, param
 			return fmt.Errorf("waiting for hybrid nodes setup cfn stack: %w", err)
 		}
 	} else {
+		params = replaceCreationTimeParameter(resp.Stacks[0].Parameters, params)
 		s.logger.Info("Updating hybrid nodes setup stack", "stackName", stackName)
 		_, err = s.cfn.UpdateStack(ctx, &cloudformation.UpdateStackInput{
 			DisableRollback: aws.Bool(true),
@@ -391,4 +393,28 @@ func (s *stack) emptyPodIdentityS3Bucket(ctx context.Context, clusterName string
 	}
 
 	return nil
+}
+
+func replaceCreationTimeParameter(existingParams, newParams []types.Parameter) []types.Parameter {
+	// if the stack already exists, try to find the original creation time
+	// and replace the new parameter with the original one to avoid triggering an
+	// unnecessary update
+	var existingCreationTime string
+	for _, param := range existingParams {
+		if *param.ParameterKey == creationTimeParameterKey {
+			existingCreationTime = *param.ParameterValue
+			break
+		}
+	}
+	if existingCreationTime == "" {
+		return newParams
+	}
+
+	for i, newParam := range newParams {
+		if *newParam.ParameterKey == creationTimeParameterKey {
+			newParams[i].ParameterValue = aws.String(existingCreationTime)
+			break
+		}
+	}
+	return newParams
 }
