@@ -13,7 +13,10 @@ import (
 	"github.com/aws/eks-hybrid/internal/nodeprovider"
 )
 
-const nodeIpValidation = "node-ip-validation"
+const (
+	nodeIpValidation      = "node-ip-validation"
+	kubeletCertValidation = "kubelet-cert-validation"
+)
 
 type HybridNodeProvider struct {
 	nodeConfig    *api.NodeConfig
@@ -24,6 +27,9 @@ type HybridNodeProvider struct {
 	cluster       *types.Cluster
 	skipPhases    []string
 	network       Network
+	// InstallRoot is optionally the root directory of the installation
+	// If not provided, the cert
+	installRoot string
 }
 
 type NodeProviderOpt func(*HybridNodeProvider)
@@ -67,6 +73,13 @@ func WithNetwork(network Network) NodeProviderOpt {
 	}
 }
 
+// WithInstallRoot sets the root directory for installation paths
+func WithInstallRoot(root string) NodeProviderOpt {
+	return func(hnp *HybridNodeProvider) {
+		hnp.installRoot = root
+	}
+}
+
 func (hnp *HybridNodeProvider) GetNodeConfig() *api.NodeConfig {
 	return hnp.nodeConfig
 }
@@ -78,6 +91,12 @@ func (hnp *HybridNodeProvider) Logger() *zap.Logger {
 func (hnp *HybridNodeProvider) Validate() error {
 	if !slices.Contains(hnp.skipPhases, nodeIpValidation) {
 		if err := hnp.ValidateNodeIP(); err != nil {
+			return err
+		}
+	}
+
+	if !slices.Contains(hnp.skipPhases, kubeletCertValidation) {
+		if err := ValidateKubeletCert(hnp.logger, hnp.installRoot, hnp.nodeConfig.Spec.Cluster.CertificateAuthority); err != nil {
 			return err
 		}
 	}
