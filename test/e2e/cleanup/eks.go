@@ -13,7 +13,7 @@ import (
 	"github.com/aws/eks-hybrid/test/e2e/errors"
 )
 
-const deleteClusterTimeout = 5 * time.Minute
+const deleteClusterTimeout = 8 * time.Minute
 
 type EKSClusterCleanup struct {
 	eksClient *eks.Client
