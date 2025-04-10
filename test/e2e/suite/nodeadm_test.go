@@ -451,7 +451,7 @@ var _ = Describe("Hybrid Nodes", func() {
 									}
 								})
 							})
-							Expect(verifyNode.Run(ctx)).NotTo(Succeed(), "node should be fully functional")
+							Expect(verifyNode.Run(ctx)).To(Succeed(), "node should be fully functional")
 
 							Expect(test.newUpgradeNode(node.Name, node.Instance.IP).Run(ctx)).To(Succeed(), "node should have upgraded successfully")
 
