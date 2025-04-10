@@ -13,7 +13,10 @@ import (
 	"github.com/aws/eks-hybrid/test/e2e/errors"
 )
 
-const deleteClusterTimeout = 8 * time.Minute
+const (
+	activeClusterTimeout = 12 * time.Minute
+	deleteClusterTimeout = 8 * time.Minute
+)
 
 type EKSClusterCleanup struct {
 	eksClient *eks.Client
@@ -61,6 +64,18 @@ func (c *EKSClusterCleanup) DeleteCluster(ctx context.Context, clusterName strin
 	_, err := c.eksClient.DeleteCluster(ctx, &eks.DeleteClusterInput{
 		Name: aws.String(clusterName),
 	})
+
+	if err != nil && errors.IsAwsError(err, "ResourceInUseException") {
+		c.logger.Info("Cluster update in progreess, waiting for cluster to be active before deleting")
+		waiter := eks.NewClusterActiveWaiter(c.eksClient)
+		err = waiter.Wait(ctx, &eks.DescribeClusterInput{Name: aws.String(clusterName)}, activeClusterTimeout)
+		if err != nil {
+			return fmt.Errorf("waiting for cluster to be active before deletion: %w", err)
+		}
+		_, err = c.eksClient.DeleteCluster(ctx, &eks.DeleteClusterInput{
+			Name: aws.String(clusterName),
+		})
+	}
 
 	if err != nil && errors.IsAwsError(err, "AccessDeniedException") {
 		// if the cluster deleted, the role policy may return a 403 since its
