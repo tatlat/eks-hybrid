@@ -189,16 +189,7 @@ var _ = Describe("Hybrid Nodes", func() {
 		&credentials.IamRolesAnywhereProvider{},
 	}
 
-	notSupported := nodeadmConfigMatchers{
-		{
-			matchOS:            osystem.IsUbuntu2004,
-			matchCredsProvider: credentials.IsIAMRolesAnywhere,
-		},
-		{
-			matchOS:            osystem.IsRHEL8,
-			matchCredsProvider: credentials.IsIAMRolesAnywhere,
-		},
-	}
+	notSupported := nodeadmConfigMatchers{}
 
 	When("using peered VPC", func() {
 		var test *peeredVPCTest
