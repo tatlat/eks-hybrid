@@ -154,7 +154,7 @@ func (pm *DistroPackageManager) configureAptPackageManagerWithDockerRepo(ctx con
 
 	// Run update to pull docker repo's metadata
 	pm.logger.Info("Updating packages to refresh docker repo metadata...")
-	err = pm.updateDockerAptPackagesWithRetries(ctx)
+	err = pm.RefreshMetadataCache(ctx)
 	if err != nil {
 		return errors.Wrapf(err, "failed running commands to configure package manager")
 	}
@@ -196,15 +196,6 @@ func (pm *DistroPackageManager) uninstallDockerRepo() error {
 	default:
 		return nil
 	}
-}
-
-// updateAllPackages updates all packages and repo metadata on the system
-func (pm *DistroPackageManager) updateDockerAptPackagesCommand(ctx context.Context) *exec.Cmd {
-	return exec.CommandContext(ctx, pm.manager, pm.updateVerb, "-y", "-o", fmt.Sprintf("Dir::Etc::sourcelist=\"%s\"", aptDockerRepoSourceFilePath))
-}
-
-func (pm *DistroPackageManager) updateDockerAptPackagesWithRetries(ctx context.Context) error {
-	return cmd.Retry(ctx, pm.updateDockerAptPackagesCommand, 5*time.Second)
 }
 
 func (pm *DistroPackageManager) appendPackageVersion(packageName, version string) string {
