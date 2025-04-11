@@ -9,6 +9,7 @@ import (
 	"go.uber.org/zap"
 	"k8s.io/utils/strings/slices"
 
+	"github.com/aws/eks-hybrid/internal/cleanup"
 	"github.com/aws/eks-hybrid/internal/cli"
 	"github.com/aws/eks-hybrid/internal/cni"
 	"github.com/aws/eks-hybrid/internal/containerd"
@@ -43,6 +44,7 @@ func NewCommand() cli.Command {
 	fc.Description = "Uninstall components installed using the install sub-command"
 	fc.AdditionalHelpAppend = uninstallHelpText
 	fc.StringSlice(&cmd.skipPhases, "s", "skip", "Phases of uninstall to skip. Allowed values: [pod-validation, node-validation].")
+	fc.Bool(&cmd.force, "f", "force", "Force delete additional directories that might contain leftovers from the node process. WARNING: This will delete all contents in default Kubernetes and CNI directories (/var/lib/kubelet, /var/lib/cni, etc). Do not use this flag if you store your own data in these locations.")
 	cmd.flaggy = fc
 
 	return &cmd
@@ -51,6 +53,7 @@ func NewCommand() cli.Command {
 type command struct {
 	flaggy     *flaggy.Subcommand
 	skipPhases []string
+	force      bool
 }
 
 func (c *command) Flaggy() *flaggy.Subcommand {
@@ -125,5 +128,17 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		CNIUninstall:   cni.Uninstall,
 	}
 
-	return uninstaller.Run(ctx)
+	if err := uninstaller.Run(ctx); err != nil {
+		return err
+	}
+
+	if c.force {
+		log.Info("Force mode enabled, cleaning up additional directories...")
+		cleanupManager := cleanup.New(log)
+		if err := cleanupManager.Cleanup(); err != nil {
+			return fmt.Errorf("cleaning up additional directories: %w", err)
+		}
+	}
+
+	return nil
 }
