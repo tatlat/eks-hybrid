@@ -67,6 +67,33 @@ func (c *EKSClusterCleanup) DeleteCluster(ctx context.Context, clusterName strin
 
 	if err != nil && errors.IsAwsError(err, "ResourceInUseException") {
 		c.logger.Info("Cluster update in progreess, waiting for cluster to be active before deleting")
+		var describeCluster *eks.DescribeClusterOutput
+		describeCluster, err = c.eksClient.DescribeCluster(ctx, &eks.DescribeClusterInput{
+			Name: aws.String(clusterName),
+		})
+		if err != nil {
+			return fmt.Errorf("describing cluster: %w", err)
+		}
+		c.logger.Info("Current cluster state", "cluster", describeCluster)
+		paginator := eks.NewListUpdatesPaginator(c.eksClient, &eks.ListUpdatesInput{
+			Name: aws.String(clusterName),
+		})
+		for paginator.HasMorePages() {
+			page, err := paginator.NextPage(ctx)
+			if err != nil {
+				return fmt.Errorf("listing updates: %w", err)
+			}
+			for _, update := range page.UpdateIds {
+				updateInfo, err := c.eksClient.DescribeUpdate(ctx, &eks.DescribeUpdateInput{
+					Name:     aws.String(clusterName),
+					UpdateId: aws.String(update),
+				})
+				if err != nil {
+					return fmt.Errorf("describing update: %w", err)
+				}
+				c.logger.Info("Current update operation", "update", updateInfo)
+			}
+		}
 		waiter := eks.NewClusterActiveWaiter(c.eksClient)
 		err = waiter.Wait(ctx, &eks.DescribeClusterInput{Name: aws.String(clusterName)}, activeClusterTimeout)
 		if err != nil {
