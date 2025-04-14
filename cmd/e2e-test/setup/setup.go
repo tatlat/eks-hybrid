@@ -3,12 +3,10 @@ package setup
 import (
 	"context"
 	"fmt"
-	"os"
 
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/integrii/flaggy"
 	"go.uber.org/zap"
-	"gopkg.in/yaml.v2"
 
 	"github.com/aws/eks-hybrid/internal/cli"
 	"github.com/aws/eks-hybrid/test/e2e"
@@ -44,15 +42,10 @@ func (c *Command) Commands() []cli.Command {
 
 func (s *Command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	ctx := context.Background()
-	file, err := os.ReadFile(s.configFilePath)
+
+	testResources, err := cluster.LoadTestResources(s.configFilePath)
 	if err != nil {
-		return fmt.Errorf("failed to open configuration file: %v", err)
-	}
-
-	testResources := cluster.TestResources{}
-
-	if err = yaml.Unmarshal(file, &testResources); err != nil {
-		return fmt.Errorf("unmarshaling test infra configuration: %w", err)
+		return fmt.Errorf("failed to load test resources: %w", err)
 	}
 
 	aws, err := e2e.NewAWSConfig(ctx, config.WithRegion(testResources.ClusterRegion))
@@ -61,7 +54,7 @@ func (s *Command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	}
 
 	logger := e2e.NewLogger()
-	create := cluster.NewCreate(aws, logger, testResources.Endpoint)
+	create := cluster.NewCreate(aws, logger, testResources.EKS.Endpoint)
 
 	logger.Info("Creating cluster infrastructure for E2E tests...")
 	if err := create.Run(ctx, testResources); err != nil {

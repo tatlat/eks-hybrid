@@ -67,7 +67,7 @@ type stack struct {
 func (s *stack) deploy(ctx context.Context, test TestResources) (*resourcesStackOutput, error) {
 	stackName := stackName(test.ClusterName)
 
-	params := s.prepareStackParameters(test)
+	params := s.prepareStackParameters(test, test.EKS)
 
 	// There are occasional race conditions when creating the cfn stack
 	// retrying once allows to potentially resolve them on the second attempt
@@ -108,7 +108,7 @@ func (s *stack) deploy(ctx context.Context, test TestResources) (*resourcesStack
 	return result, nil
 }
 
-func (s *stack) prepareStackParameters(test TestResources) []types.Parameter {
+func (s *stack) prepareStackParameters(test TestResources, eks EKSConfig) []types.Parameter {
 	return []types.Parameter{
 		{
 			ParameterKey:   aws.String("ClusterName"),
@@ -171,6 +171,14 @@ func (s *stack) prepareStackParameters(test TestResources) []types.Parameter {
 		{
 			ParameterKey:   aws.String("CreationTimeTagKey"),
 			ParameterValue: aws.String(constants.CreationTimeTagKey),
+		},
+		{
+			ParameterKey:   aws.String("EKSClusterRoleSP"),
+			ParameterValue: aws.String(eks.ClusterRoleSP),
+		},
+		{
+			ParameterKey:   aws.String("EKSPodIdentitySP"),
+			ParameterValue: aws.String(eks.PodIdentitySP),
 		},
 	}
 }

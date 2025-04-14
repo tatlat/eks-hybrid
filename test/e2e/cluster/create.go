@@ -3,6 +3,7 @@ package cluster
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/cloudformation"
@@ -12,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	"github.com/go-logr/logr"
+	"gopkg.in/yaml.v2"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
@@ -28,7 +30,12 @@ type TestResources struct {
 	HybridNetwork     NetworkConfig `yaml:"hybridNetwork"`
 	KubernetesVersion string        `yaml:"kubernetesVersion"`
 	Cni               string        `yaml:"cni"`
-	Endpoint          string        `yaml:"endpoint"`
+	EKS               EKSConfig     `yaml:"eks"`
+}
+type EKSConfig struct {
+	Endpoint      string `yaml:"endpoint"`
+	ClusterRoleSP string `yaml:"clusterRoleSP"`
+	PodIdentitySP string `yaml:"podIdentitySP"`
 }
 
 type NetworkConfig struct {
@@ -39,8 +46,10 @@ type NetworkConfig struct {
 }
 
 const (
-	ciliumCni = "cilium"
-	calicoCni = "calico"
+	ciliumCni            = "cilium"
+	calicoCni            = "calico"
+	defaultClusterRoleSP = "eks.amazonaws.com"
+	defaultPodIdentitySP = "pods.eks.amazonaws.com"
 )
 
 type Create struct {
@@ -56,9 +65,7 @@ type Create struct {
 func NewCreate(aws aws.Config, logger logr.Logger, endpoint string) Create {
 	return Create{
 		logger: logger,
-		eks: eks.NewFromConfig(aws, func(o *eks.Options) {
-			o.EndpointResolverV2 = &e2e.EksResolverV2{Endpoint: endpoint}
-		}),
+		eks:    e2e.NewEKSClient(aws, endpoint),
 		stack: &stack{
 			iamClient: iam.NewFromConfig(aws),
 			cfn:       cloudformation.NewFromConfig(aws),
@@ -149,4 +156,48 @@ func (c *Create) Run(ctx context.Context, test TestResources) error {
 
 func KubeconfigPath(clusterName string) string {
 	return fmt.Sprintf("/tmp/%s.kubeconfig", clusterName)
+}
+
+func LoadTestResources(path string) (TestResources, error) {
+	file, err := os.ReadFile(path)
+	if err != nil {
+		return TestResources{}, fmt.Errorf("opening configuration file: %w", err)
+	}
+
+	var testResources TestResources
+	err = yaml.Unmarshal(file, &testResources)
+	if err != nil {
+		return TestResources{}, fmt.Errorf("unmarshalling test resources: %w", err)
+	}
+
+	testResources = SetTestResourcesDefaults(testResources)
+
+	return testResources, nil
+}
+
+func SetTestResourcesDefaults(testResources TestResources) TestResources {
+	if testResources.EKS.ClusterRoleSP == "" {
+		testResources.EKS.ClusterRoleSP = defaultClusterRoleSP
+	}
+
+	if testResources.EKS.PodIdentitySP == "" {
+		testResources.EKS.PodIdentitySP = defaultPodIdentitySP
+	}
+	if testResources.ClusterNetwork == (NetworkConfig{}) {
+		testResources.ClusterNetwork = NetworkConfig{
+			VpcCidr:           "10.0.0.0/16",
+			PublicSubnetCidr:  "10.0.10.0/24",
+			PrivateSubnetCidr: "10.0.20.0/24",
+		}
+	}
+	if testResources.HybridNetwork == (NetworkConfig{}) {
+		testResources.HybridNetwork = NetworkConfig{
+			VpcCidr:           "10.1.0.0/16",
+			PublicSubnetCidr:  "10.1.1.0/24",
+			PrivateSubnetCidr: "10.1.2.0/24",
+			PodCidr:           "10.2.0.0/16",
+		}
+	}
+
+	return testResources
 }

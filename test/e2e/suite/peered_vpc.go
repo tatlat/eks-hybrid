@@ -43,6 +43,7 @@ type suiteConfiguration struct {
 
 type peeredVPCTest struct {
 	aws             aws.Config
+	eksEndpoint     string
 	eksClient       *eks.Client
 	ec2Client       *ec2v2.Client
 	ssmClient       *ssmv2.Client
@@ -81,6 +82,7 @@ type peeredVPCTest struct {
 func buildPeeredVPCTestForSuite(ctx context.Context, suite *suiteConfiguration) (*peeredVPCTest, error) {
 	pausableLogger := newLoggerForTests()
 	test := &peeredVPCTest{
+		eksEndpoint:            suite.TestConfig.Endpoint,
 		stackOut:               suite.CredentialsStackOutput,
 		logger:                 pausableLogger.Logger,
 		loggerControl:          pausableLogger,
@@ -98,7 +100,7 @@ func buildPeeredVPCTestForSuite(ctx context.Context, suite *suiteConfiguration) 
 	}
 
 	test.aws = aws
-	test.eksClient = eks.NewFromConfig(aws)
+	test.eksClient = e2e.NewEKSClient(aws, suite.TestConfig.Endpoint)
 	test.ec2Client = ec2v2.NewFromConfig(aws)
 	test.ssmClient = ssmv2.NewFromConfig(aws)
 	test.s3Client = s3v2.NewFromConfig(aws)
@@ -223,6 +225,7 @@ func (t *peeredVPCTest) newTestNode(ctx context.Context, instanceName, nodeName,
 		ArtifactsPath:   t.artifactsPath,
 		ClusterName:     t.cluster.Name,
 		EC2Client:       t.ec2Client,
+		EKSEndpoint:     t.eksEndpoint,
 		FailHandler:     t.handleFailure,
 		InstanceName:    instanceName,
 		Logger:          t.logger,

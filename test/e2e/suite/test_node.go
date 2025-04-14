@@ -23,6 +23,7 @@ type testNode struct {
 	ArtifactsPath   string
 	ClusterName     string
 	EC2Client       *ec2v2.Client
+	EKSEndpoint     string
 	FailHandler     func(message string, callerSkip ...int)
 	InstanceName    string
 	K8sClient       clientgo.Interface
@@ -54,6 +55,7 @@ func (n *testNode) Start(ctx context.Context) error {
 		n.addReportEntries(n.PeeredNode)
 
 		node, err := n.PeeredNode.Create(ctx, &peered.NodeSpec{
+			EKSEndpoint:    n.EKSEndpoint,
 			InstanceName:   n.InstanceName,
 			NodeK8sVersion: n.K8sVersion,
 			NodeName:       n.NodeName,

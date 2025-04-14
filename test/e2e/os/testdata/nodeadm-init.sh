@@ -24,9 +24,11 @@ trap "run_debug" EXIT
 rm -rf /etc/cni/net.d
 
 echo "Downloading nodeadm binary"
-for i in {1..5}; do curl --fail -s --retry 5 -L "$NODEADM_URL" -o /tmp/nodeadm && break || sleep 5; done
+for i in {1..5}; do curl --fail -s --retry 5 -L "$NODEADM_URL" -o /tmp/nodeadm-bin && break || sleep 5; done
 
-chmod +x /tmp/nodeadm
+chmod +x /tmp/nodeadm-bin
+mv /tmp/nodeadm-wrapper.sh /tmp/nodeadm
+
 
 echo "Installing kubernetes components"
 /tmp/nodeadm install $KUBERNETES_VERSION $NODEADM_ADDITIONAL_ARGS --credential-provider $PROVDER --region $REGION
