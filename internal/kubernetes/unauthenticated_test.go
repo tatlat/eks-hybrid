@@ -105,6 +105,24 @@ func TestMakeUnauthenticatedRequestNotForbidden(t *testing.T) {
 
 	resp := &apiServerResponse{
 		Status:  "Failure",
+		Message: "Not Found",
+		Reason:  "Not Found",
+		Code:    404,
+	}
+
+	server := test.NewHTTPSServerForJSON(t, http.StatusNotFound, resp)
+
+	err := kubernetes.MakeUnauthenticatedRequest(ctx, server.URL, server.CAPEM())
+	g.Expect(err).To(MatchError(ContainSubstring("expected status code from unauthenticated request 403 or 401, got 404. Message: Not Found")))
+	g.Expect(validation.Remediation(err)).To(Equal("Ensure the Kubernetes API server endpoint provided is correct and the CA certificate is valid for that endpoint."))
+}
+
+func TestMakeUnauthenticatedRequestUnauthorized(t *testing.T) {
+	g := NewGomegaWithT(t)
+	ctx := context.Background()
+
+	resp := &apiServerResponse{
+		Status:  "Failure",
 		Message: "Unauthorized",
 		Reason:  "Unauthorized",
 		Code:    401,
@@ -112,9 +130,7 @@ func TestMakeUnauthenticatedRequestNotForbidden(t *testing.T) {
 
 	server := test.NewHTTPSServerForJSON(t, http.StatusUnauthorized, resp)
 
-	err := kubernetes.MakeUnauthenticatedRequest(ctx, server.URL, server.CAPEM())
-	g.Expect(err).To(MatchError(ContainSubstring("expected status code from unauthenticated request 403, got 401. Message: Unauthorized")))
-	g.Expect(validation.Remediation(err)).To(Equal("Ensure the Kubernetes API server endpoint provided is correct and the CA certificate is valid for that endpoint."))
+	g.Expect(kubernetes.MakeUnauthenticatedRequest(ctx, server.URL, server.CAPEM())).To(Succeed())
 }
 
 func TestCheckUnauthenticatedAccessSuccess(t *testing.T) {

@@ -52,8 +52,10 @@ func MakeUnauthenticatedRequest(ctx context.Context, endpoint string, caCertific
 		return fmt.Errorf("unmarshalling unauthenticated request response: %w", err)
 	}
 
-	if resp.StatusCode != http.StatusForbidden {
-		return validation.WithRemediation(fmt.Errorf("expected status code from unauthenticated request %d, got %d. Message: %s", http.StatusForbidden, resp.StatusCode, apiServerResp.Message),
+	// We allow both Forbidden and Unauthorized status codes because the API server will return
+	// The kube-API server used to return Forbidden but in k8s 1.32 it started returning Unauthorized.
+	if resp.StatusCode != http.StatusForbidden && resp.StatusCode != http.StatusUnauthorized {
+		return validation.WithRemediation(fmt.Errorf("expected status code from unauthenticated request %d or %d, got %d. Message: %s", http.StatusForbidden, http.StatusUnauthorized, resp.StatusCode, apiServerResp.Message),
 			"Ensure the Kubernetes API server endpoint provided is correct and the CA certificate is valid for that endpoint.",
 		)
 	}
