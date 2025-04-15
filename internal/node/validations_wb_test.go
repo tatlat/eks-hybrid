@@ -3,6 +3,7 @@ package node
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/aws/smithy-go/ptr"
 	. "github.com/onsi/gomega"
@@ -96,7 +97,7 @@ func Test_getNode(t *testing.T) {
 			g := NewWithT(t)
 			client := tc.setupFakeClient()
 
-			node, err := getNode(context.Background(), nodeName, client)
+			node, err := getNode(context.Background(), nodeName, client, WithValidationInterval(1*time.Millisecond))
 
 			if tc.err != nil {
 				g.Expect(err).To(MatchError(tc.err))
