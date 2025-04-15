@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -62,7 +63,7 @@ func TestGetPodsOnNode(t *testing.T) {
 			g := NewWithT(t)
 			client := tt.setupFakeClient()
 
-			pods, err := node.GetPodsOnNode(context.Background(), "test-node", client)
+			pods, err := node.GetPodsOnNode(context.Background(), "test-node", client, node.WithValidationInterval(1*time.Millisecond))
 
 			if tt.expectedError != "" {
 				g.Expect(err).ToNot(BeNil())

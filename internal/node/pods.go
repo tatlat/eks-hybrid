@@ -86,12 +86,18 @@ func getStaticPodsOnNode() ([]string, error) {
 	return staticPodNames, nil
 }
 
-// GetPodsOnNode makes 5 attempts to list pods before erroring unless it times out.
-func GetPodsOnNode(ctx context.Context, nodeName string, clientset kubernetes.Interface) ([]corev1.Pod, error) {
+// GetPodsOnNode makes 5 attempts by default to list pods before erroring unless it times out.
+func GetPodsOnNode(ctx context.Context, nodeName string, clientset kubernetes.Interface, options ...NodeValidationOption) ([]corev1.Pod, error) {
+	opts := DefaultNodeValidationOptions()
+
+	for _, option := range options {
+		option(&opts)
+	}
+
 	var pods *corev1.PodList
 	var err error
 	consecutiveErrors := 0
-	err = wait.PollUntilContextTimeout(ctx, nodeValidationInterval, nodeValidationTimeout, true, func(ctx context.Context) (bool, error) {
+	err = wait.PollUntilContextTimeout(ctx, opts.ValidationInterval, opts.ValidationTimeout, true, func(ctx context.Context) (bool, error) {
 		pods, err = clientset.CoreV1().Pods("").List(ctx,
 			metav1.ListOptions{
 				FieldSelector: fmt.Sprintf("spec.nodeName=%s", nodeName),
@@ -99,7 +105,7 @@ func GetPodsOnNode(ctx context.Context, nodeName string, clientset kubernetes.In
 		)
 		if err != nil {
 			consecutiveErrors += 1
-			if consecutiveErrors == nodeValidationMaxRetries {
+			if consecutiveErrors == opts.MaxRetries {
 				return false, errors.Wrap(err, "failed to list all pods running on the node")
 			}
 			return false, nil // continue polling
