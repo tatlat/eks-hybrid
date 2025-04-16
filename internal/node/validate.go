@@ -8,38 +8,34 @@ import (
 	"slices"
 	"strings"
 
+	"golang.org/x/mod/semver"
 	authenticationv1 "k8s.io/api/authentication/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/aws/eks-hybrid/internal/api"
-	"github.com/aws/eks-hybrid/internal/kubelet"
 	"github.com/aws/eks-hybrid/internal/network"
 	"github.com/aws/eks-hybrid/internal/validation"
 )
 
+// Kubelet is the kubernetes node agent.
+type Kubelet interface {
+	// BuildClient creates a new Kubernetes client
+	BuildClient() (kubernetes.Interface, error)
+	// KubeconfigPath returns the path to the kubeconfig file
+	KubeconfigPath() string
+	// Version returns the current kubelet version
+	Version() (string, error)
+}
+
 type APIServerValidator struct {
-	buildClient func() (kubernetes.Interface, error)
+	kubelet Kubelet
 }
 
-type APIServerValidatorOption func(*APIServerValidator)
-
-func WithClientBuilder(buildClient func() (kubernetes.Interface, error)) APIServerValidatorOption {
-	return func(v *APIServerValidator) {
-		v.buildClient = buildClient
+func NewAPIServerValidator(kubelet Kubelet) APIServerValidator {
+	return APIServerValidator{
+		kubelet: kubelet,
 	}
-}
-
-func NewAPIServerValidator(opts ...APIServerValidatorOption) APIServerValidator {
-	v := APIServerValidator{
-		buildClient: kubelet.GetKubeClientFromKubeConfig,
-	}
-
-	for _, opt := range opts {
-		opt(&v)
-	}
-
-	return v
 }
 
 const badPermissionsRemediation = "Verify the Kubernetes identity and permissions assigned to the IAM roles on this node, it should belong to the group 'system:nodes'. Check your Access Entries or aws-auth ConfigMap."
@@ -66,12 +62,23 @@ func (a APIServerValidator) MakeAuthenticatedRequest(ctx context.Context, inform
 }
 
 func (a APIServerValidator) CheckIdentity(ctx context.Context, informer validation.Informer, node *api.NodeConfig) error {
-	name := "kubernetes-node-identity"
 	var err error
+	kubeletVersion, err := a.kubelet.Version()
+	if err != nil {
+		return err
+	}
+
+	// 1.27 and below don't allow SelfSubjectReview requests from nodes
+	if semver.Compare(kubeletVersion, "v1.28.0") < 0 {
+		return nil
+	}
+
+	name := "kubernetes-node-identity"
 	informer.Starting(ctx, name, "Validating Kubernetes identity matches a Node identity")
 	defer func() {
 		informer.Done(ctx, name, err)
 	}()
+
 	client, err := a.client()
 	if err != nil {
 		return err
@@ -178,9 +185,9 @@ func (a APIServerValidator) CheckVPCEndpointAccess(ctx context.Context, informer
 }
 
 func (a APIServerValidator) client() (kubernetes.Interface, error) {
-	client, err := a.buildClient()
+	client, err := a.kubelet.BuildClient()
 	if err != nil {
-		return nil, validation.WithRemediation(err, fmt.Sprintf("Ensure the kubeconfig at %s has been created and is valid.", kubelet.KubeconfigPath()))
+		return nil, validation.WithRemediation(err, fmt.Sprintf("Ensure the kubeconfig at %s has been created and is valid.", a.kubelet.KubeconfigPath()))
 	}
 
 	return client, nil
