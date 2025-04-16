@@ -229,7 +229,7 @@ func shouldDeleteManagedInstance(instance *types.InstanceInformation, tags []typ
 
 	resource := ResourceWithTags{
 		ID:           *instance.InstanceId,
-		CreationTime: aws.ToTime(instance.LastPingDateTime),
+		CreationTime: aws.ToTime(instance.RegistrationDate),
 		Tags:         customTags,
 	}
 
