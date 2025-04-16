@@ -53,8 +53,9 @@ func TestAPIServerValidator_MakeAuthenticatedRequest(t *testing.T) {
 			informer := test.NewFakeInformer()
 
 			nodeConfig := &api.NodeConfig{}
+			kubelet := newMockKubelet(client, "v1.28.0")
 
-			v := node.NewAPIServerValidator(node.WithClientBuilder(withClient(client)))
+			v := node.NewAPIServerValidator(kubelet)
 			err := v.MakeAuthenticatedRequest(ctx, informer, nodeConfig)
 			if tc.wantErr == "" {
 				g.Expect(err).To(BeNil())
@@ -74,22 +75,16 @@ func TestAPIServerValidator_MakeAuthenticatedRequest_FailBuildingClient(t *testi
 	informer := test.NewFakeInformer()
 
 	nodeConfig := &api.NodeConfig{}
+	kubelet := newMockKubelet(nil, "v1.28.0")
+	kubelet.clientError = errors.New("can't build client")
 
-	v := node.NewAPIServerValidator(node.WithClientBuilder(func() (kubernetes.Interface, error) {
-		return nil, errors.New("can't build client")
-	}))
+	v := node.NewAPIServerValidator(kubelet)
 	err := v.MakeAuthenticatedRequest(ctx, informer, nodeConfig)
 
 	g.Expect(err).To(MatchError(ContainSubstring("can't build client")))
 
 	g.Expect(informer.Started).To(BeTrue())
 	g.Expect(validation.Remediation(informer.DoneWith)).To(Equal("Ensure the kubeconfig at /var/lib/kubelet/kubeconfig has been created and is valid."))
-}
-
-func withClient(client *fake.Clientset) func() (kubernetes.Interface, error) {
-	return func() (kubernetes.Interface, error) {
-		return client, nil
-	}
 }
 
 func TestAPIServerValidator_CheckVPCEndpointAccess(t *testing.T) {
@@ -212,8 +207,9 @@ func TestAPIServerValidator_CheckVPCEndpointAccess(t *testing.T) {
 			informer := test.NewFakeInformer()
 
 			nodeConfig := &api.NodeConfig{}
+			kubelet := newMockKubelet(client, "v1.28.0")
 
-			v := node.NewAPIServerValidator(node.WithClientBuilder(withClient(client)))
+			v := node.NewAPIServerValidator(kubelet)
 			err := v.CheckVPCEndpointAccess(ctx, informer, nodeConfig)
 			if tc.wantErr == "" {
 				g.Expect(err).To(BeNil())
@@ -229,10 +225,12 @@ func TestAPIServerValidator_CheckVPCEndpointAccess(t *testing.T) {
 
 func TestAPIServerValidator_CheckIdentity(t *testing.T) {
 	testCases := []struct {
-		name            string
-		selfReview      *authenticationv1.SelfSubjectReview
-		wantErr         string
-		wantRemediation string
+		name                string
+		selfReview          *authenticationv1.SelfSubjectReview
+		kubeletVersion      string
+		wantErr             string
+		wantRemediation     string
+		wantInformerStarted bool
 	}{
 		{
 			name: "success",
@@ -247,6 +245,8 @@ func TestAPIServerValidator_CheckIdentity(t *testing.T) {
 					},
 				},
 			},
+			kubeletVersion:      "v1.28.0",
+			wantInformerStarted: true,
 		},
 		{
 			name: "not in group system:nodes",
@@ -261,8 +261,10 @@ func TestAPIServerValidator_CheckIdentity(t *testing.T) {
 					},
 				},
 			},
-			wantErr:         "node identity system:node:my-node for principal arn:aws:iam::123456789012:role/eks-node-role does not belong to the group 'system:nodes'",
-			wantRemediation: "Verify the Kubernetes identity and permissions assigned to the IAM roles on this node, it should belong to the group 'system:nodes'. Check your Access Entries or aws-auth ConfigMap.",
+			kubeletVersion:      "v1.28.1",
+			wantErr:             "node identity system:node:my-node for principal arn:aws:iam::123456789012:role/eks-node-role does not belong to the group 'system:nodes'",
+			wantRemediation:     "Verify the Kubernetes identity and permissions assigned to the IAM roles on this node, it should belong to the group 'system:nodes'. Check your Access Entries or aws-auth ConfigMap.",
+			wantInformerStarted: true,
 		},
 		{
 			name: "not a node",
@@ -277,13 +279,38 @@ func TestAPIServerValidator_CheckIdentity(t *testing.T) {
 					},
 				},
 			},
-			wantErr:         "node identity my-node for principal arn:aws:iam::123456789012:role/eks-node-role does not match a node identity, username should start with 'system:node:'",
-			wantRemediation: "Verify the Kubernetes identity and permissions assigned to the IAM roles on this node, it should belong to the group 'system:nodes'. Check your Access Entries or aws-auth ConfigMap.",
+			kubeletVersion:      "v1.29.0",
+			wantErr:             "node identity my-node for principal arn:aws:iam::123456789012:role/eks-node-role does not match a node identity, username should start with 'system:node:'",
+			wantRemediation:     "Verify the Kubernetes identity and permissions assigned to the IAM roles on this node, it should belong to the group 'system:nodes'. Check your Access Entries or aws-auth ConfigMap.",
+			wantInformerStarted: true,
 		},
 		{
-			name:            "client failed",
-			wantErr:         "can't execute self review",
-			wantRemediation: "Verify the Kubernetes identity and permissions assigned to the IAM roles on this node, it should belong to the group 'system:nodes'. Check your Access Entries or aws-auth ConfigMap.",
+			name:                "client failed",
+			kubeletVersion:      "v1.28.0",
+			wantErr:             "can't execute self review",
+			wantRemediation:     "Verify the Kubernetes identity and permissions assigned to the IAM roles on this node, it should belong to the group 'system:nodes'. Check your Access Entries or aws-auth ConfigMap.",
+			wantInformerStarted: true,
+		},
+		{
+			name:                "skip validation for 1.25.1",
+			kubeletVersion:      "v1.25.1",
+			wantInformerStarted: false,
+		},
+		{
+			name:                "skip validation for 1.26.5",
+			kubeletVersion:      "v1.26.5",
+			wantInformerStarted: false,
+		},
+		{
+			name:                "skip validation for 1.27",
+			kubeletVersion:      "v1.27.0",
+			wantInformerStarted: false,
+		},
+
+		{
+			name:                "skip validation for invalid kubelet version",
+			kubeletVersion:      "1.50.xx",
+			wantInformerStarted: false,
 		},
 	}
 	for _, tc := range testCases {
@@ -295,8 +322,9 @@ func TestAPIServerValidator_CheckIdentity(t *testing.T) {
 			informer := test.NewFakeInformer()
 
 			nodeConfig := &api.NodeConfig{}
+			kubelet := newMockKubelet(client, tc.kubeletVersion)
 
-			v := node.NewAPIServerValidator(node.WithClientBuilder(withClient(client)))
+			v := node.NewAPIServerValidator(kubelet)
 			err := v.CheckIdentity(ctx, informer, nodeConfig)
 			if tc.wantErr == "" {
 				g.Expect(err).To(BeNil())
@@ -304,7 +332,7 @@ func TestAPIServerValidator_CheckIdentity(t *testing.T) {
 				g.Expect(err).To(MatchError(ContainSubstring(tc.wantErr)))
 			}
 
-			g.Expect(informer.Started).To(BeTrue())
+			g.Expect(informer.Started).To(Equal(tc.wantInformerStarted))
 			g.Expect(validation.Remediation(informer.DoneWith)).To(Equal(tc.wantRemediation))
 		})
 	}
@@ -323,4 +351,39 @@ func mockSelfSubjectReview(client *fake.Clientset, selfReview *authenticationv1.
 
 		return true, createAction.GetObject(), nil
 	})
+}
+
+// mockKubelet implements the Kubelet interface for testing
+type mockKubelet struct {
+	client         kubernetes.Interface
+	version        string
+	versionError   error
+	clientError    error
+	kubeconfigPath string
+}
+
+func newMockKubelet(client kubernetes.Interface, version string) *mockKubelet {
+	return &mockKubelet{
+		client:         client,
+		version:        version,
+		kubeconfigPath: "/var/lib/kubelet/kubeconfig",
+	}
+}
+
+func (m *mockKubelet) BuildClient() (kubernetes.Interface, error) {
+	if m.clientError != nil {
+		return nil, m.clientError
+	}
+	return m.client, nil
+}
+
+func (m *mockKubelet) KubeconfigPath() string {
+	return m.kubeconfigPath
+}
+
+func (m *mockKubelet) Version() (string, error) {
+	if m.versionError != nil {
+		return "", m.versionError
+	}
+	return m.version, nil
 }
