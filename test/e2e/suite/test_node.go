@@ -16,6 +16,7 @@ import (
 	"github.com/aws/eks-hybrid/test/e2e/credentials"
 	"github.com/aws/eks-hybrid/test/e2e/ec2"
 	"github.com/aws/eks-hybrid/test/e2e/kubernetes"
+	"github.com/aws/eks-hybrid/test/e2e/nodeadm"
 	"github.com/aws/eks-hybrid/test/e2e/peered"
 )
 
@@ -112,16 +113,19 @@ func (n *testNode) waitForNodeToJoin(ctx context.Context, flakeRun FlakeRun) {
 	n.Logger.Info("Waiting for EC2 Instance to be Running...")
 	flakeRun.RetryableExpect(ec2.WaitForEC2InstanceRunning(ctx, n.EC2Client, n.node.Instance.ID)).To(Succeed(), "EC2 Instance should have been reached Running status")
 	_, err := n.verifyNode.WaitForNodeReady(ctx)
-	if err != nil {
-		isImpaired, oErr := ec2.IsEC2InstanceImpaired(ctx, n.EC2Client, n.node.Instance.ID)
-		Expect(oErr).NotTo(HaveOccurred(), "should describe instance status")
 
-		expect := Expect
-		if isImpaired {
-			expect = flakeRun.RetryableExpect
-		}
-		expect(err).To(Succeed(), "node should have joined the cluster successfully")
+	// if the node is impaired, we want to trigger a retryable expect
+	// if the node is not impaired, we run nodeadm debug regardless of whether the node joined the cluster successfully
+	// if the node joined successfully and debug fails, the test will fail
+	expect := flakeRun.RetryableExpect
+	isImpaired := n.isImpaired(ctx, err)
+	var debugErr error
+	if !isImpaired {
+		expect = Expect
+		debugErr = nodeadm.RunNodeadmDebug(ctx, n.PeeredNode.RemoteCommandRunner, n.node.Instance.IP)
 	}
+	expect(err).To(Succeed(), "node should have joined the cluster successfully")
+	Expect(debugErr).NotTo(HaveOccurred(), "nodeadm debug should have been run successfully")
 }
 
 func (n *testNode) newVerifyNode(nodeName, nodeIP string) *kubernetes.VerifyNode {
@@ -145,4 +149,13 @@ func (n *testNode) It(name string, f func()) {
 
 func (n *testNode) PeerdNode() *peered.PeerdNode {
 	return n.node
+}
+
+func (n *testNode) isImpaired(ctx context.Context, waitErr error) bool {
+	if waitErr == nil {
+		return false
+	}
+	isImpaired, err := ec2.IsEC2InstanceImpaired(ctx, n.EC2Client, n.node.Instance.ID)
+	n.Logger.Error(err, "describing instance status")
+	return isImpaired
 }
