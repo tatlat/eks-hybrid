@@ -48,7 +48,12 @@ func (s *Command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return fmt.Errorf("failed to load test resources: %w", err)
 	}
 
-	aws, err := e2e.NewAWSConfig(ctx, config.WithRegion(testResources.ClusterRegion))
+	aws, err := e2e.NewAWSConfig(ctx,
+		config.WithRegion(testResources.ClusterRegion),
+		// We use a custom AppId so the requests show that they were
+		// made by this command in the user-agent
+		config.WithAppID("nodeadm-e2e-test-setup-cmd"),
+	)
 	if err != nil {
 		return fmt.Errorf("reading AWS configuration: %w", err)
 	}

@@ -50,7 +50,12 @@ var _ = SynchronizedBeforeSuite(
 		Expect(err).NotTo(HaveOccurred(), "should read valid test configuration")
 
 		logger := newLoggerForTests().Logger
-		aws, err := e2e.NewAWSConfig(ctx, awsconfig.WithRegion(config.ClusterRegion))
+		aws, err := e2e.NewAWSConfig(ctx,
+			awsconfig.WithRegion(config.ClusterRegion),
+			// We use a custom AppId so the requests show that they were
+			// made by the e2e suite in the user-agent
+			awsconfig.WithAppID("nodeadm-e2e-test-suite"),
+		)
 		Expect(err).NotTo(HaveOccurred())
 
 		infra, err := peered.Setup(ctx, logger, aws, config.ClusterName, config.Endpoint)

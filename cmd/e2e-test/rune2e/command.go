@@ -101,7 +101,12 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	ctx := context.Background()
 	logger := e2e.NewLogger(e2e.LoggerConfig{NoColor: c.noColor})
 
-	awsCfg, err := e2e.NewAWSConfig(ctx, config.WithRegion(c.region))
+	awsCfg, err := e2e.NewAWSConfig(ctx,
+		config.WithRegion(c.region),
+		// We use a custom AppId so the requests show that they were
+		// made by this command in the user-agent
+		config.WithAppID("nodeadm-e2e-test-run-cmd"),
+	)
 	if err != nil {
 		return fmt.Errorf("reading AWS configuration: %w", err)
 	}

@@ -94,7 +94,11 @@ func buildPeeredVPCTestForSuite(ctx context.Context, suite *suiteConfiguration) 
 		skipCleanup:            suite.SkipCleanup,
 	}
 
-	aws, err := e2e.NewAWSConfig(ctx, awsconfig.WithRegion(suite.TestConfig.ClusterRegion))
+	aws, err := e2e.NewAWSConfig(ctx, awsconfig.WithRegion(suite.TestConfig.ClusterRegion),
+		// We use a custom AppId so the requests show that they were
+		// made by this test in the user-agent
+		awsconfig.WithAppID("nodeadm-e2e-test"),
+	)
 	if err != nil {
 		return nil, err
 	}
