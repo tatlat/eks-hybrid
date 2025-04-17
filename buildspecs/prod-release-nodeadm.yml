@@ -26,26 +26,26 @@ phases:
   build:
     commands:
       - echo "Uploading nodeadm to production..."
-      - aws s3 cp --no-progress _bin/amd64/nodeadm s3://${PROD_BUCKET}/releases/${VERSION}/bin/linux/amd64/nodeadm --acl public-read --profile artifacts-production
-      - aws s3 cp --no-progress _bin/arm64/nodeadm s3://${PROD_BUCKET}/releases/${VERSION}/bin/linux/arm64/nodeadm --acl public-read --profile artifacts-production
+      - aws s3 cp --no-progress _bin/amd64/nodeadm s3://${PROD_BUCKET}/releases/${VERSION}/bin/linux/amd64/nodeadm --profile artifacts-production
+      - aws s3 cp --no-progress _bin/arm64/nodeadm s3://${PROD_BUCKET}/releases/${VERSION}/bin/linux/arm64/nodeadm --profile artifacts-production
 
       - echo "Generating and uploading nodeadm checksums..."
       - sha256sum _bin/amd64/nodeadm > _bin/amd64/nodeadm.sha256
-      - aws s3 cp --no-progress _bin/amd64/nodeadm.sha256 s3://${PROD_BUCKET}/releases/${VERSION}/bin/linux/amd64/nodeadm.sha256 --acl public-read --profile artifacts-production
+      - aws s3 cp --no-progress _bin/amd64/nodeadm.sha256 s3://${PROD_BUCKET}/releases/${VERSION}/bin/linux/amd64/nodeadm.sha256 --profile artifacts-production
       - sha512sum _bin/amd64/nodeadm > _bin/amd64/nodeadm.sha512
-      - aws s3 cp --no-progress _bin/amd64/nodeadm.sha512 s3://${PROD_BUCKET}/releases/${VERSION}/bin/linux/amd64/nodeadm.sha512 --acl public-read --profile artifacts-production
+      - aws s3 cp --no-progress _bin/amd64/nodeadm.sha512 s3://${PROD_BUCKET}/releases/${VERSION}/bin/linux/amd64/nodeadm.sha512 --profile artifacts-production
       - sha256sum _bin/arm64/nodeadm > _bin/arm64/nodeadm.sha256
-      - aws s3 cp --no-progress _bin/arm64/nodeadm.sha256 s3://${PROD_BUCKET}/releases/${VERSION}/bin/linux/arm64/nodeadm.sha256 --acl public-read --profile artifacts-production
+      - aws s3 cp --no-progress _bin/arm64/nodeadm.sha256 s3://${PROD_BUCKET}/releases/${VERSION}/bin/linux/arm64/nodeadm.sha256 --profile artifacts-production
       - sha512sum _bin/arm64/nodeadm > _bin/arm64/nodeadm.sha512
-      - aws s3 cp --no-progress _bin/arm64/nodeadm.sha512 s3://${PROD_BUCKET}/releases/${VERSION}/bin/linux/arm64/nodeadm.sha512 --acl public-read --profile artifacts-production
+      - aws s3 cp --no-progress _bin/arm64/nodeadm.sha512 s3://${PROD_BUCKET}/releases/${VERSION}/bin/linux/arm64/nodeadm.sha512 --profile artifacts-production
 
       - echo "Updating latest symlinks for nodeadm..."
-      - aws s3 cp --no-progress s3://${PROD_BUCKET}/releases/${VERSION}/bin/linux/amd64/nodeadm s3://${PROD_BUCKET}/latest/bin/linux/amd64/nodeadm --acl public-read --profile artifacts-production
-      - aws s3 cp --no-progress s3://${PROD_BUCKET}/releases/${VERSION}/bin/linux/arm64/nodeadm s3://${PROD_BUCKET}/latest/bin/linux/arm64/nodeadm --acl public-read --profile artifacts-production
-      - aws s3 cp --no-progress s3://${PROD_BUCKET}/releases/${VERSION}/bin/linux/amd64/nodeadm.sha256 s3://${PROD_BUCKET}/latest/bin/linux/amd64/nodeadm.sha256 --acl public-read --profile artifacts-production
-      - aws s3 cp --no-progress s3://${PROD_BUCKET}/releases/${VERSION}/bin/linux/arm64/nodeadm.sha256 s3://${PROD_BUCKET}/latest/bin/linux/arm64/nodeadm.sha256 --acl public-read --profile artifacts-production
-      - aws s3 cp --no-progress s3://${PROD_BUCKET}/releases/${VERSION}/bin/linux/amd64/nodeadm.sha512 s3://${PROD_BUCKET}/latest/bin/linux/amd64/nodeadm.sha512 --acl public-read --profile artifacts-production
-      - aws s3 cp --no-progress s3://${PROD_BUCKET}/releases/${VERSION}/bin/linux/arm64/nodeadm.sha512 s3://${PROD_BUCKET}/latest/bin/linux/arm64/nodeadm.sha512 --acl public-read --profile artifacts-production
+      - aws s3 cp --no-progress s3://${PROD_BUCKET}/releases/${VERSION}/bin/linux/amd64/nodeadm s3://${PROD_BUCKET}/latest/bin/linux/amd64/nodeadm --profile artifacts-production
+      - aws s3 cp --no-progress s3://${PROD_BUCKET}/releases/${VERSION}/bin/linux/arm64/nodeadm s3://${PROD_BUCKET}/latest/bin/linux/arm64/nodeadm --profile artifacts-production
+      - aws s3 cp --no-progress s3://${PROD_BUCKET}/releases/${VERSION}/bin/linux/amd64/nodeadm.sha256 s3://${PROD_BUCKET}/latest/bin/linux/amd64/nodeadm.sha256 --profile artifacts-production
+      - aws s3 cp --no-progress s3://${PROD_BUCKET}/releases/${VERSION}/bin/linux/arm64/nodeadm.sha256 s3://${PROD_BUCKET}/latest/bin/linux/arm64/nodeadm.sha256 --profile artifacts-production
+      - aws s3 cp --no-progress s3://${PROD_BUCKET}/releases/${VERSION}/bin/linux/amd64/nodeadm.sha512 s3://${PROD_BUCKET}/latest/bin/linux/amd64/nodeadm.sha512 --profile artifacts-production
+      - aws s3 cp --no-progress s3://${PROD_BUCKET}/releases/${VERSION}/bin/linux/arm64/nodeadm.sha512 s3://${PROD_BUCKET}/latest/bin/linux/arm64/nodeadm.sha512 --profile artifacts-production
 
   post_build:
     commands:
