@@ -206,8 +206,12 @@ func (e *E2E) runCleanup(ctx context.Context) []Phase {
 		return nil
 	}
 
+	// We use a custom AppId so the requests show that they were
+	// made by this cleanup in the user-agent
+	aws := e.AwsCfg.Copy()
+	aws.AppID = "nodeadm-e2e-test-run-cleanup"
 	cleaner := E2ECleanup{
-		AwsCfg:        e.AwsCfg,
+		AwsCfg:        aws,
 		Logger:        newFileLogger(e.Paths.CleanupLog, e.NoColor),
 		TestResources: e.TestResources,
 	}

@@ -56,7 +56,12 @@ func (s *Command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return fmt.Errorf("unmarshaling cleanup config: %w", err)
 	}
 
-	aws, err := e2e.NewAWSConfig(ctx, config.WithRegion(deleteCluster.ClusterRegion))
+	aws, err := e2e.NewAWSConfig(ctx,
+		config.WithRegion(deleteCluster.ClusterRegion),
+		// We use a custom AppId so the requests show that they were
+		// made by this cleanup in the user-agent
+		config.WithAppID("nodeadm-e2e-test-cleanup-cmd"),
+	)
 	if err != nil {
 		return fmt.Errorf("reading AWS configuration: %w", err)
 	}

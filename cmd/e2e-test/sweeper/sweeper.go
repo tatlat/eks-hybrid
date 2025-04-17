@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/integrii/flaggy"
 	"go.uber.org/zap"
 
@@ -71,7 +72,11 @@ func (s *SweeperCommand) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	if s.clusterPrefix == "" && s.clusterName == "" && !s.all {
 		return fmt.Errorf("either --cluster-prefix, --cluster-name, or --all must be specified")
 	}
-	aws, err := e2e.NewAWSConfig(ctx)
+	aws, err := e2e.NewAWSConfig(ctx,
+		// We use a custom AppId so the requests show that they were
+		// made by this command in the user-agent
+		config.WithAppID("nodeadm-e2e-test-sweeper-cmd"),
+	)
 	if err != nil {
 		return fmt.Errorf("reading AWS configuration: %w", err)
 	}
