@@ -2,6 +2,7 @@ package cleanup
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -58,6 +59,11 @@ func NewSweeper(aws aws.Config, logger logr.Logger, endpoint string) Sweeper {
 	}
 }
 
+type Cleanup struct {
+	Cleanup        func(ctx context.Context, filterInput FilterInput) error
+	FailureMessage string
+}
+
 func (c *Sweeper) Run(ctx context.Context, input SweeperInput) error {
 	filterInput := FilterInput{
 		ClusterName:          input.ClusterName,
@@ -80,89 +86,103 @@ func (c *Sweeper) Run(ctx context.Context, input SweeperInput) error {
 	// - empty s3 pod identity buckets, infra cfn stack deletes the bucket
 	// - infra cfn stack (creates vpcs/eks cluster)
 	// - remaining leaking items which should only exist in the case where the cfn deletion is incomplete
-
-	if err := c.cleanupEC2Instances(ctx, filterInput); err != nil {
-		return fmt.Errorf("cleaning up EC2 instances: %w", err)
+	cleanups := []Cleanup{
+		{
+			Cleanup:        c.cleanupEC2Instances,
+			FailureMessage: "cleaning up EC2 instances",
+		},
+		{
+			Cleanup:        c.cleanupIAMInstanceProfiles,
+			FailureMessage: "cleaning up IAM instance profiles",
+		},
+		{
+			Cleanup:        c.cleanupCredentialStacks,
+			FailureMessage: "cleaning up credential stacks",
+		},
+		{
+			Cleanup:        c.cleanupEKSClusters,
+			FailureMessage: "cleaning up EKS clusters",
+		},
+		{
+			Cleanup:        c.emptyS3PodIdentityBuckets,
+			FailureMessage: "emptying S3 pod identity buckets",
+		},
+		{
+			Cleanup:        c.cleanupArchitectureStacks,
+			FailureMessage: "cleaning up architecture stacks",
+		},
+		{
+			Cleanup:        c.cleanupRolesAnywhereProfiles,
+			FailureMessage: "cleaning up Roles Anywhere profiles",
+		},
+		{
+			Cleanup:        c.cleanupRolesAnywhereTrustAnchors,
+			FailureMessage: "cleaning up Roles Anywhere trust anchors",
+		},
+		{
+			Cleanup:        c.cleanupIAMRoles,
+			FailureMessage: "cleaning up IAM roles",
+		},
+		{
+			Cleanup:        c.cleanupPeeringConnections,
+			FailureMessage: "cleaning up peering connections",
+		},
+		{
+			Cleanup:        c.cleanupInternetGateways,
+			FailureMessage: "cleaning up internet gateways",
+		},
+		{
+			Cleanup:        c.cleanupNetworkInterfaces,
+			FailureMessage: "cleaning up network interfaces",
+		},
+		{
+			Cleanup:        c.cleanupSubnets,
+			FailureMessage: "cleaning up subnets",
+		},
+		{
+			Cleanup:        c.cleanupRouteTables,
+			FailureMessage: "cleaning up route tables",
+		},
+		{
+			Cleanup:        c.cleanupSecurityGroups,
+			FailureMessage: "cleaning up security groups",
+		},
+		{
+			Cleanup:        c.cleanupVPCs,
+			FailureMessage: "cleaning up VPCs",
+		},
+		{
+			Cleanup:        c.cleanupS3PodIdentityBuckets,
+			FailureMessage: "cleaning up S3 pod identity buckets",
+		},
+		{
+			Cleanup:        c.cleanupKeyPairs,
+			FailureMessage: "cleaning up key pairs",
+		},
+		{
+			Cleanup:        c.cleanupSSMParameters,
+			FailureMessage: "cleaning up SSM parameters",
+		},
+		{
+			Cleanup:        c.cleanupSSMManagedInstances,
+			FailureMessage: "cleaning up SSM managed instances",
+		},
+		{
+			Cleanup:        c.cleanupSSMHybridActivations,
+			FailureMessage: "cleaning up SSM hybrid activations",
+		},
 	}
 
-	if err := c.cleanupIAMInstanceProfiles(ctx, filterInput); err != nil {
-		return fmt.Errorf("cleaning up IAM instance profiles: %w", err)
+	allErrors := []error{}
+	for _, cleanup := range cleanups {
+		if err := cleanup.Cleanup(ctx, filterInput); err != nil {
+			c.logger.Error(err, cleanup.FailureMessage)
+			allErrors = append(allErrors, fmt.Errorf("%s: %w", cleanup.FailureMessage, err))
+		}
 	}
 
-	if err := c.cleanupCredentialStacks(ctx, filterInput); err != nil {
-		return fmt.Errorf("cleaning up credential stacks: %w", err)
-	}
-
-	if err := c.cleanupEKSClusters(ctx, filterInput); err != nil {
-		return fmt.Errorf("cleaning up EKS clusters: %w", err)
-	}
-
-	if err := c.emptyS3PodIdentityBuckets(ctx, filterInput); err != nil {
-		return fmt.Errorf("emptying S3 pod identity buckets: %w", err)
-	}
-
-	if err := c.cleanupArchitectureStacks(ctx, filterInput); err != nil {
-		return fmt.Errorf("cleaning up architecture stacks: %w", err)
-	}
-
-	// TODO: do we still need ot support skipping these on a region basis
-	if err := c.cleanupRolesAnywhereProfiles(ctx, filterInput); err != nil {
-		return fmt.Errorf("cleaning up Roles Anywhere resources: %w", err)
-	}
-
-	if err := c.cleanupRolesAnywhereTrustAnchors(ctx, filterInput); err != nil {
-		return fmt.Errorf("cleaning up Roles Anywhere trust anchors: %w", err)
-	}
-
-	if err := c.cleanupIAMRoles(ctx, filterInput); err != nil {
-		return fmt.Errorf("cleaning up IAM roles: %w", err)
-	}
-
-	if err := c.cleanupPeeringConnections(ctx, filterInput); err != nil {
-		return fmt.Errorf("cleaning up peering connections: %w", err)
-	}
-
-	if err := c.cleanupInternetGateways(ctx, filterInput); err != nil {
-		return fmt.Errorf("cleaning up internet gateways: %w", err)
-	}
-
-	if err := c.cleanupNetworkInterfaces(ctx, filterInput); err != nil {
-		return fmt.Errorf("cleaning up network interfaces: %w", err)
-	}
-
-	if err := c.cleanupSubnets(ctx, filterInput); err != nil {
-		return fmt.Errorf("cleaning up subnets: %w", err)
-	}
-
-	if err := c.cleanupRouteTables(ctx, filterInput); err != nil {
-		return fmt.Errorf("cleaning up route tables: %w", err)
-	}
-
-	if err := c.cleanupSecurityGroups(ctx, filterInput); err != nil {
-		return fmt.Errorf("cleaning up security groups: %w", err)
-	}
-
-	if err := c.cleanupVPCs(ctx, filterInput); err != nil {
-		return fmt.Errorf("cleaning up VPCs: %w", err)
-	}
-
-	if err := c.cleanupS3PodIdentityBuckets(ctx, filterInput); err != nil {
-		return fmt.Errorf("cleaning up S3 pod identity buckets: %w", err)
-	}
-
-	if err := c.cleanupKeyPairs(ctx, filterInput); err != nil {
-		return fmt.Errorf("cleaning up key pairs: %w", err)
-	}
-
-	if err := c.cleanupSSMParameters(ctx, filterInput); err != nil {
-		return fmt.Errorf("cleaning up SSM parameters: %w", err)
-	}
-	if err := c.cleanupSSMManagedInstances(ctx, filterInput); err != nil {
-		return fmt.Errorf("cleaning up SSM managed instances: %w", err)
-	}
-
-	if err := c.cleanupSSMHybridActivations(ctx, filterInput); err != nil {
-		return fmt.Errorf("cleaning up SSM hybrid activations: %w", err)
+	if len(allErrors) > 0 {
+		return errors.Join(allErrors...)
 	}
 
 	return nil
