@@ -7,6 +7,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/cloudformation"
+	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/eks"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
@@ -21,6 +22,12 @@ import (
 	"github.com/aws/eks-hybrid/test/e2e"
 	"github.com/aws/eks-hybrid/test/e2e/addon"
 	"github.com/aws/eks-hybrid/test/e2e/cni"
+	"github.com/aws/eks-hybrid/test/e2e/constants"
+)
+
+const (
+	clusterLogRetentionDays = 14
+	clusterLogGroupName     = "/aws/eks/%s/cluster"
 )
 
 type TestResources struct {
@@ -53,11 +60,12 @@ const (
 )
 
 type Create struct {
-	logger logr.Logger
-	eks    *eks.Client
-	stack  *stack
-	iam    *iam.Client
-	s3     *s3.Client
+	logger         logr.Logger
+	eks            *eks.Client
+	stack          *stack
+	iam            *iam.Client
+	s3             *s3.Client
+	cloudWatchLogs *cloudwatchlogs.Client
 }
 
 // NewCreate creates a new workflow to create an EKS cluster. The EKS client will use
@@ -73,8 +81,9 @@ func NewCreate(aws aws.Config, logger logr.Logger, endpoint string) Create {
 			logger:    logger,
 			ssmClient: ssm.NewFromConfig(aws),
 		},
-		iam: iam.NewFromConfig(aws),
-		s3:  s3.NewFromConfig(aws),
+		iam:            iam.NewFromConfig(aws),
+		s3:             s3.NewFromConfig(aws),
+		cloudWatchLogs: cloudwatchlogs.NewFromConfig(aws),
 	}
 }
 
@@ -98,6 +107,16 @@ func (c *Create) Run(ctx context.Context, test TestResources) error {
 	cluster, err := hybridCluster.create(ctx, c.eks, c.logger)
 	if err != nil {
 		return fmt.Errorf("creating %s EKS cluster: %w", test.KubernetesVersion, err)
+	}
+
+	err = c.tagClusterLogGroup(ctx, test.ClusterName)
+	if err != nil {
+		return fmt.Errorf("tagging cluster log group: %w", err)
+	}
+
+	err = c.setClusterLogRetention(ctx, test.ClusterName)
+	if err != nil {
+		return fmt.Errorf("setting cluster log retention: %w", err)
 	}
 
 	kubeconfig := KubeconfigPath(test.ClusterName)
@@ -200,4 +219,32 @@ func SetTestResourcesDefaults(testResources TestResources) TestResources {
 	}
 
 	return testResources
+}
+
+func (c *Create) tagClusterLogGroup(ctx context.Context, clusterName string) error {
+	describeLogGroups, err := c.cloudWatchLogs.DescribeLogGroups(ctx, &cloudwatchlogs.DescribeLogGroupsInput{
+		LogGroupNamePrefix: aws.String(fmt.Sprintf(clusterLogGroupName, clusterName)),
+	})
+	if err != nil {
+		return fmt.Errorf("describing log groups: %w", err)
+	}
+	if len(describeLogGroups.LogGroups) == 0 {
+		return fmt.Errorf("log group not found")
+	}
+
+	_, err = c.cloudWatchLogs.TagResource(ctx, &cloudwatchlogs.TagResourceInput{
+		ResourceArn: describeLogGroups.LogGroups[0].LogGroupArn,
+		Tags: map[string]string{
+			constants.TestClusterTagKey: clusterName,
+		},
+	})
+	return err
+}
+
+func (c *Create) setClusterLogRetention(ctx context.Context, clusterName string) error {
+	_, err := c.cloudWatchLogs.PutRetentionPolicy(ctx, &cloudwatchlogs.PutRetentionPolicyInput{
+		LogGroupName:    aws.String(fmt.Sprintf(clusterLogGroupName, clusterName)),
+		RetentionInDays: aws.Int32(clusterLogRetentionDays),
+	})
+	return err
 }
