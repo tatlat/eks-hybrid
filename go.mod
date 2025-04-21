@@ -11,7 +11,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ec2 v1.211.3
 	github.com/aws/aws-sdk-go-v2/service/ec2instanceconnect v1.28.2
 	github.com/aws/aws-sdk-go-v2/service/ecr v1.43.3
-	github.com/aws/aws-sdk-go-v2/service/eks v1.63.2
+	github.com/aws/aws-sdk-go-v2/service/eks v1.64.0
 	github.com/aws/aws-sdk-go-v2/service/iam v1.41.1
 	github.com/aws/aws-sdk-go-v2/service/rolesanywhere v1.17.2
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.79.2
