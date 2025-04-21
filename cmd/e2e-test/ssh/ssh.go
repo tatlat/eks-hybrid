@@ -6,9 +6,12 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
+	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
+	"github.com/aws/aws-sdk-go/aws"
 	"github.com/integrii/flaggy"
 	"go.uber.org/zap"
 
@@ -19,8 +22,8 @@ import (
 )
 
 type Command struct {
-	flaggy     *flaggy.Subcommand
-	instanceID string
+	flaggy           *flaggy.Subcommand
+	instanceIDOrName string
 }
 
 func NewCommand() *Command {
@@ -28,7 +31,7 @@ func NewCommand() *Command {
 
 	setupCmd := flaggy.NewSubcommand("ssh")
 	setupCmd.Description = "SSH into a E2E Hybrid Node running in the peered VPC through the jumpbox"
-	setupCmd.AddPositionalValue(&cmd.instanceID, "INSTANCE_ID", 1, true, "The instance ID of the node to SSH into")
+	setupCmd.AddPositionalValue(&cmd.instanceIDOrName, "INSTANCE_ID_OR_NAME", 1, true, "The instance ID or name of the node to SSH into")
 
 	cmd.flaggy = setupCmd
 
@@ -53,15 +56,24 @@ func (s *Command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 
 	ec2Client := ec2.NewFromConfig(cfg)
 
-	instances, err := ec2Client.DescribeInstances(ctx, &ec2.DescribeInstancesInput{
-		InstanceIds: []string{s.instanceID},
-	})
+	input := &ec2.DescribeInstancesInput{}
+	if strings.HasPrefix(s.instanceIDOrName, "i-") {
+		input.InstanceIds = []string{s.instanceIDOrName}
+	} else {
+		input.Filters = []types.Filter{
+			{
+				Name:   aws.String("tag:Name"),
+				Values: []string{s.instanceIDOrName},
+			},
+		}
+	}
+	instances, err := ec2Client.DescribeInstances(ctx, input)
 	if err != nil {
-		return fmt.Errorf("describing instance %s: %w", s.instanceID, err)
+		return fmt.Errorf("describing instance %s: %w", s.instanceIDOrName, err)
 	}
 
 	if len(instances.Reservations) == 0 || len(instances.Reservations[0].Instances) == 0 {
-		return fmt.Errorf("no instance found with ID %s", s.instanceID)
+		return fmt.Errorf("no instance found with ID or Name %s", s.instanceIDOrName)
 	}
 
 	targetInstance := instances.Reservations[0].Instances[0]
@@ -75,7 +87,7 @@ func (s *Command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	}
 
 	if clusterName == "" {
-		return fmt.Errorf("no cluster name found in instance %s tags", s.instanceID)
+		return fmt.Errorf("no cluster name found in instance %s tags", s.instanceIDOrName)
 	}
 
 	jumpbox, err := peered.JumpboxInstance(ctx, ec2Client, clusterName)
