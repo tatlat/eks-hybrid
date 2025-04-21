@@ -340,6 +340,22 @@ export function createNodeadmTestsCreationCleanupPolicy(
         ],
         conditions: resourceTagCondition,
       }),
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['logs:TagResource'],
+        resources: [`arn:aws:logs:${stack.region}:${stack.account}:log-group:/aws/eks/*`],
+        conditions: requestTagCondition,
+      }),
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['logs:PutRetentionPolicy'],
+        resources: [`arn:aws:logs:${stack.region}:${stack.account}:log-group:/aws/eks/*`],
+      }),
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['logs:DescribeLogGroups'],
+        resources: ['*'],
+      }),
     ],
   });
 }
