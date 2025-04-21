@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/aws/retry"
 	"github.com/aws/aws-sdk-go-v2/service/eks"
 	"github.com/aws/aws-sdk-go-v2/service/eks/types"
 	"github.com/go-logr/logr"
@@ -60,49 +61,18 @@ func (c *EKSClusterCleanup) ListEKSClusters(ctx context.Context, input FilterInp
 	return clusterNames, nil
 }
 
+type resourceInUseRetryable struct{}
+
 func (c *EKSClusterCleanup) DeleteCluster(ctx context.Context, clusterName string) error {
 	_, err := c.eksClient.DeleteCluster(ctx, &eks.DeleteClusterInput{
 		Name: aws.String(clusterName),
+	}, func(o *eks.Options) {
+		o.ClientLogMode = aws.LogRetries
+		o.Retryer = retry.NewStandard(func(o *retry.StandardOptions) {
+			o.MaxAttempts = 60 // ~ 20 minutes
+			o.Retryables = append(o.Retryables, resourceInUseRetryable{})
+		})
 	})
-
-	if err != nil && errors.IsAwsError(err, "ResourceInUseException") {
-		c.logger.Info("Cluster update in progreess, waiting for cluster to be active before deleting")
-		var describeCluster *eks.DescribeClusterOutput
-		describeCluster, err = c.eksClient.DescribeCluster(ctx, &eks.DescribeClusterInput{
-			Name: aws.String(clusterName),
-		})
-		if err != nil {
-			return fmt.Errorf("describing cluster: %w", err)
-		}
-		c.logger.Info("Current cluster state", "cluster", describeCluster)
-		paginator := eks.NewListUpdatesPaginator(c.eksClient, &eks.ListUpdatesInput{
-			Name: aws.String(clusterName),
-		})
-		for paginator.HasMorePages() {
-			page, err := paginator.NextPage(ctx)
-			if err != nil {
-				return fmt.Errorf("listing updates: %w", err)
-			}
-			for _, update := range page.UpdateIds {
-				updateInfo, err := c.eksClient.DescribeUpdate(ctx, &eks.DescribeUpdateInput{
-					Name:     aws.String(clusterName),
-					UpdateId: aws.String(update),
-				})
-				if err != nil {
-					return fmt.Errorf("describing update: %w", err)
-				}
-				c.logger.Info("Current update operation", "update", updateInfo)
-			}
-		}
-		waiter := eks.NewClusterActiveWaiter(c.eksClient)
-		err = waiter.Wait(ctx, &eks.DescribeClusterInput{Name: aws.String(clusterName)}, activeClusterTimeout)
-		if err != nil {
-			return fmt.Errorf("waiting for cluster to be active before deletion: %w", err)
-		}
-		_, err = c.eksClient.DeleteCluster(ctx, &eks.DeleteClusterInput{
-			Name: aws.String(clusterName),
-		})
-	}
 
 	if err != nil && errors.IsAwsError(err, "AccessDeniedException") {
 		// if the cluster deleted, the role policy may return a 403 since its
@@ -146,4 +116,12 @@ func shouldDeleteCluster(cluster *types.Cluster, input FilterInput) bool {
 		Tags:         tags,
 	}
 	return shouldDeleteResource(resource, input)
+}
+
+func (c resourceInUseRetryable) IsErrorRetryable(err error) aws.Ternary {
+	if errors.IsAwsError(err, "ResourceInUseException") {
+		return aws.BoolTernary(true)
+	}
+
+	return aws.BoolTernary(false)
 }

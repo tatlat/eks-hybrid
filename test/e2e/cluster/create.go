@@ -4,11 +4,13 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/cloudformation"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
+	ec2Types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/aws/aws-sdk-go-v2/service/eks"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -65,6 +67,7 @@ type Create struct {
 	stack          *stack
 	iam            *iam.Client
 	s3             *s3.Client
+	ec2            *ec2.Client
 	cloudWatchLogs *cloudwatchlogs.Client
 }
 
@@ -83,6 +86,7 @@ func NewCreate(aws aws.Config, logger logr.Logger, endpoint string) Create {
 		},
 		iam:            iam.NewFromConfig(aws),
 		s3:             s3.NewFromConfig(aws),
+		ec2:            ec2.NewFromConfig(aws),
 		cloudWatchLogs: cloudwatchlogs.NewFromConfig(aws),
 	}
 }
@@ -117,6 +121,11 @@ func (c *Create) Run(ctx context.Context, test TestResources) error {
 	err = c.setClusterLogRetention(ctx, test.ClusterName)
 	if err != nil {
 		return fmt.Errorf("setting cluster log retention: %w", err)
+	}
+
+	err = c.tagClusterSecurityGroup(ctx, test.ClusterName, *cluster.ResourcesVpcConfig.ClusterSecurityGroupId, cluster.CreatedAt)
+	if err != nil {
+		return fmt.Errorf("tagging cluster security group: %w", err)
 	}
 
 	kubeconfig := KubeconfigPath(test.ClusterName)
@@ -171,6 +180,23 @@ func (c *Create) Run(ctx context.Context, test TestResources) error {
 	}
 
 	return nil
+}
+
+func (c *Create) tagClusterSecurityGroup(ctx context.Context, clusterName, securityGroupID string, creationTime *time.Time) error {
+	_, err := c.ec2.CreateTags(ctx, &ec2.CreateTagsInput{
+		Resources: []string{securityGroupID},
+		Tags: []ec2Types.Tag{
+			{
+				Key:   aws.String(constants.TestClusterTagKey),
+				Value: aws.String(clusterName),
+			},
+			{
+				Key:   aws.String(constants.CreationTimeTagKey),
+				Value: aws.String(creationTime.Format(time.RFC3339)),
+			},
+		},
+	})
+	return err
 }
 
 func KubeconfigPath(clusterName string) string {

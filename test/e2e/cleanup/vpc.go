@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/aws/retry"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/go-logr/logr"
@@ -127,6 +128,11 @@ func (v *VPCCleaner) ListVPCs(ctx context.Context, input FilterInput) ([]string,
 func (v *VPCCleaner) DeleteVPC(ctx context.Context, vpcID string) error {
 	_, err := v.ec2Client.DeleteVpc(ctx, &ec2.DeleteVpcInput{
 		VpcId: aws.String(vpcID),
+	}, func(o *ec2.Options) {
+		o.Retryer = retry.NewStandard(func(o *retry.StandardOptions) {
+			o.MaxAttempts = 10 // ~ 2 minutes
+			o.Retryables = append(o.Retryables, dependencyViolationRetryable{})
+		})
 	})
 	if err != nil && errors.IsAwsError(err, "InvalidVpcID.NotFound") {
 		v.logger.Info("VPC already deleted", "vpcID", vpcID)
@@ -249,6 +255,11 @@ func (v *VPCCleaner) ListSubnets(ctx context.Context, input FilterInput) ([]stri
 func (v *VPCCleaner) DeleteSubnet(ctx context.Context, subnetID string) error {
 	_, err := v.ec2Client.DeleteSubnet(ctx, &ec2.DeleteSubnetInput{
 		SubnetId: aws.String(subnetID),
+	}, func(o *ec2.Options) {
+		o.Retryer = retry.NewStandard(func(o *retry.StandardOptions) {
+			o.MaxAttempts = 10 // ~ 2 minutes
+			o.Retryables = append(o.Retryables, dependencyViolationRetryable{})
+		})
 	})
 	if err != nil && (errors.IsAwsError(err, "InvalidSubnetID.NotFound") || errors.IsAwsError(err, "InvalidSubnetId.NotFound")) {
 		v.logger.Info("Subnet already deleted", "subnetID", subnetID)
@@ -467,4 +478,14 @@ func creationTimeFromTags(tags []types.Tag) (time.Time, error) {
 	// if we are cleaning by cluster-name it will get deleted
 	// if its the sweeper based on age of resources it will be left
 	return time.Now(), nil
+}
+
+type dependencyViolationRetryable struct{}
+
+func (c dependencyViolationRetryable) IsErrorRetryable(err error) aws.Ternary {
+	if errors.IsAwsError(err, "DependencyViolation") {
+		return aws.BoolTernary(true)
+	}
+
+	return aws.BoolTernary(false)
 }
