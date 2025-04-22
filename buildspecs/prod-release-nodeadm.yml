@@ -25,38 +25,8 @@ phases:
 
   build:
     commands:
-      - echo "Uploading nodeadm to production..."
-      - aws s3 cp --no-progress _bin/amd64/nodeadm s3://${PROD_BUCKET}/releases/${VERSION}/bin/linux/amd64/nodeadm --profile artifacts-production
-      - aws s3 cp --no-progress _bin/arm64/nodeadm s3://${PROD_BUCKET}/releases/${VERSION}/bin/linux/arm64/nodeadm --profile artifacts-production
-
-      - echo "Generating and uploading nodeadm checksums..."
-      - sha256sum _bin/amd64/nodeadm > _bin/amd64/nodeadm.sha256
-      - aws s3 cp --no-progress _bin/amd64/nodeadm.sha256 s3://${PROD_BUCKET}/releases/${VERSION}/bin/linux/amd64/nodeadm.sha256 --profile artifacts-production
-      - sha512sum _bin/amd64/nodeadm > _bin/amd64/nodeadm.sha512
-      - aws s3 cp --no-progress _bin/amd64/nodeadm.sha512 s3://${PROD_BUCKET}/releases/${VERSION}/bin/linux/amd64/nodeadm.sha512 --profile artifacts-production
-      - sha256sum _bin/arm64/nodeadm > _bin/arm64/nodeadm.sha256
-      - aws s3 cp --no-progress _bin/arm64/nodeadm.sha256 s3://${PROD_BUCKET}/releases/${VERSION}/bin/linux/arm64/nodeadm.sha256 --profile artifacts-production
-      - sha512sum _bin/arm64/nodeadm > _bin/arm64/nodeadm.sha512
-      - aws s3 cp --no-progress _bin/arm64/nodeadm.sha512 s3://${PROD_BUCKET}/releases/${VERSION}/bin/linux/arm64/nodeadm.sha512 --profile artifacts-production
-
-      - echo "Updating latest symlinks for nodeadm..."
-      - aws s3 cp --no-progress _bin/amd64/nodeadm s3://${PROD_BUCKET}/latest/bin/linux/amd64/nodeadm --profile artifacts-production
-      - aws s3 cp --no-progress _bin/arm64/nodeadm s3://${PROD_BUCKET}/latest/bin/linux/arm64/nodeadm --profile artifacts-production
-      - aws s3 cp --no-progress _bin/amd64/nodeadm.sha256 s3://${PROD_BUCKET}/latest/bin/linux/amd64/nodeadm.sha256 --profile artifacts-production
-      - aws s3 cp --no-progress _bin/arm64/nodeadm.sha256 s3://${PROD_BUCKET}/latest/bin/linux/arm64/nodeadm.sha256 --profile artifacts-production
-      - aws s3 cp --no-progress _bin/amd64/nodeadm.sha512 s3://${PROD_BUCKET}/latest/bin/linux/amd64/nodeadm.sha512 --profile artifacts-production
-      - aws s3 cp --no-progress _bin/arm64/nodeadm.sha512 s3://${PROD_BUCKET}/latest/bin/linux/arm64/nodeadm.sha512 --profile artifacts-production
-
-      - echo "Generating and uploading attribution..."
-      - make generate-attribution
-      - aws s3 cp --no-progress ATTRIBUTION.txt s3://${PROD_BUCKET}/releases/${VERSION}/ATTRIBUTION.txt --profile artifacts-production
-      - aws s3 cp --no-progress ATTRIBUTION.txt s3://${PROD_BUCKET}/latest/ATTRIBUTION.txt --profile artifacts-production 
+      - ./hack/release-nodeadm.sh "${PROD_BUCKET}" "artifacts-production" "${VERSION}"
 
   post_build:
     commands:
-      - echo "Invalidating CloudFront cache..."
-      - aws cloudfront create-invalidation --distribution-id ${CLOUDFRONT_DISTRIBUTION_ID} --paths "/*" --profile artifacts-production
-
-      - echo "Production release completed successfully"
-      - echo "Version:"
-      - cat _bin/GIT_VERSION
+      - ./hack/validate-release.sh "${CLOUDFRONT_DISTRIBUTION_ID}" "artifacts-production" "_bin/GIT_VERSION"
