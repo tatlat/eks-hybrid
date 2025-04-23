@@ -25,7 +25,10 @@ mv /tmp/nodeadm-wrapper.sh /tmp/nodeadm
 
 
 echo "Installing kubernetes components"
-/tmp/nodeadm install $KUBERNETES_VERSION $NODEADM_ADDITIONAL_ARGS --credential-provider $PROVDER --region $REGION
+# the test will wait up to 10 minutes for the node to become ready
+# we give install 8 minutes, which should be more than enough, but in case it does
+# timeout due to issues downloading the artifacts, the logs will more clearly indicate this as the cause of the failure
+/tmp/nodeadm install $KUBERNETES_VERSION $NODEADM_ADDITIONAL_ARGS --credential-provider $PROVDER --region $REGION --timeout 8m
 
 echo "Initializing the node"
 /tmp/nodeadm init -c file:///nodeadm-config.yaml
