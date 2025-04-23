@@ -13,6 +13,7 @@ const (
 	TestInstanceName                = "TestInstanceName"
 	TestArtifactsPath               = "TestArtifactsPath"
 	TestConformancePath             = "TestConformancePath"
+	TestAddonsPath                  = "TestAddonsPath"
 	TestLogBundleFile               = "TestLogBundleFile"
 	TestSerialOutputLogFile         = "TestSerialOutputLogFile"
 	TestNodeadmVersion              = "TestNodeadmVersion"
