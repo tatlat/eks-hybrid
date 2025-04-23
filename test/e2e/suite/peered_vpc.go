@@ -51,13 +51,13 @@ type SuiteConfiguration struct {
 }
 
 type PeeredVPCTest struct {
-	aws             aws.Config
+	Aws             aws.Config
 	eksEndpoint     string
-	eksClient       *eks.Client
+	EksClient       *eks.Client
 	ec2Client       *ec2v2.Client
 	SSMClient       *ssmv2.Client
 	cfnClient       *cloudformation.Client
-	k8sClient       clientgo.Interface
+	K8sClient       clientgo.Interface
 	K8sClientConfig *rest.Config
 	s3Client        *s3v2.Client
 	iamClient       *iam.Client
@@ -112,8 +112,8 @@ func BuildPeeredVPCTestForSuite(ctx context.Context, suite *SuiteConfiguration) 
 		return nil, err
 	}
 
-	test.aws = aws
-	test.eksClient = e2e.NewEKSClient(aws, suite.TestConfig.Endpoint)
+	test.Aws = aws
+	test.EksClient = e2e.NewEKSClient(aws, suite.TestConfig.Endpoint)
 	test.ec2Client = ec2v2.NewFromConfig(aws)
 	test.SSMClient = ssmv2.NewFromConfig(aws)
 	test.s3Client = s3v2.NewFromConfig(aws)
@@ -132,12 +132,12 @@ func BuildPeeredVPCTestForSuite(ctx context.Context, suite *SuiteConfiguration) 
 		return nil, err
 	}
 	test.K8sClientConfig = clientConfig
-	test.k8sClient, err = clientgo.NewForConfig(clientConfig)
+	test.K8sClient, err = clientgo.NewForConfig(clientConfig)
 	if err != nil {
 		return nil, err
 	}
 
-	test.Cluster, err = peered.GetHybridCluster(ctx, test.eksClient, test.ec2Client, suite.TestConfig.ClusterName)
+	test.Cluster, err = peered.GetHybridCluster(ctx, test.EksClient, test.ec2Client, suite.TestConfig.ClusterName)
 	if err != nil {
 		return nil, err
 	}
@@ -164,7 +164,7 @@ func BuildPeeredVPCTestForSuite(ctx context.Context, suite *SuiteConfiguration) 
 func (t *PeeredVPCTest) NewPeeredNode() *peered.Node {
 	return &peered.Node{
 		NodeCreate: peered.NodeCreate{
-			AWS:             t.aws,
+			AWS:             t.Aws,
 			EC2:             t.ec2Client,
 			SSM:             t.SSMClient,
 			Logger:          t.Logger,
@@ -178,7 +178,7 @@ func (t *PeeredVPCTest) NewPeeredNode() *peered.Node {
 			EC2:                 t.ec2Client,
 			SSM:                 t.SSMClient,
 			S3:                  t.s3Client,
-			K8s:                 t.k8sClient,
+			K8s:                 t.K8sClient,
 			Logger:              t.Logger,
 			SkipDelete:          t.SkipCleanup,
 			ClusterName:         t.Cluster.Name,
@@ -189,7 +189,7 @@ func (t *PeeredVPCTest) NewPeeredNode() *peered.Node {
 
 func (t *PeeredVPCTest) NewCleanNode(provider e2e.NodeadmCredentialsProvider, nodeName, nodeIP string) *nodeadm.CleanNode {
 	return &nodeadm.CleanNode{
-		K8s:                 t.k8sClient,
+		K8s:                 t.K8sClient,
 		RemoteCommandRunner: t.RemoteCommandRunner,
 		Verifier:            provider,
 		Logger:              t.Logger,
@@ -200,7 +200,7 @@ func (t *PeeredVPCTest) NewCleanNode(provider e2e.NodeadmCredentialsProvider, no
 
 func (t *PeeredVPCTest) NewUpgradeNode(nodeName, nodeIP string) *nodeadm.UpgradeNode {
 	return &nodeadm.UpgradeNode{
-		K8s:                 t.k8sClient,
+		K8s:                 t.K8sClient,
 		RemoteCommandRunner: t.RemoteCommandRunner,
 		Logger:              t.Logger,
 		NodeName:            nodeName,
@@ -223,8 +223,8 @@ func (t *PeeredVPCTest) NewVerifyPodIdentityAddon(nodeName string) *addon.Verify
 		Cluster:             t.Cluster.Name,
 		NodeName:            nodeName,
 		PodIdentityS3Bucket: t.podIdentityS3Bucket,
-		K8S:                 t.k8sClient,
-		EKSClient:           t.eksClient,
+		K8S:                 t.K8sClient,
+		EKSClient:           t.EksClient,
 		IAMClient:           t.iamClient,
 		S3Client:            t.s3Client,
 		Logger:              t.Logger,
@@ -247,7 +247,7 @@ func (t *PeeredVPCTest) NewTestNode(ctx context.Context, instanceName, nodeName,
 		LogsBucket:      t.logsBucket,
 		PeeredNode:      t.NewPeeredNode(),
 		NodeName:        nodeName,
-		K8sClient:       t.k8sClient,
+		K8sClient:       t.K8sClient,
 		K8sClientConfig: t.K8sClientConfig,
 		K8sVersion:      k8sVersion,
 		OS:              os,

@@ -1,4 +1,4 @@
-package addonTests
+package smoketest
 
 import (
 	"context"
@@ -7,11 +7,9 @@ import (
 	"math/rand"
 	"testing"
 
-	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"gopkg.in/yaml.v2"
-	clientgo "k8s.io/client-go/kubernetes"
 
 	"github.com/aws/eks-hybrid/test/e2e"
 	"github.com/aws/eks-hybrid/test/e2e/addon"
@@ -44,6 +42,8 @@ var _ = SynchronizedBeforeSuite(
 
 		// pick 3 random OS/Version/Provider combinations for addonTest tests worker nodes
 		nodesToCreate := []suite.NodeCreate{}
+
+		// Add more addons here
 		addonsToTest = []addon.AddonIface{
 			addon.NewMetricsServerAddon(suiteConfig.TestConfig.ClusterName, test.K8sClientConfig),
 		}
@@ -58,9 +58,9 @@ var _ = SynchronizedBeforeSuite(
 			nodesToCreate = append(nodesToCreate, suite.NodeCreate{
 				OS:           os,
 				Provider:     provider,
-				InstanceName: test.InstanceName("addonTest", os, provider),
+				InstanceName: test.InstanceName("addon-smoke-test", os, provider),
 				InstanceSize: e2e.XLarge,
-				NodeName:     fmt.Sprintf("addonTest-node-%s-%s", provider.Name(), os.Name()),
+				NodeName:     fmt.Sprintf("addon-test-node-%s-%s", provider.Name(), os.Name()),
 			})
 		}
 		suite.CreateNodes(ctx, test, nodesToCreate)
@@ -91,17 +91,8 @@ var _ = Describe("Hybrid Nodes", func() {
 			DescribeTable("runs addons",
 				func(ctx context.Context, testAddon addon.AddonIface) {
 					test.Logger.Info("Running addon test for " + testAddon.GetName())
-					k8sClient, err := clientgo.NewForConfig(test.K8sClientConfig)
-					Expect(err).NotTo(HaveOccurred(), "should create kubernetes client successfully")
 
-					aws, err := e2e.NewAWSConfig(ctx,
-						awsconfig.WithRegion(suiteConfig.TestConfig.ClusterRegion),
-						awsconfig.WithAppID("nodeadm-e2e-test-suite"),
-					)
-					Expect(err).NotTo(HaveOccurred(), "should create aws config successfully")
-					eksClient := e2e.NewEKSClient(aws, suiteConfig.TestConfig.Endpoint)
-
-					addonTest := addon.NewAddonTest(test.K8sClientConfig, k8sClient, eksClient, test.Logger, testAddon)
+					addonTest := addon.NewAddonTest(test.K8sClientConfig, test.K8sClient, test.EksClient, test.Logger, testAddon)
 					DeferCleanup(func(ctx context.Context) {
 						Expect(addonTest.CollectLogs(ctx)).To(Succeed(), "should collect addon logs successfully")
 
@@ -109,7 +100,7 @@ var _ = Describe("Hybrid Nodes", func() {
 					})
 
 					Expect(addonTest.Run(ctx)).To(
-						Succeed(), "addon should have run successfully",
+						Succeed(), "addon test should have run successfully",
 					)
 				},
 				func() []TableEntry {

@@ -7,14 +7,13 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/service/eks"
 	"github.com/aws/aws-sdk-go-v2/service/eks/types"
-	"github.com/aws/aws-sdk-go/aws"
-	kube "github.com/aws/eks-hybrid/test/e2e/kubernetes"
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/aws/eks-hybrid/test/e2e/errors"
+	kube "github.com/aws/eks-hybrid/test/e2e/kubernetes"
 )
 
 type Addon struct {
@@ -90,7 +89,7 @@ func (a Addon) WaitUntilActive(ctx context.Context, client *eks.Client, logger l
 	}
 }
 
-func (a Addon) CreateAddon(ctx context.Context, eksClient *eks.Client, k8s *kubernetes.Clientset, logger logr.Logger) error {
+func (a Addon) CreateAddon(ctx context.Context, eksClient *eks.Client, k8s kubernetes.Interface, logger logr.Logger) error {
 	if err := a.Create(ctx, eksClient, logger); err != nil {
 		return err
 	}
@@ -124,10 +123,10 @@ func (a Addon) Delete(ctx context.Context, client *eks.Client, logger logr.Logge
 	return err
 }
 
-func getPodLogOptions(containerName string, lines int64) *corev1.PodLogOptions {
+func getPodLogOptions(containerName string, lines *int64) *corev1.PodLogOptions {
 	return &corev1.PodLogOptions{
-		Container: containerName,    // specify container name if multiple containers
-		TailLines: aws.Int64(lines), // get last N lines
+		Container: containerName, // specify container name if multiple containers
+		TailLines: lines,         // get last N lines
 	}
 }
 

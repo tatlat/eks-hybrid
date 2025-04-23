@@ -34,21 +34,21 @@ func NewMetricsServerAddon(cluster string, cfg *rest.Config) AddonIface {
 	}
 }
 
-func (m MetricsServerAddon) Setup(ctx context.Context, eksClient *eks.Client, k8s *kubernetes.Clientset, logger logr.Logger) error {
+func (m MetricsServerAddon) Setup(ctx context.Context, eksClient *eks.Client, k8s kubernetes.Interface, logger logr.Logger) error {
 	return nil
 }
 
-func (m MetricsServerAddon) PostInstall(ctx context.Context, eksClient *eks.Client, k8s *kubernetes.Clientset, logger logr.Logger) error {
+func (m MetricsServerAddon) PostInstall(ctx context.Context, eksClient *eks.Client, k8s kubernetes.Interface, logger logr.Logger) error {
 	return nil
 }
 
-func (m MetricsServerAddon) Validate(ctx context.Context, eksClient *eks.Client, k8s *kubernetes.Clientset, logger logr.Logger) error {
+func (m MetricsServerAddon) Validate(ctx context.Context, eksClient *eks.Client, k8s kubernetes.Interface, logger logr.Logger) error {
 	metricsClient, err := metricsv1beta1.NewForConfig(m.cfg)
 	if err != nil {
 		return fmt.Errorf("creating metrics client: %v", err)
 	}
 
-	nodes, err := k8s.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{})
+	nodes, err := k8s.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return fmt.Errorf("getting nodes: %v", err)
 	}
@@ -56,7 +56,9 @@ func (m MetricsServerAddon) Validate(ctx context.Context, eksClient *eks.Client,
 	fmt.Printf("Found %d nodes\n", len(nodes.Items))
 
 	for _, node := range nodes.Items {
-		getNodeMetrics(metricsClient, node, logger)
+		if err := getNodeMetrics(metricsClient, node, logger); err != nil {
+			return err
+		}
 	}
 
 	// pod metrics across all namespaces
@@ -85,7 +87,7 @@ func getPodMetrics(metricsClient *metricsv1beta1.Clientset, logger logr.Logger) 
 	return nil
 }
 
-func (m MetricsServerAddon) Cleanup(ctx context.Context, eksClient *eks.Client, k8s *kubernetes.Clientset, logger logr.Logger) error {
+func (m MetricsServerAddon) Cleanup(ctx context.Context, eksClient *eks.Client, k8s kubernetes.Interface, logger logr.Logger) error {
 	return m.Delete(ctx, eksClient, logger)
 }
 

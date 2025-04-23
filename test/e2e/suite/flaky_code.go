@@ -3,7 +3,6 @@ package suite
 import (
 	"context"
 	"fmt"
-	"slices"
 	"sync"
 	"time"
 
@@ -11,6 +10,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/onsi/ginkgo/v2/types"
 	. "github.com/onsi/gomega"
+	"slices"
 )
 
 const retryableHeading = "Retryable FlakyCode failure"

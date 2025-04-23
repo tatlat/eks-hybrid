@@ -5,10 +5,12 @@ import (
 	"fmt"
 
 	"github.com/aws/aws-sdk-go-v2/service/eks"
-	kube "github.com/aws/eks-hybrid/test/e2e/kubernetes"
+	"github.com/aws/aws-sdk-go/aws"
 	"github.com/go-logr/logr"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+
+	kube "github.com/aws/eks-hybrid/test/e2e/kubernetes"
 )
 
 const (
@@ -17,24 +19,24 @@ const (
 
 type AddonTest struct {
 	clientConfig *rest.Config
-	k8s          *kubernetes.Clientset
+	k8s          kubernetes.Interface
 	eksClient    *eks.Client
 	logger       logr.Logger
 	addon        AddonIface
 }
 
 type AddonIface interface {
-	Setup(ctx context.Context, eksClient *eks.Client, k8s *kubernetes.Clientset, logger logr.Logger) error
-	CreateAddon(ctx context.Context, eksClient *eks.Client, k8s *kubernetes.Clientset, logger logr.Logger) error
-	PostInstall(ctx context.Context, eksClient *eks.Client, k8s *kubernetes.Clientset, logger logr.Logger) error
-	Validate(ctx context.Context, eksClient *eks.Client, k8s *kubernetes.Clientset, logger logr.Logger) error
-	Cleanup(ctx context.Context, eksClient *eks.Client, k8s *kubernetes.Clientset, logger logr.Logger) error
+	Setup(ctx context.Context, eksClient *eks.Client, k8s kubernetes.Interface, logger logr.Logger) error
+	CreateAddon(ctx context.Context, eksClient *eks.Client, k8s kubernetes.Interface, logger logr.Logger) error
+	PostInstall(ctx context.Context, eksClient *eks.Client, k8s kubernetes.Interface, logger logr.Logger) error
+	Validate(ctx context.Context, eksClient *eks.Client, k8s kubernetes.Interface, logger logr.Logger) error
+	Cleanup(ctx context.Context, eksClient *eks.Client, k8s kubernetes.Interface, logger logr.Logger) error
 	GetName() string
 	GetNamespace() string
 	GetContainerName() string
 }
 
-func NewAddonTest(clientConfig *rest.Config, k8s *kubernetes.Clientset, eksClient *eks.Client, logger logr.Logger, addon AddonIface) AddonTest {
+func NewAddonTest(clientConfig *rest.Config, k8s kubernetes.Interface, eksClient *eks.Client, logger logr.Logger, addon AddonIface) AddonTest {
 	return AddonTest{
 		clientConfig: clientConfig,
 		k8s:          k8s,
@@ -50,13 +52,13 @@ func (a *AddonTest) Cleanup(ctx context.Context) error {
 
 func (a *AddonTest) CollectLogs(ctx context.Context) error {
 	addonListOptions := getAddonListOptions(a.addon.GetName())
-	pods, err := a.k8s.CoreV1().Pods(a.addon.GetNamespace()).List(context.TODO(), addonListOptions)
+	pods, err := a.k8s.CoreV1().Pods(a.addon.GetNamespace()).List(ctx, addonListOptions)
 	if err != nil {
 		return fmt.Errorf("getting pods for addon: %v", err)
 	}
 
 	for _, pod := range pods.Items {
-		logOpts := getPodLogOptions(a.addon.GetContainerName(), tailLines)
+		logOpts := getPodLogOptions(a.addon.GetContainerName(), aws.Int64(tailLines))
 		logs, err := kube.GetPodLogsWithRetries(ctx, a.k8s, pod.Name, pod.Namespace, logOpts)
 		if err != nil {
 			return err
