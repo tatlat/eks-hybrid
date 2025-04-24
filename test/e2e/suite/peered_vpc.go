@@ -19,6 +19,7 @@ import (
 	"github.com/onsi/ginkgo/v2/types"
 	. "github.com/onsi/gomega"
 	"gopkg.in/yaml.v2"
+	"k8s.io/client-go/dynamic"
 	clientgo "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -57,7 +58,7 @@ type PeeredVPCTest struct {
 	ec2Client       *ec2v2.Client
 	SSMClient       *ssmv2.Client
 	cfnClient       *cloudformation.Client
-	K8sClient       clientgo.Interface
+	k8sClient       peered.K8s
 	K8sClientConfig *rest.Config
 	s3Client        *s3v2.Client
 	iamClient       *iam.Client
@@ -132,9 +133,24 @@ func BuildPeeredVPCTestForSuite(ctx context.Context, suite *SuiteConfiguration) 
 		return nil, err
 	}
 	test.K8sClientConfig = clientConfig
-	test.K8sClient, err = clientgo.NewForConfig(clientConfig)
+	k8s, err := clientgo.NewForConfig(clientConfig)
 	if err != nil {
 		return nil, err
+	}
+
+	dynamicK8s, err := dynamic.NewForConfig(clientConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	test.k8sClient = peered.K8s{
+		Interface: k8s,
+		Dynamic:   dynamicK8s,
+	}
+
+	test.k8sClient = peered.K8s{
+		Interface: k8s,
+		Dynamic:   dynamicK8s,
 	}
 
 	test.Cluster, err = peered.GetHybridCluster(ctx, test.EksClient, test.ec2Client, suite.TestConfig.ClusterName)
@@ -178,29 +194,39 @@ func (t *PeeredVPCTest) NewPeeredNode() *peered.Node {
 			EC2:                 t.ec2Client,
 			SSM:                 t.SSMClient,
 			S3:                  t.s3Client,
-			K8s:                 t.K8sClient,
+			K8s:                 t.k8sClient,
 			Logger:              t.Logger,
 			SkipDelete:          t.SkipCleanup,
-			ClusterName:         t.Cluster.Name,
+			Cluster:             t.Cluster,
 			LogsBucket:          t.logsBucket,
 		},
 	}
 }
 
-func (t *PeeredVPCTest) NewCleanNode(provider e2e.NodeadmCredentialsProvider, nodeName, nodeIP string) *nodeadm.CleanNode {
+func (t *PeeredVPCTest) NewPeeredNetwork() *peered.Network {
+	return &peered.Network{
+		EC2:     t.ec2Client,
+		Logger:  t.Logger,
+		K8s:     t.k8sClient,
+		Cluster: t.Cluster,
+	}
+}
+
+func (t *PeeredVPCTest) NewCleanNode(provider e2e.NodeadmCredentialsProvider, infraCleaner nodeadm.NodeInfrastructureCleaner, nodeName, nodeIP string) *nodeadm.CleanNode {
 	return &nodeadm.CleanNode{
-		K8s:                 t.K8sClient,
-		RemoteCommandRunner: t.RemoteCommandRunner,
-		Verifier:            provider,
-		Logger:              t.Logger,
-		NodeName:            nodeName,
-		NodeIP:              nodeIP,
+		K8s:                   t.k8sClient,
+		RemoteCommandRunner:   t.RemoteCommandRunner,
+		Verifier:              provider,
+		Logger:                t.Logger,
+		InfrastructureCleaner: infraCleaner,
+		NodeName:              nodeName,
+		NodeIP:                nodeIP,
 	}
 }
 
 func (t *PeeredVPCTest) NewUpgradeNode(nodeName, nodeIP string) *nodeadm.UpgradeNode {
 	return &nodeadm.UpgradeNode{
-		K8s:                 t.K8sClient,
+		K8s:                 t.k8sClient,
 		RemoteCommandRunner: t.RemoteCommandRunner,
 		Logger:              t.Logger,
 		NodeName:            nodeName,
@@ -223,7 +249,7 @@ func (t *PeeredVPCTest) NewVerifyPodIdentityAddon(nodeName string) *addon.Verify
 		Cluster:             t.Cluster.Name,
 		NodeName:            nodeName,
 		PodIdentityS3Bucket: t.podIdentityS3Bucket,
-		K8S:                 t.K8sClient,
+		K8S:                 t.k8sClient,
 		EKSClient:           t.EksClient,
 		IAMClient:           t.iamClient,
 		S3Client:            t.s3Client,
@@ -247,12 +273,13 @@ func (t *PeeredVPCTest) NewTestNode(ctx context.Context, instanceName, nodeName,
 		LogsBucket:      t.logsBucket,
 		PeeredNode:      t.NewPeeredNode(),
 		NodeName:        nodeName,
-		K8sClient:       t.K8sClient,
+		K8sClient:       t.k8sClient,
 		K8sClientConfig: t.K8sClientConfig,
 		K8sVersion:      k8sVersion,
 		OS:              os,
 		Provider:        provider,
 		Region:          t.Cluster.Region,
+		PeeredNetwork:   t.NewPeeredNetwork(),
 	}
 }
 

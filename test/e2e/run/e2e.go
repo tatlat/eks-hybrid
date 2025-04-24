@@ -111,7 +111,7 @@ func (e *E2E) Run(ctx context.Context) (E2EResult, error) {
 
 	phases, err := e.preTestSetup()
 	if err != nil {
-		return E2EResult{Phases: phases}, err
+		return E2EResult{Phases: phases, NodeadmE2eTestResultJSON: true}, err
 	}
 
 	// save 5 minutes for cleanup and 2 minutes for reporting/s3 uploading
@@ -138,6 +138,7 @@ func (e *E2E) Run(ctx context.Context) (E2EResult, error) {
 	phases = append(phases, uploadPhases...)
 
 	e2eResult.Phases = phases
+	e2eResult.NodeadmE2eTestResultJSON = true
 	var allErrors error
 	for _, phase := range phases {
 		if phase.Error != nil {
