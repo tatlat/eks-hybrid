@@ -65,6 +65,10 @@ func (s *Command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 				Name:   aws.String("tag:Name"),
 				Values: []string{s.instanceIDOrName},
 			},
+			{
+				Name:   aws.String("instance-state-name"),
+				Values: []string{"running"},
+			},
 		}
 	}
 	instances, err := ec2Client.DescribeInstances(ctx, input)

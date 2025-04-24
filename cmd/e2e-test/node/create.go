@@ -30,6 +30,7 @@ type create struct {
 	flaggy        *flaggy.Subcommand
 	configFile    string
 	instanceName  string
+	instanceSize  string
 	credsProvider string
 	os            string
 	arch          string
@@ -38,8 +39,9 @@ type create struct {
 
 func NewCreateCommand() cli.Command {
 	cmd := create{
-		os:   "al23",
-		arch: "amd64",
+		os:           "al23",
+		arch:         "amd64",
+		instanceSize: "Large",
 	}
 
 	createCmd := flaggy.NewSubcommand("create")
@@ -50,6 +52,7 @@ func NewCreateCommand() cli.Command {
 	createCmd.String(&cmd.os, "o", "os", "OS to use (al23, ubuntu2004, ubuntu2204, ubuntu2404, rhel8, rhel9).")
 	createCmd.String(&cmd.arch, "a", "arch", "Architecture to use (amd64, arm64).")
 	createCmd.Bool(&cmd.waitForReady, "w", "wait-for-ready", "Wait for the node to be ready.")
+	createCmd.String(&cmd.instanceSize, "s", "instance-size", "Instance size to use (Large, XLarge).")
 
 	cmd.flaggy = createCmd
 
@@ -140,8 +143,14 @@ func (c *create) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		}
 	}
 
+	instanceSize := e2e.Large
+	if c.instanceSize == "XLarge" {
+		instanceSize = e2e.XLarge
+	}
+
 	peerdNode, err := node.Create(ctx, &peered.NodeSpec{
 		InstanceName:   c.instanceName,
+		InstanceSize:   instanceSize,
 		NodeK8sVersion: cluster.KubernetesVersion,
 		NodeName:       c.instanceName,
 		OS:             nodeOS,
