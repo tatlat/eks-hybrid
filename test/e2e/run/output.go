@@ -13,8 +13,7 @@ type E2EOutput struct {
 	ClusterRegion       string
 }
 
-func (e *E2EOutput) PrintJSON(e2eResult E2EResult) error {
-	e2eResult.NodeadmE2eTestResultJSON = true
+func (e *E2EOutput) PrintJSON(e2eResult any) error {
 	buf := new(bytes.Buffer)
 	encoder := json.NewEncoder(buf)
 	encoder.SetEscapeHTML(false)
