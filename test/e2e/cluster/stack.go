@@ -18,9 +18,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	ssmTypes "github.com/aws/aws-sdk-go-v2/service/ssm/types"
 	"github.com/go-logr/logr"
-	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/aws/eks-hybrid/test/e2e/addon"
+	"github.com/aws/eks-hybrid/test/e2e/cfn"
 	"github.com/aws/eks-hybrid/test/e2e/cleanup"
 	"github.com/aws/eks-hybrid/test/e2e/constants"
 	e2eErrors "github.com/aws/eks-hybrid/test/e2e/errors"
@@ -212,13 +212,13 @@ func (s *stack) createOrUpdateStack(ctx context.Context, stackName string, param
 		}
 
 		s.logger.Info("Waiting for hybrid nodes setup stack to be created", "stackName", stackName)
-		err = waitForStackOperation(ctx, s.cfn, stackName)
+		err = cfn.WaitForStackOperation(ctx, s.cfn, stackName, stackWaitInterval, stackWaitTimeout)
 		if err != nil {
 			return fmt.Errorf("waiting for hybrid nodes setup cfn stack: %w", err)
 		}
 	} else if resp.Stacks[0].StackStatus == types.StackStatusCreateInProgress || resp.Stacks[0].StackStatus == types.StackStatusUpdateInProgress {
 		s.logger.Info("Waiting for hybrid nodes setup stack to be created", "stackName", stackName)
-		err = waitForStackOperation(ctx, s.cfn, stackName)
+		err = cfn.WaitForStackOperation(ctx, s.cfn, stackName, stackWaitInterval, stackWaitTimeout)
 		if err != nil {
 			return fmt.Errorf("waiting for hybrid nodes setup cfn stack: %w", err)
 		}
@@ -245,7 +245,7 @@ func (s *stack) createOrUpdateStack(ctx context.Context, stackName string, param
 		}
 
 		s.logger.Info("Waiting for hybrid nodes setup stack to be updated", "stackName", stackName)
-		err = waitForStackOperation(ctx, s.cfn, stackName)
+		err = cfn.WaitForStackOperation(ctx, s.cfn, stackName, stackWaitInterval, stackWaitTimeout)
 		if err != nil {
 			return fmt.Errorf("waiting for hybrid nodes setup cfn stack: %w", err)
 		}
@@ -336,36 +336,6 @@ func (s *stack) setupJumpbox(ctx context.Context, clusterName string) error {
 
 func stackName(clusterName string) string {
 	return fmt.Sprintf("%s-%s", constants.TestArchitectureStackNamePrefix, clusterName)
-}
-
-func waitForStackOperation(ctx context.Context, client *cloudformation.Client, stackName string) error {
-	err := wait.PollUntilContextTimeout(ctx, stackWaitInterval, stackWaitTimeout, true, func(ctx context.Context) (bool, error) {
-		stackOutput, err := client.DescribeStacks(ctx, &cloudformation.DescribeStacksInput{
-			StackName: aws.String(stackName),
-		})
-		if err != nil {
-			if e2eErrors.IsCFNStackNotFound(err) {
-				return true, nil
-			}
-			return false, err
-		}
-
-		stackStatus := stackOutput.Stacks[0].StackStatus
-		switch stackStatus {
-		case types.StackStatusCreateComplete, types.StackStatusUpdateComplete, types.StackStatusDeleteComplete:
-			return true, nil
-		case types.StackStatusCreateInProgress, types.StackStatusUpdateInProgress, types.StackStatusDeleteInProgress, types.StackStatusUpdateCompleteCleanupInProgress:
-			return false, nil
-		default:
-			failureReason, err := cleanup.GetStackFailureReason(ctx, client, stackName)
-			if err != nil {
-				return false, fmt.Errorf("stack %s failed with status %s. Failed getting failure reason: %w", stackName, stackStatus, err)
-			}
-			return false, fmt.Errorf("stack %s failed with status: %s. Potential root cause: [%s]", stackName, stackStatus, failureReason)
-		}
-	})
-
-	return err
 }
 
 func (s *stack) delete(ctx context.Context, clusterName string) error {

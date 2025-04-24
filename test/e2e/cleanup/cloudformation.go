@@ -11,6 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/cloudformation/types"
 	"github.com/go-logr/logr"
 
+	"github.com/aws/eks-hybrid/test/e2e/cfn"
 	"github.com/aws/eks-hybrid/test/e2e/constants"
 	"github.com/aws/eks-hybrid/test/e2e/errors"
 )
@@ -84,21 +85,11 @@ func (c *CFNStackCleanup) DeleteStack(ctx context.Context, stackName string) err
 			return fmt.Errorf("deleting hybrid nodes cfn stack: %w", err)
 		}
 
-		waiter := cloudformation.NewStackDeleteCompleteWaiter(c.cfnClient, func(opts *cloudformation.StackDeleteCompleteWaiterOptions) {
-			opts.MinDelay = stackRetryDelay
-			opts.MaxDelay = stackRetryDelay
-		})
-		if err = waiter.Wait(ctx, describeStackInput, stackDeletionTimeout); err != nil {
-			failureReason, err := GetStackFailureReason(ctx, c.cfnClient, stackName)
-			if err != nil {
-				c.logger.Info("Retrying delete of cfn stack, failure getting failure reason", "stackName", stackName, "error", err)
-			} else if failureReason == "" {
-				c.logger.Info("Retrying delete of cfn stack, failure reason not found", "stackName", stackName)
-			} else {
-				c.logger.Info("Retrying delete of cfn stack", "stackName", stackName, "failureReason", failureReason)
-			}
+		if err := cfn.WaitForStackOperation(ctx, c.cfnClient, stackName, stackRetryDelay, stackDeletionTimeout); err != nil {
+			c.logger.Error(err, "Retrying delete of cfn stack", "stackName", stackName)
 			continue
 		}
+
 		return nil
 	}
 	return fmt.Errorf("failed to delete hybrid nodes cfn stack: %s", stackName)
@@ -183,39 +174,4 @@ func (c *CFNStackCleanup) listStacks(ctx context.Context, input FilterInput, wan
 	}
 
 	return stacks, nil
-}
-
-func GetStackFailureReason(ctx context.Context, client *cloudformation.Client, stackName string) (string, error) {
-	resp, err := client.DescribeStackEvents(ctx, &cloudformation.DescribeStackEventsInput{
-		StackName: &stackName,
-	})
-	if err != nil {
-		return "", fmt.Errorf("describing events for stack %s: %w", stackName, err)
-	}
-	firstFailedEventTimestamp := time.Now()
-	var firstFailedEventReason string
-	for _, event := range resp.StackEvents {
-		if event.ResourceStatus == types.ResourceStatusCreateFailed ||
-			event.ResourceStatus == types.ResourceStatusUpdateFailed ||
-			event.ResourceStatus == types.ResourceStatusDeleteFailed {
-			if event.ResourceStatusReason == nil {
-				continue
-			}
-
-			timestamp := aws.ToTime(event.Timestamp)
-			if timestamp.Before(firstFailedEventTimestamp) {
-				firstFailedEventTimestamp = timestamp
-
-				var resourceID string
-				if event.LogicalResourceId != nil {
-					resourceID = *event.LogicalResourceId
-				} else {
-					resourceID = "UnknownResource"
-				}
-				firstFailedEventReason = fmt.Sprintf("%s for %s: %s", event.ResourceStatus, resourceID, *event.ResourceStatusReason)
-			}
-		}
-	}
-
-	return firstFailedEventReason, nil
 }
