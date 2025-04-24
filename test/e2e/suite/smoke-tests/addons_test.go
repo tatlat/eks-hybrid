@@ -1,4 +1,4 @@
-package smoketest
+package smoke_tests
 
 import (
 	"context"
@@ -17,10 +17,16 @@ import (
 )
 
 var (
-	filePath     string
-	suiteConfig  *suite.SuiteConfiguration
-	addonsToTest []addon.AddonIface
+	filePath    string
+	suiteConfig *suite.SuiteConfiguration
 )
+
+// Add new addons to test here
+func AddonList() []addon.Provider {
+	return []addon.Provider{
+		addon.MetricsServerProvider(),
+	}
+}
 
 const numberOfNodes = 1
 
@@ -30,7 +36,7 @@ func init() {
 
 func TestE2E(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "addonTest Suite")
+	RunSpecs(t, "Addon Smoke Test Suite")
 }
 
 var _ = SynchronizedBeforeSuite(
@@ -42,11 +48,6 @@ var _ = SynchronizedBeforeSuite(
 
 		// pick 3 random OS/Version/Provider combinations for addonTest tests worker nodes
 		nodesToCreate := []suite.NodeCreate{}
-
-		// Add more addons here
-		addonsToTest = []addon.AddonIface{
-			addon.NewMetricsServerAddon(suiteConfig.TestConfig.ClusterName, test.K8sClientConfig),
-		}
 
 		rand.Shuffle(len(osList), func(i, j int) {
 			osList[i], osList[j] = osList[j], osList[i]
@@ -88,8 +89,19 @@ var _ = Describe("Hybrid Nodes", func() {
 		})
 
 		When("using ec2 instance as hybrid nodes", func() {
-			DescribeTable("runs addons",
-				func(ctx context.Context, testAddon addon.AddonIface) {
+			addonEntries := []TableEntry{}
+			for _, addon := range AddonList() {
+				entry := Entry(
+					addon.Name,
+					addon.Constructor,
+					Label(addon.Name, "smoke test"),
+				)
+				addonEntries = append(addonEntries, entry)
+			}
+
+			DescribeTable("runs addon tests",
+				func(ctx context.Context, NewAddon addon.Constructor) {
+					testAddon := NewAddon(suiteConfig.TestConfig.ClusterName, test.K8sClientConfig)
 					test.Logger.Info("Running addon test for " + testAddon.GetName())
 
 					addonTest := addon.NewAddonTest(test.K8sClientConfig, test.K8sClient, test.EksClient, test.Logger, testAddon)
@@ -103,17 +115,7 @@ var _ = Describe("Hybrid Nodes", func() {
 						Succeed(), "addon test should have run successfully",
 					)
 				},
-				func() []TableEntry {
-					entries := make([]TableEntry, len(addonsToTest))
-					for i, addon := range addonsToTest {
-						entries[i] = Entry(
-							addon.GetName(),
-							addon,
-						)
-					}
-					return entries
-				}(),
-				Label("addonTest"),
+				addonEntries,
 			)
 		})
 	})

@@ -3,6 +3,7 @@ package addon
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/eks"
 	"github.com/aws/aws-sdk-go/aws"
@@ -14,7 +15,9 @@ import (
 )
 
 const (
-	tailLines = 10
+	tailLines          = 10
+	addonDelayInterval = 30 * time.Second
+	addonWaitTimeout   = 2 * time.Minute
 )
 
 type AddonTest struct {
@@ -24,6 +27,13 @@ type AddonTest struct {
 	logger       logr.Logger
 	addon        AddonIface
 }
+
+type Provider struct {
+	Name        string
+	Constructor Constructor
+}
+
+type Constructor func(cluster string, cfg *rest.Config) AddonIface
 
 type AddonIface interface {
 	Setup(ctx context.Context, eksClient *eks.Client, k8s kubernetes.Interface, logger logr.Logger) error
