@@ -19,6 +19,7 @@ import (
 	"github.com/aws/smithy-go"
 	"github.com/go-logr/logr"
 
+	"github.com/aws/eks-hybrid/test/e2e/cfn"
 	"github.com/aws/eks-hybrid/test/e2e/cleanup"
 	"github.com/aws/eks-hybrid/test/e2e/constants"
 	e2errors "github.com/aws/eks-hybrid/test/e2e/errors"
@@ -172,11 +173,12 @@ func (s *Stack) deployStack(ctx context.Context, logger logr.Logger) error {
 		if err != nil {
 			return fmt.Errorf("creating hybrid nodes cfn stack: %w", err)
 		}
-		if err := s.waitForStackCreation(ctx, logger); err != nil {
+		if err := cfn.WaitForStackOperation(ctx, s.CFN, s.Name, stackRetryDelay, stackCreationTimeout); err != nil {
 			return err
 		}
 	} else if resp.Stacks[0].StackStatus == cfnTypes.StackStatusCreateInProgress {
-		if err := s.waitForStackCreation(ctx, logger); err != nil {
+		logger.Info("Waiting for hybrid nodes stack to be created", "stackName", s.Name)
+		if err := cfn.WaitForStackOperation(ctx, s.CFN, s.Name, stackRetryDelay, stackCreationTimeout); err != nil {
 			return err
 		}
 	} else {
@@ -200,15 +202,8 @@ func (s *Stack) deployStack(ctx context.Context, logger logr.Logger) error {
 		}
 
 		logger.Info("Waiting for hybrid nodes stack to be updated", "stackName", s.Name)
-		waiter := cloudformation.NewStackUpdateCompleteWaiter(s.CFN, func(opts *cloudformation.StackUpdateCompleteWaiterOptions) {
-			opts.MinDelay = stackRetryDelay
-			opts.MaxDelay = stackRetryDelay
-		})
-		err = waiter.Wait(ctx, &cloudformation.DescribeStacksInput{
-			StackName: aws.String(s.Name),
-		}, stackCreationTimeout)
-		if err != nil {
-			return fmt.Errorf("waiting for hybrid nodes cfn stack: %w", err)
+		if err := cfn.WaitForStackOperation(ctx, s.CFN, s.Name, stackRetryDelay, stackCreationTimeout); err != nil {
+			return err
 		}
 	}
 
@@ -352,32 +347,13 @@ func (s *Stack) Delete(ctx context.Context, logger logr.Logger, output *StackOut
 }
 
 func isNotFound(err error) bool {
-	var awsErr smithy.APIError
-	ok := errors.As(err, &awsErr)
-	return err != nil && ok && awsErr.ErrorCode() == "NoSuchEntity"
+	return e2errors.IsAwsError(err, "NoSuchEntity")
 }
 
 func skipIRATest() bool {
 	return os.Getenv("SKIP_IRA_TEST") == "true"
 }
 
-func (s *Stack) waitForStackCreation(ctx context.Context, logger logr.Logger) error {
-	logger.Info("Waiting for hybrid nodes stack to be created", "stackName", s.Name)
-	waiter := cloudformation.NewStackCreateCompleteWaiter(s.CFN, func(opts *cloudformation.StackCreateCompleteWaiterOptions) {
-		opts.MinDelay = stackRetryDelay
-		opts.MaxDelay = stackRetryDelay
-	})
-	err := waiter.Wait(ctx, &cloudformation.DescribeStacksInput{
-		StackName: aws.String(s.Name),
-	}, stackCreationTimeout)
-	if err != nil {
-		return fmt.Errorf("waiting for hybrid nodes cfn stack: %w", err)
-	}
-	return nil
-}
-
 func isResourceAlreadyInUse(err error) bool {
-	var awsErr smithy.APIError
-	ok := errors.As(err, &awsErr)
-	return err != nil && ok && awsErr.ErrorCode() == "ResourceInUseException"
+	return e2errors.IsAwsError(err, "ResourceInUseException")
 }
