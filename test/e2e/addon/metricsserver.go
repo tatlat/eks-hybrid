@@ -5,14 +5,16 @@ import (
 	"fmt"
 
 	"github.com/aws/aws-sdk-go-v2/service/eks"
+	"github.com/aws/aws-sdk-go/aws"
 	"github.com/go-logr/logr"
-	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	metricsv1beta1 "k8s.io/metrics/pkg/client/clientset/versioned"
+
+	kube "github.com/aws/eks-hybrid/test/e2e/kubernetes"
 )
 
 const (
@@ -21,20 +23,20 @@ const (
 )
 
 type MetricsServerAddon struct {
-	Addon
-	cfg *rest.Config
+	baseAddon Addon
+	cfg       *rest.Config
 }
 
-func MetricsServerProvider() Provider {
-	return Provider{
+func MetricsServerWorkflow() WorkflowProvider {
+	return WorkflowProvider{
 		Name:        metricsServerName,
 		Constructor: NewMetricsServerAddon,
 	}
 }
 
-func NewMetricsServerAddon(cluster string, cfg *rest.Config) AddonIface {
+func NewMetricsServerAddon(cluster string, cfg *rest.Config) AddonWorkflow {
 	return MetricsServerAddon{
-		Addon: Addon{
+		baseAddon: Addon{
 			Cluster:   cluster,
 			Name:      metricsServerName,
 			Namespace: metricsServerNamespace,
@@ -43,11 +45,15 @@ func NewMetricsServerAddon(cluster string, cfg *rest.Config) AddonIface {
 	}
 }
 
-func (m MetricsServerAddon) Setup(ctx context.Context, eksClient *eks.Client, k8s kubernetes.Interface, logger logr.Logger) error {
-	return nil
-}
+func (m MetricsServerAddon) Create(ctx context.Context, eksClient *eks.Client, k8s kubernetes.Interface, logger logr.Logger) error {
+	if err := m.baseAddon.CreateAddon(ctx, eksClient, k8s, logger); err != nil {
+		return err
+	}
 
-func (m MetricsServerAddon) PostInstall(ctx context.Context, eksClient *eks.Client, k8s kubernetes.Interface, logger logr.Logger) error {
+	if err := kube.WaitForDeploymentReady(ctx, logger, k8s, m.baseAddon.Namespace, m.baseAddon.Name); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -57,24 +63,35 @@ func (m MetricsServerAddon) Validate(ctx context.Context, eksClient *eks.Client,
 		return fmt.Errorf("creating metrics client: %v", err)
 	}
 
-	nodes, err := k8s.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return fmt.Errorf("getting nodes: %v", err)
-	}
-
-	fmt.Printf("Found %d nodes\n", len(nodes.Items))
-
-	for _, node := range nodes.Items {
-		if err := getNodeMetrics(ctx, metricsClient, node, logger); err != nil {
-			return err
-		}
+	if err := getNodeMetrics(ctx, metricsClient, logger); err != nil {
+		return err
 	}
 
 	// pod metrics across all namespaces
 	return getPodMetrics(ctx, metricsClient, logger)
 }
 
-func getNodeMetrics(ctx context.Context, metricsClient *metricsv1beta1.Clientset, node v1.Node, logger logr.Logger) error {
+func (m MetricsServerAddon) CollectLogs(ctx context.Context, eksClient *eks.Client, k8s kubernetes.Interface, logger logr.Logger) error {
+	AddonListOptions := getAddonListOptions(m.GetName())
+	pods, err := k8s.CoreV1().Pods(m.GetNamespace()).List(ctx, AddonListOptions)
+	if err != nil {
+		return fmt.Errorf("getting pods for metrics-server: %v", err)
+	}
+
+	for _, pod := range pods.Items {
+		logOpts := getPodLogOptions(m.GetName(), aws.Int64(tailLines))
+		logs, err := kube.GetPodLogsWithRetries(ctx, k8s, pod.Name, pod.Namespace, logOpts)
+		if err != nil {
+			return err
+		}
+
+		logger.Info("Logs for pod\n\n", pod.Name, fmt.Sprintf("%s\n\n", logs))
+	}
+
+	return nil
+}
+
+func getNodeMetrics(ctx context.Context, metricsClient *metricsv1beta1.Clientset, logger logr.Logger) error {
 	consecutiveErrors := 0
 
 	// Add initial check for metrics-server availability
@@ -84,34 +101,26 @@ func getNodeMetrics(ctx context.Context, metricsClient *metricsv1beta1.Clientset
 		return err
 	}
 
-	err = wait.PollUntilContextTimeout(ctx, addonDelayInterval, addonWaitTimeout, true, func(ctx context.Context) (done bool, err error) {
-		nodeMetrics, err := metricsClient.MetricsV1beta1().NodeMetricses().Get(ctx, node.Name, metav1.GetOptions{})
+	err = wait.ExponentialBackoffWithContext(ctx, retryBackoff, func(ctx context.Context) (bool, error) {
+		allNodeMetrics, err := metricsClient.MetricsV1beta1().NodeMetricses().List(ctx, metav1.ListOptions{})
 		if err != nil {
 			if errors.IsServiceUnavailable(err) {
 				logger.Info("Metrics server is temporarily unavailable", "error", err)
 				consecutiveErrors++
-				if consecutiveErrors > 3 {
-					return false, fmt.Errorf("metrics server repeatedly unavailable for node %s: %v", node.Name, err)
+				if consecutiveErrors > addonMaxRetries {
+					return false, fmt.Errorf("metrics server repeatedly unavailable: %v", err)
 				}
 				return false, nil
 			}
 
-			if errors.IsNotFound(err) {
-				logger.Info("Metrics not yet available for node", "node", node.Name)
-				consecutiveErrors++
-				if consecutiveErrors > 3 {
-					return false, fmt.Errorf("metrics not found for node %s after multiple attempts: %v", node.Name, err)
-				}
-				return false, nil
-			}
-
-			return false, fmt.Errorf("unexpected error getting metrics for node %s: %v", node.Name, err)
+			return false, fmt.Errorf("unexpected error getting metrics: %v", err)
 		}
-
-		logger.Info("Retrieved metrics for node",
-			"node", node.Name,
-			"cpu", nodeMetrics.Usage.Cpu().String(),
-			"memory", nodeMetrics.Usage.Memory().String())
+		for _, metrics := range allNodeMetrics.Items {
+			logger.Info("Found metrics for node", "node", metrics.Name,
+				"cpu", metrics.Usage.Cpu().String(),
+				"memory", metrics.Usage.Memory().String(),
+			)
+		}
 
 		return true, nil
 	})
@@ -122,26 +131,26 @@ func getNodeMetrics(ctx context.Context, metricsClient *metricsv1beta1.Clientset
 func getPodMetrics(ctx context.Context, metricsClient *metricsv1beta1.Clientset, logger logr.Logger) error {
 	consecutiveErrors := 0
 
-	err := wait.PollUntilContextTimeout(ctx, addonDelayInterval, addonWaitTimeout, true, func(ctx context.Context) (done bool, err error) {
+	err := wait.ExponentialBackoffWithContext(ctx, retryBackoff, func(ctx context.Context) (bool, error) {
 		pods, err := metricsClient.MetricsV1beta1().PodMetricses("").List(ctx, metav1.ListOptions{})
 		if err != nil {
 			consecutiveErrors += 1
-			if consecutiveErrors > 3 {
+			if consecutiveErrors > addonMaxRetries {
 				return false, fmt.Errorf("getting pod metrics: %v", err)
 			}
 			logger.Info("Retryable error getting pod metrics. Continuing to poll", "error", err)
 			return false, nil // continue polling
 		}
 
-		logger.Info("\nFound metrics for %d pods\n", len(pods.Items))
+		logger.Info(fmt.Sprintf("Found metrics for %d pods", len(pods.Items)))
 		return true, nil
 	})
 
 	return err
 }
 
-func (m MetricsServerAddon) Cleanup(ctx context.Context, eksClient *eks.Client, k8s kubernetes.Interface, logger logr.Logger) error {
-	return m.Delete(ctx, eksClient, logger)
+func (m MetricsServerAddon) Delete(ctx context.Context, eksClient *eks.Client, k8s kubernetes.Interface, logger logr.Logger) error {
+	return m.baseAddon.Delete(ctx, eksClient, logger)
 }
 
 func (m MetricsServerAddon) GetName() string {
@@ -150,8 +159,4 @@ func (m MetricsServerAddon) GetName() string {
 
 func (m MetricsServerAddon) GetNamespace() string {
 	return metricsServerNamespace
-}
-
-func (m MetricsServerAddon) GetContainerName() string {
-	return metricsServerName
 }

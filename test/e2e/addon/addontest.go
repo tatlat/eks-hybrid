@@ -2,98 +2,76 @@ package addon
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/eks"
-	"github.com/aws/aws-sdk-go/aws"
 	"github.com/go-logr/logr"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-
-	kube "github.com/aws/eks-hybrid/test/e2e/kubernetes"
 )
 
 const (
-	tailLines          = 10
-	addonDelayInterval = 30 * time.Second
-	addonWaitTimeout   = 2 * time.Minute
+	tailLines       = 10
+	addonMaxRetries = 5
+)
+
+var (
+	retryBackoff = wait.Backoff{
+		Duration: 1 * time.Second,
+		Factor:   2,
+		Jitter:   0.1,
+		Steps:    5,
+		Cap:      30 * time.Second,
+	}
 )
 
 type AddonTest struct {
-	clientConfig *rest.Config
-	k8s          kubernetes.Interface
-	eksClient    *eks.Client
-	logger       logr.Logger
-	addon        AddonIface
+	ClientConfig *rest.Config
+	K8s          kubernetes.Interface
+	EksClient    *eks.Client
+	Logger       logr.Logger
+	Workflow     AddonWorkflow
 }
 
-type Provider struct {
+type WorkflowProvider struct {
 	Name        string
-	Constructor Constructor
+	Constructor WorkflowConstructor
 }
 
-type Constructor func(cluster string, cfg *rest.Config) AddonIface
+// WorkflowConstructor is a function that returns an AddonWorkflow.
+type WorkflowConstructor func(cluster string, cfg *rest.Config) AddonWorkflow
 
-type AddonIface interface {
-	Setup(ctx context.Context, eksClient *eks.Client, k8s kubernetes.Interface, logger logr.Logger) error
-	CreateAddon(ctx context.Context, eksClient *eks.Client, k8s kubernetes.Interface, logger logr.Logger) error
-	PostInstall(ctx context.Context, eksClient *eks.Client, k8s kubernetes.Interface, logger logr.Logger) error
+// AddonWorkflow defines the workflows that happen during an addon test.
+type AddonWorkflow interface {
+	// Create installs the addon along with other resources and waits for it to become ready.
+	Create(ctx context.Context, eksClient *eks.Client, k8s kubernetes.Interface, logger logr.Logger) error
+	// Validate checks if the addon functions.
 	Validate(ctx context.Context, eksClient *eks.Client, k8s kubernetes.Interface, logger logr.Logger) error
-	Cleanup(ctx context.Context, eksClient *eks.Client, k8s kubernetes.Interface, logger logr.Logger) error
+	// Delete removes any resources that were created by this workflow.
+	Delete(ctx context.Context, eksClient *eks.Client, k8s kubernetes.Interface, logger logr.Logger) error
+	// CollectLogs retrieves key logs from the addon's pods and writes them to the logger for debugging.
+	CollectLogs(ctx context.Context, eksClient *eks.Client, k8s kubernetes.Interface, logger logr.Logger) error
+	// GetName returns the name of the addon.
 	GetName() string
+	// GetNamespace returns the namespace of the addon.
 	GetNamespace() string
-	GetContainerName() string
-}
-
-func NewAddonTest(clientConfig *rest.Config, k8s kubernetes.Interface, eksClient *eks.Client, logger logr.Logger, addon AddonIface) AddonTest {
-	return AddonTest{
-		clientConfig: clientConfig,
-		k8s:          k8s,
-		eksClient:    eksClient,
-		logger:       logger,
-		addon:        addon,
-	}
-}
-
-func (a *AddonTest) Cleanup(ctx context.Context) error {
-	return a.addon.Cleanup(ctx, a.eksClient, a.k8s, a.logger)
 }
 
 func (a *AddonTest) CollectLogs(ctx context.Context) error {
-	addonListOptions := getAddonListOptions(a.addon.GetName())
-	pods, err := a.k8s.CoreV1().Pods(a.addon.GetNamespace()).List(ctx, addonListOptions)
-	if err != nil {
-		return fmt.Errorf("getting pods for addon: %v", err)
-	}
+	return a.Workflow.CollectLogs(ctx, a.EksClient, a.K8s, a.Logger)
+}
 
-	for _, pod := range pods.Items {
-		logOpts := getPodLogOptions(a.addon.GetContainerName(), aws.Int64(tailLines))
-		logs, err := kube.GetPodLogsWithRetries(ctx, a.k8s, pod.Name, pod.Namespace, logOpts)
-		if err != nil {
-			return err
-		}
-
-		a.logger.Info("Logs for pod %s:\n%s\n", pod.Name, logs)
-	}
-
-	return nil
+func (a *AddonTest) Cleanup(ctx context.Context) error {
+	return a.Workflow.Delete(ctx, a.EksClient, a.K8s, a.Logger)
 }
 
 func (a *AddonTest) Run(ctx context.Context) error {
-	if err := a.addon.Setup(ctx, a.eksClient, a.k8s, a.logger); err != nil {
+	if err := a.Workflow.Create(ctx, a.EksClient, a.K8s, a.Logger); err != nil {
 		return err
 	}
 
-	if err := a.addon.CreateAddon(ctx, a.eksClient, a.k8s, a.logger); err != nil {
-		return err
-	}
-
-	if err := a.addon.PostInstall(ctx, a.eksClient, a.k8s, a.logger); err != nil {
-		return err
-	}
-
-	if err := a.addon.Validate(ctx, a.eksClient, a.k8s, a.logger); err != nil {
+	if err := a.Workflow.Validate(ctx, a.EksClient, a.K8s, a.Logger); err != nil {
 		return err
 	}
 

@@ -283,6 +283,16 @@ func (t *PeeredVPCTest) NewTestNode(ctx context.Context, instanceName, nodeName,
 	}
 }
 
+func (t *PeeredVPCTest) NewTestAddon(a addon.AddonWorkflow) *addon.AddonTest {
+	return &addon.AddonTest{
+		ClientConfig: t.K8sClientConfig,
+		K8s:          t.k8sClient,
+		EksClient:    t.EksClient,
+		Logger:       t.Logger,
+		Workflow:     a,
+	}
+}
+
 // handleFailure is a wrapper around ginkgo.Fail that logs the error message
 // immediately after it happens. It doesn't modify gomega's or ginkgo's regular
 // behavior.

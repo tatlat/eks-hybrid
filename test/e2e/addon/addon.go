@@ -13,7 +13,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/aws/eks-hybrid/test/e2e/errors"
-	kube "github.com/aws/eks-hybrid/test/e2e/kubernetes"
 )
 
 type Addon struct {
@@ -98,11 +97,6 @@ func (a Addon) CreateAddon(ctx context.Context, eksClient *eks.Client, k8s kuber
 		return err
 	}
 
-	addonListOptions := getAddonListOptions(a.Name)
-	if err := kube.WaitForPodsToBeRunning(ctx, k8s, addonListOptions, a.Namespace, logger); err != nil {
-		return err
-	}
-
 	return nil
 }
 
@@ -132,6 +126,6 @@ func getPodLogOptions(containerName string, lines *int64) *corev1.PodLogOptions 
 
 func getAddonListOptions(addonName string) v1.ListOptions {
 	return v1.ListOptions{
-		LabelSelector: fmt.Sprintf("%s=%s", "app.kubernetes.io/name", addonName),
+		LabelSelector: fmt.Sprintf("%s=%s", "app.kubernetes.io/instance", addonName),
 	}
 }

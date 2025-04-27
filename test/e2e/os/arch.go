@@ -29,10 +29,14 @@ var instanceSizeToType = map[architecture]map[e2e.InstanceSize]string{
 	amd64: {
 		e2e.XLarge: "t3.xlarge",
 		e2e.Large:  "t3.large",
+		e2e.Medium: "t3.medium",
+		e2e.Small:  "t3.small",
 	},
 	arm64: {
 		e2e.XLarge: "t4g.xlarge",
 		e2e.Large:  "t4g.large",
+		e2e.Medium: "t4g.medium",
+		e2e.Small:  "t4g.small",
 	},
 }
 

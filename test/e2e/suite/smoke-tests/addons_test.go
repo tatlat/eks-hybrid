@@ -22,9 +22,10 @@ var (
 )
 
 // Add new addons to test here
-func AddonList() []addon.Provider {
-	return []addon.Provider{
-		addon.MetricsServerProvider(),
+func AddonList() []addon.WorkflowProvider {
+	return []addon.WorkflowProvider{
+		addon.MetricsServerWorkflow(),
+		addon.NodeMonitoringAgentWorkflow(),
 	}
 }
 
@@ -47,7 +48,7 @@ var _ = SynchronizedBeforeSuite(
 		osList := suite.OSProviderList(credentialProviders)
 
 		// pick 3 random OS/Version/Provider combinations for addonTest tests worker nodes
-		nodesToCreate := []suite.NodeCreate{}
+		nodesToCreate := make([]suite.NodeCreate, 0, numberOfNodes)
 
 		rand.Shuffle(len(osList), func(i, j int) {
 			osList[i], osList[j] = osList[j], osList[i]
@@ -60,7 +61,7 @@ var _ = SynchronizedBeforeSuite(
 				OS:           os,
 				Provider:     provider,
 				InstanceName: test.InstanceName("addon-smoke-test", os, provider),
-				InstanceSize: e2e.XLarge,
+				InstanceSize: e2e.Medium,
 				NodeName:     fmt.Sprintf("addon-test-node-%s-%s", provider.Name(), os.Name()),
 			})
 		}
@@ -94,17 +95,17 @@ var _ = Describe("Hybrid Nodes", func() {
 				entry := Entry(
 					addon.Name,
 					addon.Constructor,
-					Label(addon.Name, "smoke test"),
+					Label(addon.Name, "addon"),
 				)
 				addonEntries = append(addonEntries, entry)
 			}
 
 			DescribeTable("runs addon tests",
-				func(ctx context.Context, NewAddon addon.Constructor) {
+				func(ctx context.Context, NewAddon addon.WorkflowConstructor) {
 					testAddon := NewAddon(suiteConfig.TestConfig.ClusterName, test.K8sClientConfig)
 					test.Logger.Info("Running addon test for " + testAddon.GetName())
 
-					addonTest := addon.NewAddonTest(test.K8sClientConfig, test.K8sClient, test.EksClient, test.Logger, testAddon)
+					addonTest := test.NewTestAddon(testAddon)
 					DeferCleanup(func(ctx context.Context) {
 						Expect(addonTest.CollectLogs(ctx)).To(Succeed(), "should collect addon logs successfully")
 
