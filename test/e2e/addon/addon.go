@@ -7,10 +7,13 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/service/eks"
 	"github.com/aws/aws-sdk-go-v2/service/eks/types"
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/eks-hybrid/test/e2e/kubernetes"
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
+	"k8s.io/apimachinery/pkg/util/wait"
+	clientgo "k8s.io/client-go/kubernetes"
 
 	"github.com/aws/eks-hybrid/test/e2e/errors"
 )
@@ -23,7 +26,19 @@ type Addon struct {
 }
 
 const (
-	backoff = 10 * time.Second
+	backoff         = 10 * time.Second
+	tailLines       = 10
+	addonMaxRetries = 5
+)
+
+var (
+	retryBackoff = wait.Backoff{
+		Duration: 1 * time.Second,
+		Factor:   2,
+		Jitter:   0.1,
+		Steps:    5,
+		Cap:      30 * time.Second,
+	}
 )
 
 func (a Addon) Create(ctx context.Context, client *eks.Client, logger logr.Logger) error {
@@ -88,7 +103,7 @@ func (a Addon) WaitUntilActive(ctx context.Context, client *eks.Client, logger l
 	}
 }
 
-func (a Addon) CreateAddon(ctx context.Context, eksClient *eks.Client, k8s kubernetes.Interface, logger logr.Logger) error {
+func (a Addon) CreateAddon(ctx context.Context, eksClient *eks.Client, k8s clientgo.Interface, logger logr.Logger) error {
 	if err := a.Create(ctx, eksClient, logger); err != nil {
 		return err
 	}
@@ -115,6 +130,39 @@ func (a Addon) Delete(ctx context.Context, client *eks.Client, logger logr.Logge
 		return nil
 	}
 	return err
+}
+
+func (a Addon) FetchLogs(ctx context.Context, k8s clientgo.Interface, logger logr.Logger, containers []string, tailLines int64) error {
+	var pods *corev1.PodList
+	AddonListOptions := getAddonListOptions(a.Name)
+	err := wait.ExponentialBackoffWithContext(ctx, retryBackoff, func(ctx context.Context) (bool, error) {
+		var err error
+		pods, err = k8s.CoreV1().Pods(a.Namespace).List(ctx, AddonListOptions)
+		if err != nil {
+			// Log error and return false to retry
+			logger.Error(err, "Failed to list pods", "namespace", a.Namespace, "addon", a.Name)
+			return false, nil
+		}
+		return true, nil
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to get pods for %s after retries: %v", a.Name, err)
+	}
+
+	for _, pod := range pods.Items {
+		for _, container := range containers {
+			logOpts := getPodLogOptions(container, aws.Int64(tailLines))
+			logs, err := kubernetes.GetPodLogsWithRetries(ctx, k8s, pod.Name, pod.Namespace, logOpts)
+			if err != nil {
+				return err
+			}
+
+			logger.Info("Logs for:\n\n", "pod", pod.Name, "container", container, "msg", fmt.Sprintf("%s\n\n", logs))
+		}
+	}
+
+	return nil
 }
 
 func getPodLogOptions(containerName string, lines *int64) *corev1.PodLogOptions {

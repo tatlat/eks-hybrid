@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/aws/aws-sdk-go-v2/service/eks"
-	"github.com/aws/aws-sdk-go/aws"
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -76,23 +75,7 @@ func (m MetricsServerTest) Validate(ctx context.Context) error {
 }
 
 func (m MetricsServerTest) CollectLogs(ctx context.Context) error {
-	AddonListOptions := getAddonListOptions(m.GetName())
-	pods, err := m.K8S.CoreV1().Pods(m.GetNamespace()).List(ctx, AddonListOptions)
-	if err != nil {
-		return fmt.Errorf("getting pods for metrics-server: %v", err)
-	}
-
-	for _, pod := range pods.Items {
-		logOpts := getPodLogOptions(m.GetName(), aws.Int64(tailLines))
-		logs, err := kubernetes.GetPodLogsWithRetries(ctx, m.K8S, pod.Name, pod.Namespace, logOpts)
-		if err != nil {
-			return err
-		}
-
-		m.Logger.Info("Logs for pod\n\n", pod.Name, fmt.Sprintf("%s\n\n", logs))
-	}
-
-	return nil
+	return m.addon.FetchLogs(ctx, m.K8S, m.Logger, []string{metricsServerName}, tailLines)
 }
 
 func getNodeMetrics(ctx context.Context, metricsClient *metricsv1beta1.Clientset, logger logr.Logger) error {
@@ -155,12 +138,4 @@ func getPodMetrics(ctx context.Context, metricsClient *metricsv1beta1.Clientset,
 
 func (m MetricsServerTest) Delete(ctx context.Context) error {
 	return m.addon.Delete(ctx, m.EKSClient, m.Logger)
-}
-
-func (m MetricsServerTest) GetName() string {
-	return metricsServerName
-}
-
-func (m MetricsServerTest) GetNamespace() string {
-	return metricsServerNamespace
 }

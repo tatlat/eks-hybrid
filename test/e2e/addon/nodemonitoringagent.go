@@ -3,15 +3,16 @@ package addon
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/service/eks"
-	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/eks-hybrid/test/e2e/kubernetes"
 	"github.com/go-logr/logr"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
+	clientgo "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-
-	kube "github.com/aws/eks-hybrid/test/e2e/kubernetes"
 )
 
 const (
@@ -19,85 +20,100 @@ const (
 	nodeMonitoringAgentName      = "metrics-server"
 )
 
-type NodeMonitoringAgentAddon struct {
-	baseAddon Addon
-	cfg       *rest.Config
+type NodeMonitoringAgentTest struct {
+	Cluster   string
+	addon     Addon
+	K8S       clientgo.Interface
+	EKSClient *eks.Client
+	K8SConfig *rest.Config
+	Logger    logr.Logger
 }
 
-func NodeMonitoringAgentWorkflow() WorkflowProvider {
-	return WorkflowProvider{
-		Name:        nodeMonitoringAgentName,
-		Constructor: NewNodeMonitoringAgentAddon,
-	}
-}
-
-func NewNodeMonitoringAgentAddon(cluster string, cfg *rest.Config) AddonWorkflow {
-	return NodeMonitoringAgentAddon{
-		baseAddon: Addon{
-			Cluster:   cluster,
-			Name:      nodeMonitoringAgentName,
-			Namespace: nodeMonitoringAgentNamespace,
-		},
-		cfg: cfg,
-	}
-}
-
-func (m NodeMonitoringAgentAddon) Create(ctx context.Context, eksClient *eks.Client, k8s kubernetes.Interface, logger logr.Logger) error {
-	if err := m.baseAddon.CreateAddon(ctx, eksClient, k8s, logger); err != nil {
+func (n NodeMonitoringAgentTest) Create(ctx context.Context) error {
+	if err := n.addon.CreateAddon(ctx, n.EKSClient, n.K8S, n.Logger); err != nil {
 		return err
 	}
 
-	if err := kube.WaitForDaemonSetReady(ctx, logger, k8s, m.baseAddon.Namespace, m.baseAddon.Name); err != nil {
+	if err := kubernetes.WaitForDaemonSetReady(ctx, n.Logger, n.K8S, n.addon.Namespace, n.addon.Name); err != nil {
+		return err
+	}
+
+	if err := deployKernelError(ctx, n.K8S, n.Logger); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func deployKernelError() error {
+func deployKernelError(ctx context.Context, k8s clientgo.Interface, logger logr.Logger) error {
 	return nil
 }
 
-func (m NodeMonitoringAgentAddon) Validate(ctx context.Context, eksClient *eks.Client, k8s kubernetes.Interface, logger logr.Logger) error {
-	nodes, err := k8s.CoreV1().Nodes().List(ctx, v1.ListOptions{})
+func (n NodeMonitoringAgentTest) Validate(ctx context.Context) error {
+	var nodes *v1.NodeList
+
+	err := wait.ExponentialBackoffWithContext(ctx, retryBackoff, func(ctx context.Context) (bool, error) {
+		var err error
+		nodes, err = n.K8S.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+		if err != nil {
+			n.Logger.Error(err, "Failed to list nodes")
+			return false, nil // Return false to retry, nil to not stop with error
+		}
+		return true, nil
+	})
+
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to list nodes after retries: %v", err)
 	}
 
 	for _, node := range nodes.Items {
-		node.Name = ""
-	}
-	return nil
-}
+		nodeLogger := n.Logger.WithValues("node", node.Name)
+		fieldSelector := fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=Node", node.Name)
 
-func (m NodeMonitoringAgentAddon) CollectLogs(ctx context.Context, eksClient *eks.Client, k8s kubernetes.Interface, logger logr.Logger) error {
-	AddonListOptions := getAddonListOptions(m.GetName())
-	pods, err := k8s.CoreV1().Pods(m.GetNamespace()).List(ctx, AddonListOptions)
-	if err != nil {
-		return fmt.Errorf("getting pods for node monitoring agent: %v", err)
-	}
+		var events *v1.EventList
+		err := wait.ExponentialBackoffWithContext(ctx, retryBackoff, func(ctx context.Context) (bool, error) {
+			var err error
+			events, err = n.K8S.CoreV1().Events("").List(ctx, metav1.ListOptions{
+				FieldSelector: fieldSelector,
+			})
+			if err != nil {
+				nodeLogger.Error(err, "Failed to get events")
+				return false, nil
+			}
+			return true, nil
+		})
 
-	for _, pod := range pods.Items {
-		logOpts := getPodLogOptions(m.GetName(), aws.Int64(tailLines))
-		logs, err := kube.GetPodLogsWithRetries(ctx, k8s, pod.Name, pod.Namespace, logOpts)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to get events for node %s after retries: %v", node.Name, err)
 		}
 
-		logger.Info("Logs for pod\n\n", pod.Name, fmt.Sprintf("%s\n\n", logs))
+		foundMonitoringEvents := false
+		for _, event := range events.Items {
+			if isMonitoringAgentEvent(event) {
+				foundMonitoringEvents = true
+				nodeLogger.Info("Found monitoring agent event",
+					"message", event.Message,
+					"reason", event.Reason,
+					"count", event.Count)
+			}
+		}
+
+		if !foundMonitoringEvents {
+			nodeLogger.Info("No monitoring agent events found")
+		}
 	}
 
 	return nil
 }
 
-func (m NodeMonitoringAgentAddon) Delete(ctx context.Context, eksClient *eks.Client, k8s kubernetes.Interface, logger logr.Logger) error {
-	return m.baseAddon.Delete(ctx, eksClient, logger)
+func isMonitoringAgentEvent(event v1.Event) bool {
+	return strings.Contains(strings.ToLower(event.Source.Component), nodeMonitoringAgentName)
 }
 
-func (m NodeMonitoringAgentAddon) GetName() string {
-	return nodeMonitoringAgentName
+func (n NodeMonitoringAgentTest) CollectLogs(ctx context.Context) error {
+	return n.addon.FetchLogs(ctx, n.K8S, n.Logger, []string{nodeMonitoringAgentName}, 10)
 }
 
-func (m NodeMonitoringAgentAddon) GetNamespace() string {
-	return nodeMonitoringAgentNamespace
+func (n NodeMonitoringAgentTest) Delete(ctx context.Context) error {
+	return n.addon.Delete(ctx, n.EKSClient, n.Logger)
 }
