@@ -1,4 +1,4 @@
-package smoke_tests
+package addons
 
 import (
 	"context"
@@ -8,11 +8,11 @@ import (
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
+	"github.com/onsi/ginkgo/v2/types"
 	. "github.com/onsi/gomega"
 	"gopkg.in/yaml.v2"
 
 	"github.com/aws/eks-hybrid/test/e2e"
-	"github.com/aws/eks-hybrid/test/e2e/addon"
 	"github.com/aws/eks-hybrid/test/e2e/suite"
 )
 
@@ -20,14 +20,6 @@ var (
 	filePath    string
 	suiteConfig *suite.SuiteConfiguration
 )
-
-// Add new addons to test here
-func AddonList() []addon.WorkflowProvider {
-	return []addon.WorkflowProvider{
-		addon.MetricsServerWorkflow(),
-		addon.NodeMonitoringAgentWorkflow(),
-	}
-}
 
 const numberOfNodes = 1
 
@@ -47,7 +39,7 @@ var _ = SynchronizedBeforeSuite(
 		credentialProviders := suite.AddClientsToCredentialProviders(suite.CredentialProviders(), test)
 		osList := suite.OSProviderList(credentialProviders)
 
-		// pick 3 random OS/Version/Provider combinations for addonTest tests worker nodes
+		// pick 3 random OS/Version/Provider combinations for metricsServer tests worker nodes
 		nodesToCreate := make([]suite.NodeCreate, 0, numberOfNodes)
 
 		rand.Shuffle(len(osList), func(i, j int) {
@@ -61,7 +53,7 @@ var _ = SynchronizedBeforeSuite(
 				OS:           os,
 				Provider:     provider,
 				InstanceName: test.InstanceName("addon-smoke-test", os, provider),
-				InstanceSize: e2e.Medium,
+				InstanceSize: e2e.Small,
 				NodeName:     fmt.Sprintf("addon-test-node-%s-%s", provider.Name(), os.Name()),
 			})
 		}
@@ -90,34 +82,24 @@ var _ = Describe("Hybrid Nodes", func() {
 		})
 
 		When("using ec2 instance as hybrid nodes", func() {
-			addonEntries := []TableEntry{}
-			for _, addon := range AddonList() {
-				entry := Entry(
-					addon.Name,
-					addon.Constructor,
-					Label(addon.Name, "addon"),
+			It("runs metrics server tests", func(ctx context.Context) {
+				metricsServer := test.NewMetricsServerTest()
+				test.Logger.Info("Running test for metrics server")
+
+				DeferCleanup(func(ctx context.Context) {
+					Expect(metricsServer.Delete(ctx)).To(Succeed(), "should cleanup metrics server successfully")
+				})
+
+				ReportAfterEach(func(report SpecReport) {
+					if report.State == types.SpecStateFailed {
+						Expect(metricsServer.CollectLogs(ctx)).To(Succeed(), "should collect metrics server logs successfully")
+					}
+				})
+
+				Expect(metricsServer.Run(ctx)).To(
+					Succeed(), "metrics server test should have run successfully",
 				)
-				addonEntries = append(addonEntries, entry)
-			}
-
-			DescribeTable("runs addon tests",
-				func(ctx context.Context, NewAddon addon.WorkflowConstructor) {
-					testAddon := NewAddon(suiteConfig.TestConfig.ClusterName, test.K8sClientConfig)
-					test.Logger.Info("Running addon test for " + testAddon.GetName())
-
-					addonTest := test.NewTestAddon(testAddon)
-					DeferCleanup(func(ctx context.Context) {
-						Expect(addonTest.CollectLogs(ctx)).To(Succeed(), "should collect addon logs successfully")
-
-						Expect(addonTest.Cleanup(ctx)).To(Succeed(), "should cleanup addon successfully")
-					})
-
-					Expect(addonTest.Run(ctx)).To(
-						Succeed(), "addon test should have run successfully",
-					)
-				},
-				addonEntries,
-			)
+			}, Label("metrics-server"))
 		})
 	})
 })

@@ -283,13 +283,13 @@ func (t *PeeredVPCTest) NewTestNode(ctx context.Context, instanceName, nodeName,
 	}
 }
 
-func (t *PeeredVPCTest) NewTestAddon(a addon.AddonWorkflow) *addon.AddonTest {
-	return &addon.AddonTest{
-		ClientConfig: t.K8sClientConfig,
-		K8s:          t.k8sClient,
-		EksClient:    t.EksClient,
-		Logger:       t.Logger,
-		Workflow:     a,
+func (t *PeeredVPCTest) NewMetricsServerTest() *addon.MetricsServerTest {
+	return &addon.MetricsServerTest{
+		Cluster:   t.Cluster.Name,
+		K8S:       t.k8sClient,
+		EKSClient: t.EksClient,
+		K8SConfig: t.K8sClientConfig,
+		Logger:    t.Logger,
 	}
 }
 
