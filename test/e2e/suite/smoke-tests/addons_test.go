@@ -87,13 +87,18 @@ var _ = Describe("Hybrid Nodes", func() {
 				test.Logger.Info("Running test for metrics server")
 
 				DeferCleanup(func(ctx context.Context) {
+					report := CurrentSpecReport()
+					if report.State.Is(types.SpecStateFailed) {
+						err := metricsServer.CollectLogs(ctx)
+						if err != nil {
+							// continue cleanup even if logs collection fails
+							GinkgoWriter.Printf("Failed to collect metrics server logs: %v\n", err)
+						}
+					}
 					Expect(metricsServer.Delete(ctx)).To(Succeed(), "should cleanup metrics server successfully")
 				})
 
 				ReportAfterEach(func(report SpecReport) {
-					if report.State == types.SpecStateFailed {
-						Expect(metricsServer.CollectLogs(ctx)).To(Succeed(), "should collect metrics server logs successfully")
-					}
 				})
 
 				Expect(metricsServer.Run(ctx)).To(
