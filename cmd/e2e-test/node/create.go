@@ -34,7 +34,6 @@ type create struct {
 	credsProvider string
 	os            string
 	arch          string
-	waitForReady  bool
 }
 
 func NewCreateCommand() cli.Command {
@@ -51,7 +50,6 @@ func NewCreateCommand() cli.Command {
 	createCmd.String(&cmd.credsProvider, "c", "creds-provider", "Credentials provider to use (iam-ra, ssm).")
 	createCmd.String(&cmd.os, "o", "os", "OS to use (al23, ubuntu2004, ubuntu2204, ubuntu2404, rhel8, rhel9).")
 	createCmd.String(&cmd.arch, "a", "arch", "Architecture to use (amd64, arm64).")
-	createCmd.Bool(&cmd.waitForReady, "w", "wait-for-ready", "Wait for the node to be ready.")
 	createCmd.String(&cmd.instanceSize, "s", "instance-size", "Instance size to use (Large, XLarge).")
 
 	cmd.flaggy = createCmd
@@ -162,39 +160,37 @@ func (c *create) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 
 	logger.Info("Node created", "instanceID", peerdNode.Instance.ID)
 
-	if c.waitForReady {
-		logger.Info("Connecting to the node serial console...")
-		serial, err := node.SerialConsole(ctx, peerdNode.Instance.ID)
-		if err != nil {
-			return fmt.Errorf("preparing EC2 for serial connection: %w", err)
-		}
-		defer serial.Close()
-
-		pausableOutput := e2e.NewSwitchWriter(os.Stdout)
-		pausableOutput.Pause()
-		if err := serial.Copy(pausableOutput); err != nil {
-			return fmt.Errorf("connecting to EC2 serial console: %w", err)
-		}
-
-		logger.Info("Waiting for the node to initialize...")
-		if err := pausableOutput.Resume(); err != nil {
-			return fmt.Errorf("resuming output: %w", err)
-		}
-
-		verify := kubernetes.VerifyNode{
-			K8s:      k8s,
-			Logger:   logr.Discard(),
-			NodeName: peerdNode.Name,
-			NodeIP:   peerdNode.Instance.IP,
-		}
-		node, err := verify.WaitForNodeReady(ctx)
-		if err != nil {
-			return fmt.Errorf("waiting for node to be ready: %w", err)
-		}
-		pausableOutput.Pause()
-		fmt.Println() // newline after pausing the serial output to ensure a clean log after
-		logger.Info("Node is ready", "nodeName", node.Name)
+	logger.Info("Connecting to the node serial console...")
+	serial, err := node.SerialConsole(ctx, peerdNode.Instance.ID)
+	if err != nil {
+		return fmt.Errorf("preparing EC2 for serial connection: %w", err)
 	}
+	defer serial.Close()
+
+	pausableOutput := e2e.NewSwitchWriter(os.Stdout)
+	pausableOutput.Pause()
+	if err := serial.Copy(pausableOutput); err != nil {
+		return fmt.Errorf("connecting to EC2 serial console: %w", err)
+	}
+
+	logger.Info("Waiting for the node to initialize...")
+	if err := pausableOutput.Resume(); err != nil {
+		return fmt.Errorf("resuming output: %w", err)
+	}
+
+	verifyNode := kubernetes.VerifyNode{
+		K8s:      k8s,
+		Logger:   logr.Discard(),
+		NodeName: peerdNode.Name,
+		NodeIP:   peerdNode.Instance.IP,
+	}
+	vn, err := verifyNode.WaitForNodeReady(ctx)
+	if err != nil {
+		return fmt.Errorf("waiting for node to be ready: %w", err)
+	}
+	pausableOutput.Pause()
+	fmt.Println() // newline after pausing the serial output to ensure a clean log after
+	logger.Info("Node is ready", "nodeName", vn.Name)
 
 	network := peered.Network{
 		EC2:    ec2Client,
