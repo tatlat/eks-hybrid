@@ -31,6 +31,7 @@ type create struct {
 	configFile    string
 	instanceName  string
 	instanceSize  string
+	instanceType  string
 	credsProvider string
 	os            string
 	arch          string
@@ -51,6 +52,7 @@ func NewCreateCommand() cli.Command {
 	createCmd.String(&cmd.os, "o", "os", "OS to use (al23, ubuntu2004, ubuntu2204, ubuntu2404, rhel8, rhel9).")
 	createCmd.String(&cmd.arch, "a", "arch", "Architecture to use (amd64, arm64).")
 	createCmd.String(&cmd.instanceSize, "s", "instance-size", "Instance size to use (Large, XLarge).")
+	createCmd.String(&cmd.instanceType, "t", "instance-type", "Instance type to use (t3.large, g4dn.xlarge, etc). If provided, instance size would be ignored.")
 
 	cmd.flaggy = createCmd
 
@@ -149,6 +151,7 @@ func (c *create) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	peerdNode, err := node.Create(ctx, &peered.NodeSpec{
 		InstanceName:   c.instanceName,
 		InstanceSize:   instanceSize,
+		InstanceType:   c.instanceType,
 		NodeK8sVersion: cluster.KubernetesVersion,
 		NodeName:       c.instanceName,
 		OS:             nodeOS,
