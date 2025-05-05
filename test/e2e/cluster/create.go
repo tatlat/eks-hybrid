@@ -237,10 +237,9 @@ func SetTestResourcesDefaults(testResources TestResources) TestResources {
 	}
 	if testResources.HybridNetwork == (NetworkConfig{}) {
 		testResources.HybridNetwork = NetworkConfig{
-			VpcCidr:           "10.1.0.0/16",
-			PublicSubnetCidr:  "10.1.1.0/24",
-			PrivateSubnetCidr: "10.1.2.0/24",
-			PodCidr:           "10.2.0.0/16",
+			VpcCidr:          "10.1.0.0/16",
+			PublicSubnetCidr: "10.1.1.0/24",
+			PodCidr:          "10.2.0.0/16",
 		}
 	}
 
