@@ -278,16 +278,6 @@ Resources:
       RouteTableId: !Ref HybridNodeRouteTable
       SubnetId: !Ref HybridNodeVPCPublicSubnet
 
-  HybridNodePrivateRouteTable:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref HybridNodeVPC
-      Tags:
-        - Key: Name
-          Value: !Sub ${ClusterName}-hybrid-private-route-table
-        - Key: !Ref TestClusterTagKey
-          Value: !Ref ClusterName
-
   HybridNodeDefaultSecurityGroupIngress:
     Type: AWS::EC2::SecurityGroupIngress
     Properties:
@@ -445,17 +435,6 @@ Resources:
     DependsOn: HybridNodeVPCAttachment
     Properties:
       RouteTableId: !Ref HybridNodeRouteTable
-      DestinationCidrBlock: !Ref ClusterVPCCidr
-      TransitGatewayId: !Ref ClusterToHybridTGW
-
-  HybridNodePrivateRouteToCluster:
-    Type: AWS::EC2::Route
-    # This explicit dep is needed to ensure the TransitGatewayAttachment is created before the route is created
-    # CFN can't infer this because the route links to the TGW instead of the attachment, so it doesn't know the attachment is a dependency
-    # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-attribute-dependson.html#gatewayattachment
-    DependsOn: HybridNodeVPCAttachment
-    Properties:
-      RouteTableId: !Ref HybridNodePrivateRouteTable
       DestinationCidrBlock: !Ref ClusterVPCCidr
       TransitGatewayId: !Ref ClusterToHybridTGW
 
