@@ -34,10 +34,6 @@ Parameters:
     Type: String
     Description: EKS Hybrid Nodes public subnet VPC CIDR block
 
-  HybridNodePrivateSubnetCidr:
-    Type: String
-    Description: EKS Hybrid Nodes public subnet VPC CIDR block
-
   TestClusterTagKey:
     Type: String
     Description: Tag key of all the resources
@@ -238,20 +234,6 @@ Resources:
           Value: !Ref CreationTime
       VpcId: !Ref HybridNodeVPC
 
-  HybridNodeVPCPrivateSubnet:
-    Type: AWS::EC2::Subnet
-    Properties:
-      AvailabilityZone: !Select [1, !GetAZs '']
-      CidrBlock: !Ref HybridNodePrivateSubnetCidr
-      Tags:
-        - Key: Name
-          Value: !Sub ${ClusterName}-hybrid-private-subnet
-        - Key: !Ref TestClusterTagKey
-          Value: !Ref ClusterName
-        - Key: !Ref CreationTimeTagKey
-          Value: !Ref CreationTime
-      VpcId: !Ref HybridNodeVPC
-
   HybridNodePublicSubnetInternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
@@ -305,12 +287,6 @@ Resources:
           Value: !Sub ${ClusterName}-hybrid-private-route-table
         - Key: !Ref TestClusterTagKey
           Value: !Ref ClusterName
-
-  HybridNodePrivateSubnetRouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      RouteTableId: !Ref HybridNodePrivateRouteTable
-      SubnetId: !Ref HybridNodeVPCPrivateSubnet
 
   HybridNodeDefaultSecurityGroupIngress:
     Type: AWS::EC2::SecurityGroupIngress
@@ -377,9 +353,6 @@ Resources:
       TransitGatewayId: !Ref ClusterToHybridTGW
       VpcId: !Ref HybridNodeVPC
       SubnetIds:
-        # These 2 subnets are in different AZs so we need both
-        # Adding a subnet in an AZ gives the TGW the ability to route to all subnets in that AZ
-        - !Ref HybridNodeVPCPrivateSubnet
         - !Ref HybridNodeVPCPublicSubnet
       Tags:
         - Key: Name
