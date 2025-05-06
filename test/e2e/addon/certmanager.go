@@ -2,16 +2,24 @@ package addon
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
 	"fmt"
-	"reflect"
-	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/eks"
 	"github.com/aws/eks-hybrid/test/e2e/kubernetes"
+	certmanagerv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
+	cmmeta "github.com/cert-manager/cert-manager/pkg/apis/meta/v1"
+	certmanagerclientset "github.com/cert-manager/cert-manager/pkg/client/clientset/versioned"
 	"github.com/go-logr/logr"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 	clientgo "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 )
@@ -21,16 +29,24 @@ const (
 	certManagerName           = "cert-manager"
 	certManagerCainjectorName = "cert-manager-cainjector"
 	certManagerWebhookName    = "cert-manager-webhook"
-	certTestNamespace         = "cert-manager-test"
+	certName                  = "my-cert-request"
+	certTestNamespace         = "default"
+	issuerName                = "selfsigned-issuer"
 )
 
+type CertificateData struct {
+	CSR        []byte
+	PrivateKey []byte
+}
+
 type CertManagerTest struct {
-	Cluster   string
-	addon     Addon
-	K8S       clientgo.Interface
-	EKSClient *eks.Client
-	K8SConfig *rest.Config
-	Logger    logr.Logger
+	Cluster    string
+	addon      Addon
+	K8S        clientgo.Interface
+	EKSClient  *eks.Client
+	K8SConfig  *rest.Config
+	Logger     logr.Logger
+	CertClient certmanagerclientset.Interface
 }
 
 func (c CertManagerTest) Run(ctx context.Context) error {
@@ -78,164 +94,27 @@ func (c CertManagerTest) Create(ctx context.Context) error {
 func (c CertManagerTest) Validate(ctx context.Context) error {
 	c.Logger.Info("Starting cert-manager validation")
 
-	// Create a test namespace for certificate testing
-	if _, err := c.K8S.CoreV1().Namespaces().Create(ctx, &v1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: certTestNamespace,
-		},
-	}, metav1.CreateOptions{}); err != nil {
-		return fmt.Errorf("failed to create cert-manager test namespace: %v", err)
+	// Step 1: Create self-signed issuer with retries
+	if err := createSelfSignedIssuer(ctx, c.Logger, c.CertClient); err != nil {
+		return fmt.Errorf("failed to create self-signed issuer: %v", err)
 	}
 
-	// 1. Create a self-signed ClusterIssuer resource
-	// Note: Since we're using the standard K8s client without cert-manager CRDs,
-	// we'll apply this via kubectl-style unstructured objects
-
-	// Create RBAC resources first to ensure cert-manager can access the resources it needs
-	if err := c.ensureCertManagerRBAC(ctx); err != nil {
-		c.Logger.Error(err, "Failed to ensure cert-manager RBAC")
-		// Continue with testing
-	}
-
-	// Create a self-signed issuer
-	if err := c.createSelfSignedIssuer(ctx); err != nil {
-		c.Logger.Error(err, "Failed to create self-signed issuer")
-		// Continue with testing
-	}
-
-	// Create a certificate request
-	if err := c.createTestCertificate(ctx); err != nil {
-		c.Logger.Error(err, "Failed to create test certificate")
-		// Continue with testing
-	}
-
-	// Wait for the certificate to be issued
-	time.Sleep(20 * time.Second)
-
-	// Check if the certificate secret was created (indicates success)
-	certificateSecretName := "test-example-com-tls"
-	secret, err := c.K8S.CoreV1().Secrets(certTestNamespace).Get(ctx, certificateSecretName, metav1.GetOptions{})
+	// Step 2: Generate CSR and create certificate request
+	certData, err := generateCSR("example.com", []string{"example.com", "www.example.com"})
 	if err != nil {
-		c.Logger.Info("Certificate secret not found yet, issuing might be in progress", "error", err)
-	} else {
-		c.Logger.Info("Certificate secret created successfully",
-			"name", secret.Name,
-			"keys", reflect.ValueOf(secret.Data).MapKeys())
-
-		// Check if the TLS cert and key are in the secret
-		if _, hasCert := secret.Data["tls.crt"]; hasCert {
-			if _, hasKey := secret.Data["tls.key"]; hasKey {
-				c.Logger.Info("Certificate and private key successfully generated")
-			}
-		}
+		return fmt.Errorf("failed to generate CSR: %v", err)
 	}
 
-	// Check for certificate-related events
-	events, err := c.K8S.CoreV1().Events(certTestNamespace).List(ctx, metav1.ListOptions{})
-	if err != nil {
-		c.Logger.Error(err, "Failed to list events in test namespace")
-	} else {
-		for _, event := range events.Items {
-			if strings.Contains(event.Reason, "cert-manager") ||
-				strings.Contains(event.Source.Component, "cert-manager") {
-				c.Logger.Info("Certificate event",
-					"reason", event.Reason,
-					"message", event.Message,
-					"component", event.Source.Component)
-			}
-		}
+	if err = createCertificateRequest(ctx, c.Logger, c.CertClient, certTestNamespace, certData); err != nil {
+		return fmt.Errorf("failed to create certificate request: %v", err)
+	}
+
+	// Step 3: check certificate secret
+	if err = waitForCertificateSecret(ctx, c.Logger, c.K8S, certTestNamespace, certName, certData); err != nil {
+		return fmt.Errorf("Failed to validate certificate secret: %v", err)
 	}
 
 	c.Logger.Info("Cert-manager validation completed")
-	return nil
-}
-
-func (c CertManagerTest) ensureCertManagerRBAC(ctx context.Context) error {
-	// In a full implementation, we would ensure proper RBAC is set up
-	// This is a simplified version
-	c.Logger.Info("Cert-manager RBAC is assumed to be set up by the operator")
-	return nil
-}
-
-func (c CertManagerTest) createSelfSignedIssuer(ctx context.Context) error {
-	// Apply a self-signed ClusterIssuer
-	// In a real implementation, you would use the cert-manager CRDs directly
-	// Since we don't have those, we'll create a placeholder ConfigMap to document what we would do
-
-	issuerConfig := `
-apiVersion: cert-manager.io/v1
-kind: ClusterIssuer
-metadata:
-  name: selfsigned-issuer
-spec:
-  selfSigned: {}
-`
-
-	configMap := &v1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "cert-manager-selfsigned-issuer-config",
-			Namespace: certTestNamespace,
-			Annotations: map[string]string{
-				"cert-manager-test": "true",
-				"description":       "This ConfigMap contains the ClusterIssuer YAML that would be applied",
-			},
-		},
-		Data: map[string]string{
-			"selfsigned-issuer.yaml": issuerConfig,
-		},
-	}
-
-	_, err := c.K8S.CoreV1().ConfigMaps(certTestNamespace).Create(ctx, configMap, metav1.CreateOptions{})
-	if err != nil && !strings.Contains(err.Error(), "already exists") {
-		return err
-	}
-
-	c.Logger.Info("Created self-signed issuer configuration")
-	return nil
-}
-
-func (c CertManagerTest) createTestCertificate(ctx context.Context) error {
-	// Apply a Certificate resource for testing
-	certificateConfig := `
-apiVersion: cert-manager.io/v1
-kind: Certificate
-metadata:
-  name: test-example-com
-  namespace: cert-manager-test
-spec:
-  secretName: test-example-com-tls
-  issuerRef:
-    name: selfsigned-issuer
-    kind: ClusterIssuer
-  commonName: test.example.com
-  dnsNames:
-  - test.example.com
-  - www.test.example.com
-`
-
-	configMap := &v1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "cert-manager-test-certificate-config",
-			Namespace: certTestNamespace,
-			Annotations: map[string]string{
-				"cert-manager-test": "true",
-				"description":       "This ConfigMap contains the Certificate YAML that would be applied",
-			},
-		},
-		Data: map[string]string{
-			"test-certificate.yaml": certificateConfig,
-		},
-	}
-
-	_, err := c.K8S.CoreV1().ConfigMaps(certTestNamespace).Create(ctx, configMap, metav1.CreateOptions{})
-	if err != nil && !strings.Contains(err.Error(), "already exists") {
-		return err
-	}
-
-	// In addition, we would ideally create a small test pod that mounts this certificate
-	// to validate it's working correctly
-
-	c.Logger.Info("Created test certificate configuration")
 	return nil
 }
 
@@ -252,10 +131,210 @@ func (c CertManagerTest) CollectLogs(ctx context.Context) error {
 }
 
 func (c CertManagerTest) Delete(ctx context.Context) error {
-	// Cleanup test namespace
-	if err := c.K8S.CoreV1().Namespaces().Delete(ctx, certTestNamespace, metav1.DeleteOptions{}); err != nil {
-		c.Logger.Error(err, "Failed to delete test namespace")
+	c.Logger.Info("starting cleanup of all test resources")
+
+	err := wait.ExponentialBackoffWithContext(ctx, retryBackoff, func(ctx context.Context) (bool, error) {
+		err := c.CertClient.CertmanagerV1().CertificateRequests(certTestNamespace).Delete(
+			ctx, certName, metav1.DeleteOptions{})
+		if err != nil && !errors.IsNotFound(err) {
+			c.Logger.Error(err, "failed to delete CertificateRequest, retrying")
+			return false, nil
+		}
+
+		err = c.K8S.CoreV1().Secrets(certTestNamespace).Delete(ctx, certName, metav1.DeleteOptions{})
+		if err != nil && !errors.IsNotFound(err) {
+			c.Logger.Error(err, "failed to delete Secret, retrying", "name", certName)
+			return false, nil
+		}
+
+		err = c.CertClient.CertmanagerV1().ClusterIssuers().Delete(
+			ctx, issuerName, metav1.DeleteOptions{})
+		if err != nil && !errors.IsNotFound(err) {
+			c.Logger.Error(err, "failed to delete ClusterIssuer, retrying", "name", issuerName)
+			return false, nil
+		}
+
+		return true, nil
+	})
+	if err != nil {
+		c.Logger.Error(err, "failed to delete cert-manager k8s resources")
 	}
 
-	return c.addon.Delete(ctx, c.EKSClient, c.Logger)
+	if err := c.addon.Delete(ctx, c.EKSClient, c.Logger); err != nil {
+		return err
+	}
+
+	c.Logger.Info("successfully cleaned up all cert-manager test resources")
+	return nil
+}
+
+func createSelfSignedIssuer(ctx context.Context, logger logr.Logger, certClient certmanagerclientset.Interface) error {
+	return wait.ExponentialBackoffWithContext(ctx, retryBackoff, func(ctx context.Context) (bool, error) {
+		issuer := &certmanagerv1.ClusterIssuer{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: issuerName,
+			},
+			Spec: certmanagerv1.IssuerSpec{
+				IssuerConfig: certmanagerv1.IssuerConfig{
+					SelfSigned: &certmanagerv1.SelfSignedIssuer{},
+				},
+			},
+		}
+
+		_, err := certClient.CertmanagerV1().ClusterIssuers().Create(ctx, issuer, metav1.CreateOptions{})
+		if err != nil && !errors.IsAlreadyExists(err) {
+			logger.Error(err, "failed to create ClusterIssuer, retrying")
+			return false, nil
+		}
+
+		logger.Info("created ClusterIssuer successfully")
+		return true, nil
+	})
+}
+
+func generateCSR(commonName string, dnsNames []string) (*CertificateData, error) {
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate private key: %v", err)
+	}
+
+	// certificate request template
+	template := x509.CertificateRequest{
+		Subject: pkix.Name{
+			CommonName: commonName,
+		},
+		DNSNames: dnsNames,
+	}
+
+	csrBytes, err := x509.CreateCertificateRequest(rand.Reader, &template, privateKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create CSR: %v", err)
+	}
+
+	csrPEM := pem.EncodeToMemory(&pem.Block{
+		Type:  "CERTIFICATE REQUEST",
+		Bytes: csrBytes,
+	})
+
+	privateKeyPEM := pem.EncodeToMemory(&pem.Block{
+		Type:  "RSA PRIVATE KEY",
+		Bytes: x509.MarshalPKCS1PrivateKey(privateKey),
+	})
+
+	return &CertificateData{
+		CSR:        csrPEM,
+		PrivateKey: privateKeyPEM,
+	}, nil
+}
+
+func createCertificateRequest(ctx context.Context, logger logr.Logger, certClient certmanagerclientset.Interface, namespace string, certData *CertificateData) error {
+	return wait.ExponentialBackoffWithContext(ctx, retryBackoff, func(ctx context.Context) (bool, error) {
+		cr := &certmanagerv1.CertificateRequest{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      certName,
+				Namespace: namespace,
+			},
+			Spec: certmanagerv1.CertificateRequestSpec{
+				Request: certData.CSR,
+				IsCA:    false,
+				Usages: []certmanagerv1.KeyUsage{
+					certmanagerv1.UsageDigitalSignature,
+					certmanagerv1.UsageKeyEncipherment,
+					certmanagerv1.UsageServerAuth,
+				},
+				Duration: &metav1.Duration{
+					Duration: 24 * time.Hour,
+				},
+				IssuerRef: cmmeta.ObjectReference{
+					Name:  issuerName,
+					Kind:  "ClusterIssuer",
+					Group: "cert-manager.io",
+				},
+			},
+		}
+
+		_, err := certClient.CertmanagerV1().CertificateRequests(namespace).Create(ctx, cr, metav1.CreateOptions{})
+		if err != nil && !errors.IsAlreadyExists(err) {
+			logger.Error(err, "failed to create CertificateRequest, retrying")
+			return false, nil
+		}
+
+		logger.Info("Created CertificateRequest successfully")
+		return true, nil
+	})
+}
+
+func validateCertificateAndKey(certPEM, keyPEM, originalKeyPEM []byte) error {
+	// Parse the certificate
+	certBlock, _ := pem.Decode(certPEM)
+	if certBlock == nil {
+		return fmt.Errorf("failed to parse certificate PEM")
+	}
+
+	cert, err := x509.ParseCertificate(certBlock.Bytes)
+	if err != nil {
+		return fmt.Errorf("failed to parse certificate: %v", err)
+	}
+
+	// Parse the secret's private key
+	keyBlock, _ := pem.Decode(keyPEM)
+	if keyBlock == nil {
+		return fmt.Errorf("failed to parse private key PEM")
+	}
+
+	// Parse the original private key
+	originalKeyBlock, _ := pem.Decode(originalKeyPEM)
+	if originalKeyBlock == nil {
+		return fmt.Errorf("failed to parse original private key PEM")
+	}
+
+	// Compare the two private keys
+	if string(keyBlock.Bytes) != string(originalKeyBlock.Bytes) {
+		return fmt.Errorf("private key in secret does not match original private key")
+	}
+
+	// Verify certificate validity
+	now := time.Now()
+	if now.Before(cert.NotBefore) {
+		return fmt.Errorf("certificate is not valid yet")
+	}
+	if now.After(cert.NotAfter) {
+		return fmt.Errorf("certificate has expired")
+	}
+
+	return nil
+}
+
+func waitForCertificateSecret(ctx context.Context, logger logr.Logger, k8sClient clientgo.Interface, namespace, secretName string, certData *CertificateData) error {
+	return wait.ExponentialBackoffWithContext(ctx, retryBackoff, func(ctx context.Context) (bool, error) {
+		secret, err := k8sClient.CoreV1().Secrets(namespace).Get(ctx, secretName, metav1.GetOptions{})
+		if err != nil {
+			return false, fmt.Errorf("error getting secret: %v", err)
+		}
+
+		if secret.Type != v1.SecretTypeTLS {
+			logger.Info("Secret is not of type TLS, waiting for correct type...")
+			return false, nil
+		}
+
+		certPEM, ok := secret.Data["tls.crt"]
+		if !ok {
+			logger.Info("tls.crt not found in secret, waiting...")
+			return false, nil
+		}
+
+		keyPEM, ok := secret.Data["tls.key"]
+		if !ok {
+			logger.Info("tls.key not found in secret, waiting...")
+			return false, nil
+		}
+
+		if err := validateCertificateAndKey(certPEM, keyPEM, certData.PrivateKey); err != nil {
+			logger.Info("Certificate validation failed: %v, waiting...", err)
+			return false, nil
+		}
+
+		logger.Info("Certificate secret validated successfully")
+		return true, nil
+	})
 }
