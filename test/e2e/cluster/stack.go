@@ -139,10 +139,6 @@ func (s *stack) prepareStackParameters(test TestResources, eks EKSConfig) []type
 			ParameterValue: aws.String(test.HybridNetwork.PublicSubnetCidr),
 		},
 		{
-			ParameterKey:   aws.String("HybridNodePrivateSubnetCidr"),
-			ParameterValue: aws.String(test.HybridNetwork.PrivateSubnetCidr),
-		},
-		{
 			ParameterKey:   aws.String("HybridNodePodCidr"),
 			ParameterValue: aws.String(test.HybridNetwork.PodCidr),
 		},

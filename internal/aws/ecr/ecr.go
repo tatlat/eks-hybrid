@@ -97,6 +97,7 @@ var accountsByRegion = map[string]string{
 
 	"af-south-1":      "877085696533",
 	"ap-east-1":       "800184023465",
+	"ap-east-2":       "533267051163",
 	"ap-south-2":      "900889452093",
 	"ap-southeast-3":  "296578399912",
 	"ap-southeast-4":  "491585149902",

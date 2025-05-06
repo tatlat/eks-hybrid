@@ -1,4 +1,4 @@
 skipped_tests:
   - "ubuntu2004-amd64-docker.*"
   - "ubuntu2204-amd64-docker.*"
-  - "ubuntu2404-amd64-docker.*"
+  - "ubuntu2404-amd64-docker.*ssm.*"
