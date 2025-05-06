@@ -1,3 +1,8 @@
+// corev1.Endpoints is deprecated, but we still need to use the endpoints api from
+// the validation code since the kubelet kubeconfig/role only has permissions to endpoints
+// and not endpointslices
+//
+//nolint:staticcheck
 package node_test
 
 import (
