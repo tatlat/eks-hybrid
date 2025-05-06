@@ -83,7 +83,12 @@ func NewPausableLogger(opts ...LoggerOption) PausableLogger {
 		opt.Apply(cfg)
 	}
 
-	activeSyncer := zapcore.AddSync(os.Stdout)
+	var activeSyncer zapcore.WriteSyncer
+	if cfg.syncer != nil {
+		activeSyncer = cfg.syncer
+	} else {
+		activeSyncer = zapcore.AddSync(os.Stdout)
+	}
 	syncer := newSwitchSyncer(activeSyncer)
 	cfg.syncer = syncer
 
@@ -91,6 +96,19 @@ func NewPausableLogger(opts ...LoggerOption) PausableLogger {
 		Logger: NewLogger(cfg),
 		syncer: syncer,
 	}
+}
+
+// WithWriter returns a LoggerOption that sets the output writer to the given io.Writer.
+func WithWriter(w io.Writer) LoggerOption {
+	return &withWriterOption{writer: w}
+}
+
+type withWriterOption struct {
+	writer io.Writer
+}
+
+func (o *withWriterOption) Apply(cfg *LoggerConfig) {
+	cfg.syncer = zapcore.AddSync(o.writer)
 }
 
 // PausableLogger can be paused and resumed. It wraps a logr.Logger.
