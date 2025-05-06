@@ -14,6 +14,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/iam"
 	s3v2 "github.com/aws/aws-sdk-go-v2/service/s3"
 	ssmv2 "github.com/aws/aws-sdk-go-v2/service/ssm"
+	certmanagerclientset "github.com/cert-manager/cert-manager/pkg/client/clientset/versioned"
 	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/onsi/ginkgo/v2/types"
@@ -300,6 +301,18 @@ func (t *PeeredVPCTest) NewNodeMonitoringAgentTest() *addon.NodeMonitoringAgentT
 		EKSClient: t.EksClient,
 		K8SConfig: t.K8sClientConfig,
 		Logger:    t.Logger,
+	}
+}
+
+func (t *PeeredVPCTest) NewCertManagerTest() *addon.CertManagerTest {
+	certClient := certmanagerclientset.NewForConfigOrDie(t.K8sClientConfig)
+	return &addon.CertManagerTest{
+		Cluster:    t.Cluster.Name,
+		K8S:        t.k8sClient,
+		EKSClient:  t.EksClient,
+		K8SConfig:  t.K8sClientConfig,
+		Logger:     t.Logger,
+		CertClient: certClient,
 	}
 }
 

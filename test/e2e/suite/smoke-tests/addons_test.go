@@ -83,7 +83,7 @@ var _ = Describe("Hybrid Nodes", func() {
 
 		When("using ec2 instance as hybrid nodes", func() {
 			It("runs metrics server tests", func(ctx context.Context) {
-				metricsServer := test.NewMetricsServerTest()
+				metricsServer := test.NewCertManagerTest()
 				test.Logger.Info("Running test for metrics server")
 
 				DeferCleanup(func(ctx context.Context) {
@@ -96,9 +96,6 @@ var _ = Describe("Hybrid Nodes", func() {
 						}
 					}
 					Expect(metricsServer.Delete(ctx)).To(Succeed(), "should cleanup metrics server successfully")
-				})
-
-				ReportAfterEach(func(report SpecReport) {
 				})
 
 				Expect(metricsServer.Run(ctx)).To(
