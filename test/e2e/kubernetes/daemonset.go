@@ -59,5 +59,5 @@ func WaitForDaemonSetReady(ctx context.Context, logger logr.Logger, k8s kubernet
 		return daemonSet.Status.NumberAvailable == daemonSet.Status.DesiredNumberScheduled
 	}
 
-	return GenericResourcePoller(ctx, logger, resourceName, getResource, isResourceReady)
+	return WaitForResource(ctx, logger, resourceName, getResource, isResourceReady)
 }

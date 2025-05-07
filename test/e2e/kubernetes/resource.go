@@ -15,11 +15,11 @@ const (
 	maxConsecutiveErrors = 3
 )
 
-// GenericResourcePoller is a generic function to poll for kubernetes resources
-func GenericResourcePoller(
+// WaitForResource is a generic function to wait until a kubernetes resource is ready.
+func WaitForResource(
 	ctx context.Context,
 	logger logr.Logger,
-	resourceName string,
+	resourceDescription string,
 	getResource func(ctx context.Context) (any, error),
 	isResourceReady func(resource any) bool,
 ) error {
@@ -30,10 +30,10 @@ func GenericResourcePoller(
 		if err != nil {
 			consecutiveErrors++
 			if consecutiveErrors > maxConsecutiveErrors {
-				return false, fmt.Errorf("getting %s: %w", resourceName, err)
+				return false, fmt.Errorf("getting %s: %w", resourceDescription, err)
 			}
-			logger.Info(fmt.Sprintf("Retryable error getting %s. Continuing to poll", resourceName),
-				"name", resourceName, "error", err)
+			logger.Info(fmt.Sprintf("Retryable error getting %s. Continuing to poll", resourceDescription),
+				"name", resourceDescription, "error", err)
 			return false, nil // continue polling
 		}
 
@@ -45,7 +45,7 @@ func GenericResourcePoller(
 		return false, nil // continue polling
 	})
 	if err != nil {
-		return fmt.Errorf("waiting for %s to be ready: %w", resourceName, err)
+		return fmt.Errorf("waiting for %s to be ready: %w", resourceDescription, err)
 	}
 
 	return nil

@@ -23,5 +23,5 @@ func WaitForDeploymentReady(ctx context.Context, logger logr.Logger, k8s kuberne
 		return deployment.Status.ReadyReplicas == *deployment.Spec.Replicas
 	}
 
-	return GenericResourcePoller(ctx, logger, resourceName, getResource, isResourceReady)
+	return WaitForResource(ctx, logger, resourceName, getResource, isResourceReady)
 }

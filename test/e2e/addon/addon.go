@@ -128,7 +128,7 @@ func (a Addon) Delete(ctx context.Context, client *eks.Client, logger logr.Logge
 	return err
 }
 
-func (a Addon) FetchLogs(ctx context.Context, k8s clientgo.Interface, logger logr.Logger, containers []string) error {
+func (a Addon) FetchLogs(ctx context.Context, k8s clientgo.Interface, logger logr.Logger) error {
 	var pods *corev1.PodList
 	AddonListOptions := getAddonListOptions(a.Name)
 	err := wait.ExponentialBackoffWithContext(ctx, retryBackoff, func(ctx context.Context) (bool, error) {
@@ -141,20 +141,18 @@ func (a Addon) FetchLogs(ctx context.Context, k8s clientgo.Interface, logger log
 		}
 		return true, nil
 	})
+
 	if err != nil {
 		return fmt.Errorf("failed to get pods for %s after retries: %v", a.Name, err)
 	}
 
 	for _, pod := range pods.Items {
-		for _, container := range containers {
-			logOpts := getPodLogOptions(container, nil)
-			logs, err := kubernetes.GetPodLogsWithRetries(ctx, k8s, pod.Name, pod.Namespace, logOpts)
-			if err != nil {
-				return err
-			}
-
-			logger.Info(fmt.Sprintf("Logs for %s:\n", a.Name), "pod", pod.Name, "container", container, "logs", logs)
+		logs, err := kubernetes.GetPodLogsWithRetries(ctx, k8s, pod.Name, pod.Namespace, &corev1.PodLogOptions{})
+		if err != nil {
+			return err
 		}
+
+		logger.Info("Logs for:\n\n", "pod", pod.Name, "msg", fmt.Sprintf("%s\n\n", logs))
 	}
 
 	return nil
