@@ -75,7 +75,7 @@ func (m MetricsServerTest) Validate(ctx context.Context) error {
 }
 
 func (m MetricsServerTest) CollectLogs(ctx context.Context) error {
-	return m.addon.FetchLogs(ctx, m.K8S, m.Logger, []string{metricsServerName}, tailLines)
+	return m.addon.FetchLogs(ctx, m.K8S, m.Logger)
 }
 
 func getNodeMetrics(ctx context.Context, metricsClient *metricsv1beta1.Clientset, logger logr.Logger) error {

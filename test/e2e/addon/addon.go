@@ -7,7 +7,6 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/service/eks"
 	"github.com/aws/aws-sdk-go-v2/service/eks/types"
-	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/eks-hybrid/test/e2e/kubernetes"
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
@@ -132,7 +131,7 @@ func (a Addon) Delete(ctx context.Context, client *eks.Client, logger logr.Logge
 	return err
 }
 
-func (a Addon) FetchLogs(ctx context.Context, k8s clientgo.Interface, logger logr.Logger, containers []string, tailLines int64) error {
+func (a Addon) FetchLogs(ctx context.Context, k8s clientgo.Interface, logger logr.Logger) error {
 	var pods *corev1.PodList
 	AddonListOptions := getAddonListOptions(a.Name)
 	err := wait.ExponentialBackoffWithContext(ctx, retryBackoff, func(ctx context.Context) (bool, error) {
@@ -151,15 +150,12 @@ func (a Addon) FetchLogs(ctx context.Context, k8s clientgo.Interface, logger log
 	}
 
 	for _, pod := range pods.Items {
-		for _, container := range containers {
-			logOpts := getPodLogOptions(container, aws.Int64(tailLines))
-			logs, err := kubernetes.GetPodLogsWithRetries(ctx, k8s, pod.Name, pod.Namespace, logOpts)
-			if err != nil {
-				return err
-			}
-
-			logger.Info("Logs for:\n\n", "pod", pod.Name, "container", container, "msg", fmt.Sprintf("%s\n\n", logs))
+		logs, err := kubernetes.GetPodLogsWithRetries(ctx, k8s, pod.Name, pod.Namespace, &corev1.PodLogOptions{})
+		if err != nil {
+			return err
 		}
+
+		logger.Info("Logs for:\n\n", "pod", pod.Name, "msg", fmt.Sprintf("%s\n\n", logs))
 	}
 
 	return nil

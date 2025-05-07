@@ -111,7 +111,7 @@ func isMonitoringAgentEvent(event v1.Event) bool {
 }
 
 func (n NodeMonitoringAgentTest) CollectLogs(ctx context.Context) error {
-	return n.addon.FetchLogs(ctx, n.K8S, n.Logger, []string{nodeMonitoringAgentName}, 10)
+	return n.addon.FetchLogs(ctx, n.K8S, n.Logger)
 }
 
 func (n NodeMonitoringAgentTest) Delete(ctx context.Context) error {
