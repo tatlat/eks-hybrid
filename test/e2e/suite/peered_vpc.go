@@ -331,6 +331,16 @@ func (t *PeeredVPCTest) NewCertManagerTest() *addon.CertManagerTest {
 	}
 }
 
+func (t *PeeredVPCTest) NewPrometheusNodeExporterTest() *addon.PrometheusNodeExporterTest {
+	return &addon.PrometheusNodeExporterTest{
+		Cluster:   t.Cluster.Name,
+		K8S:       t.k8sClient,
+		EKSClient: t.EksClient,
+		K8SConfig: t.K8sClientConfig,
+		Logger:    t.Logger,
+	}
+}
+
 // handleFailure is a wrapper around ginkgo.Fail that logs the error message
 // immediately after it happens. It doesn't modify gomega's or ginkgo's regular
 // behavior.
