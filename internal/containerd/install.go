@@ -16,12 +16,7 @@ import (
 	"github.com/aws/eks-hybrid/internal/util/cmd"
 )
 
-type SourceName string
-
 const (
-	ContainerdSourceNone   SourceName = "none"
-	ContainerdSourceDistro SourceName = "distro"
-	ContainerdSourceDocker SourceName = "docker"
 	// pin containerd to major version 1.x
 	ContainerdVersion = "1.*"
 
@@ -34,20 +29,26 @@ type Source interface {
 	GetContainerd(version string) artifact.Package
 }
 
-func Install(ctx context.Context, tracker *tracker.Tracker, source Source, containerdSource SourceName) error {
-	if containerdSource == ContainerdSourceNone {
+func Install(ctx context.Context, artifactsTracker *tracker.Tracker, source Source, containerdSource tracker.ContainerdSourceName) error {
+	// if containerd/run are already installed, we skip the installation and set the source to none
+	// which exclude it from being upgrading during upgrade and removed during uninstall
+	// this has the (potentially negative) side effect of the user not knowing that we have chosen none on
+	// their behalf based on it already being installed
+	// TODO: a better approach would be to determine if the installed versions are from the user supplied
+	// containerd-source (distro/docker) and if they are, treat it as such including upgrading/uninstalling
+	// if they are not, we error and ask the user to explictly pass none to the --containerd-source flag
+	if containerdSource == tracker.ContainerdSourceNone || areContainerdAndRuncInstalled() {
+		artifactsTracker.Artifacts.Containerd = tracker.ContainerdSourceNone
 		return nil
 	}
-	if isContainerdNotInstalled() {
-		containerd := source.GetContainerd(ContainerdVersion)
-		// Sometimes install fails due to conflicts with other processes
-		// updating packages, specially when automating at machine startup.
-		// We assume errors are transient and just retry for a bit.
-		if err := cmd.Retry(ctx, containerd.InstallCmd, 5*time.Second); err != nil {
-			return errors.Wrap(err, "failed to install containerd")
-		}
-		tracker.MarkContainerd(string(containerdSource))
+	containerd := source.GetContainerd(ContainerdVersion)
+	// Sometimes install fails due to conflicts with other processes
+	// updating packages, specially when automating at machine startup.
+	// We assume errors are transient and just retry for a bit.
+	if err := cmd.Retry(ctx, containerd.InstallCmd, 5*time.Second); err != nil {
+		return errors.Wrap(err, "installing containerd")
 	}
+	artifactsTracker.Artifacts.Containerd = containerdSource
 	return nil
 }
 
@@ -55,11 +56,11 @@ func Uninstall(ctx context.Context, source Source) error {
 	if isContainerdInstalled() {
 		containerd := source.GetContainerd(ContainerdVersion)
 		if err := cmd.Retry(ctx, containerd.UninstallCmd, 5*time.Second); err != nil {
-			return errors.Wrap(err, "failed to uninstall containerd")
+			return errors.Wrap(err, "uninstalling containerd")
 		}
 
 		if err := os.RemoveAll(containerdConfigDir); err != nil {
-			return errors.Wrap(err, "failed to uninstall containerd config files")
+			return errors.Wrap(err, "removing containerd config files")
 		}
 	}
 	return nil
@@ -73,16 +74,16 @@ func Upgrade(ctx context.Context, source Source) error {
 	return nil
 }
 
-func ValidateContainerdSource(source SourceName) error {
+func ValidateContainerdSource(source tracker.ContainerdSourceName) error {
 	osName := system.GetOsName()
 	switch source {
-	case ContainerdSourceNone:
+	case tracker.ContainerdSourceNone:
 		return nil
-	case ContainerdSourceDocker:
+	case tracker.ContainerdSourceDocker:
 		if osName == system.AmazonOsName {
 			return fmt.Errorf("docker source for containerd is not supported on AL2023. Please provide `none` or `distro` to the --containerd-source flag")
 		}
-	case ContainerdSourceDistro:
+	case tracker.ContainerdSourceDistro:
 		if osName == system.RhelOsName {
 			return fmt.Errorf("distro source for containerd is not supported on RHEL. Please provide `none` or `docker` to the --containerd-source flag")
 		}
@@ -105,25 +106,14 @@ func ValidateSystemdUnitFile() error {
 	return nil
 }
 
-func GetContainerdSource(containerdSource string) SourceName {
-	switch containerdSource {
-	case string(ContainerdSourceDistro):
-		return ContainerdSourceDistro
-	case string(ContainerdSourceDocker):
-		return ContainerdSourceDocker
-	default:
-		return ContainerdSourceNone
-	}
-}
-
 func isContainerdInstalled() bool {
 	_, containerdNotFoundErr := exec.LookPath(containerdPackageName)
 	return containerdNotFoundErr == nil
 }
 
-// isContainerdNotInstalled returns true only if both containerd and runc are not installed
-func isContainerdNotInstalled() bool {
+// areContainerdAndRuncInstalled returns true only if both containerd and runc are installed
+func areContainerdAndRuncInstalled() bool {
 	_, containerdNotFoundErr := exec.LookPath(containerdPackageName)
 	_, runcNotFoundErr := exec.LookPath(runcPackageName)
-	return containerdNotFoundErr != nil || runcNotFoundErr != nil
+	return containerdNotFoundErr == nil && runcNotFoundErr == nil
 }

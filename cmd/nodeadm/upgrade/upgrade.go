@@ -12,7 +12,6 @@ import (
 
 	"github.com/aws/eks-hybrid/internal/aws"
 	"github.com/aws/eks-hybrid/internal/cli"
-	"github.com/aws/eks-hybrid/internal/containerd"
 	"github.com/aws/eks-hybrid/internal/creds"
 	"github.com/aws/eks-hybrid/internal/daemon"
 	"github.com/aws/eks-hybrid/internal/flows"
@@ -169,7 +168,7 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	}
 
 	log.Info("Creating package manager...")
-	containerdSource := containerd.GetContainerdSource(installed.Artifacts.Containerd)
+	containerdSource := installed.Artifacts.Containerd
 	log.Info("Configuring package manager with", zap.Reflect("containerd source", string(containerdSource)))
 	packageManager, err := packagemanager.New(containerdSource, log)
 	if err != nil {

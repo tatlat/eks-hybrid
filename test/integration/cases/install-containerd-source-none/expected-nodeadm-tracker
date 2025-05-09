@@ -1,6 +1,6 @@
 Artifacts:
   CniPlugins: true
-  Containerd: ""
+  Containerd: none
   IamAuthenticator: true
   IamRolesAnywhere: true
   ImageCredentialProvider: true

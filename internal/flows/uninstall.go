@@ -100,7 +100,7 @@ func (u *Uninstaller) uninstallDaemons(ctx context.Context) error {
 			}
 		}
 	}
-	if containerd.GetContainerdSource(u.Artifacts.Containerd) != containerd.ContainerdSourceNone {
+	if u.Artifacts.Containerd != tracker.ContainerdSourceNone {
 		u.Logger.Info("Uninstalling containerd...")
 		if err := u.DaemonManager.StopDaemon(containerd.ContainerdDaemonName); err != nil {
 			return err

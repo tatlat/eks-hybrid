@@ -13,8 +13,8 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/aws/eks-hybrid/internal/artifact"
-	"github.com/aws/eks-hybrid/internal/containerd"
 	"github.com/aws/eks-hybrid/internal/system"
+	"github.com/aws/eks-hybrid/internal/tracker"
 	"github.com/aws/eks-hybrid/internal/util"
 	"github.com/aws/eks-hybrid/internal/util/cmd"
 )
@@ -61,7 +61,7 @@ type DistroPackageManager struct {
 	logger              *zap.Logger
 }
 
-func New(containerdSource containerd.SourceName, logger *zap.Logger) (*DistroPackageManager, error) {
+func New(containerdSource tracker.ContainerdSourceName, logger *zap.Logger) (*DistroPackageManager, error) {
 	manager, err := getOsPackageManager()
 	if err != nil {
 		return nil, err
@@ -75,7 +75,7 @@ func New(containerdSource containerd.SourceName, logger *zap.Logger) (*DistroPac
 		deleteVerb:          packageManagerDeleteCmd[manager],
 		refreshMetadataVerb: packageManagerMetadataRefreshCmd[manager],
 	}
-	if containerdSource == containerd.ContainerdSourceDocker {
+	if containerdSource == tracker.ContainerdSourceDocker {
 		pm.dockerRepo = managerToDockerRepoMap[manager]
 	}
 	return pm, nil

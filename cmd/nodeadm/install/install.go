@@ -15,6 +15,7 @@ import (
 	"github.com/aws/eks-hybrid/internal/logger"
 	"github.com/aws/eks-hybrid/internal/packagemanager"
 	"github.com/aws/eks-hybrid/internal/ssm"
+	"github.com/aws/eks-hybrid/internal/tracker"
 )
 
 const installHelpText = `Examples:
@@ -29,7 +30,8 @@ Documentation:
 
 func NewCommand() cli.Command {
 	cmd := command{
-		timeout: 20 * time.Minute,
+		timeout:          20 * time.Minute,
+		containerdSource: string(tracker.ContainerdSourceDistro),
 	}
 	cmd.region = ssm.DefaultSsmInstallerRegion
 
@@ -79,11 +81,10 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return err
 	}
 
-	// Default containerd source to distro
-	if c.containerdSource == "" {
-		c.containerdSource = string(containerd.ContainerdSourceDistro)
+	containerdSource, err := tracker.ContainerdSource(c.containerdSource)
+	if err != nil {
+		return err
 	}
-	containerdSource := containerd.GetContainerdSource(c.containerdSource)
 	if err := containerd.ValidateContainerdSource(containerdSource); err != nil {
 		return err
 	}
