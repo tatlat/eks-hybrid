@@ -66,7 +66,7 @@ func (u *Upgrader) upgradeDistroPackages(ctx context.Context) error {
 	if err := u.PackageManager.RefreshMetadataCache(ctx); err != nil {
 		return err
 	}
-	if u.Artifacts.Containerd != string(containerd.ContainerdSourceNone) {
+	if u.Artifacts.Containerd != tracker.ContainerdSourceNone {
 		u.Logger.Info("Upgrading containerd...")
 		if err := containerd.Upgrade(ctx, u.PackageManager); err != nil {
 			return err

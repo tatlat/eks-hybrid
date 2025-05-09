@@ -13,6 +13,14 @@ import (
 	"github.com/aws/eks-hybrid/internal/util"
 )
 
+type ContainerdSourceName string
+
+const (
+	ContainerdSourceNone   ContainerdSourceName = "none"
+	ContainerdSourceDistro ContainerdSourceName = "distro"
+	ContainerdSourceDocker ContainerdSourceName = "docker"
+)
+
 const trackerFile = "/opt/nodeadm/tracker"
 
 type Tracker struct {
@@ -20,7 +28,7 @@ type Tracker struct {
 }
 
 type InstalledArtifacts struct {
-	Containerd              string
+	Containerd              ContainerdSourceName
 	CniPlugins              bool
 	IamAuthenticator        bool
 	IamRolesAnywhere        bool
@@ -56,12 +64,14 @@ func (tracker *Tracker) Add(componentName string) error {
 	return nil
 }
 
-func (tracker *Tracker) MarkContainerd(source string) {
-	tracker.Artifacts.Containerd = source
-}
-
 // Save() saves the tracker to file
 func (tracker *Tracker) Save() error {
+	// ensure containerd source is populated with none/distro/docker
+	containerdSource, err := ContainerdSource(string(tracker.Artifacts.Containerd))
+	if err != nil {
+		return err
+	}
+	tracker.Artifacts.Containerd = containerdSource
 	data, err := yaml.Marshal(tracker)
 	if err != nil {
 		return err
@@ -86,6 +96,14 @@ func GetInstalledArtifacts() (*Tracker, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "invalid yaml data in tracker")
 	}
+	// containerd will be non-empty if containerd is being managed by nodeadm
+	// otherwise it *may* be empty, which we want want to ensure is treated as "none"
+	containerdSource, err := ContainerdSource(string(artifacts.Artifacts.Containerd))
+	if err != nil {
+		return nil, err
+	}
+	artifacts.Artifacts.Containerd = containerdSource
+
 	return &artifacts, nil
 }
 
@@ -102,4 +120,17 @@ func GetCurrentState() (*Tracker, error) {
 		return nil, err
 	}
 	return tracker, nil
+}
+
+func ContainerdSource(containerdSource string) (ContainerdSourceName, error) {
+	switch containerdSource {
+	case string(ContainerdSourceDistro):
+		return ContainerdSourceDistro, nil
+	case string(ContainerdSourceDocker):
+		return ContainerdSourceDocker, nil
+	case "", "none":
+		return ContainerdSourceNone, nil
+	default:
+		return "", fmt.Errorf("invalid containerd source: %s", containerdSource)
+	}
 }

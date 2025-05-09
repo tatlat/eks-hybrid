@@ -392,3 +392,15 @@ function mock::aws() {
   # ensure that our instance exists in the API
   aws ec2 run-instances
 }
+
+function install-previous-containerd-version() {
+  # example output:
+  # Last metadata expiration check: 0:09:53 ago on Fri May  9 14:32:14 2025.
+  # Available Packages
+  # containerd.x86_64      1.6.8-2.amzn2023.0.3 amazonlinux
+  # containerd.x86_64      1.6.8-2.amzn2023.0.4 amazonlinux
+  # skip first 2 header lines, grab second column, pick second to last line
+  containerd_version=$(yum --showduplicates list --available containerd | tail -n +3  | awk '{print $2}' | tail -n 2 | head -1)
+  yum install -y containerd-${containerd_version}  
+}
+

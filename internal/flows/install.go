@@ -23,7 +23,7 @@ import (
 
 type Installer struct {
 	AwsSource          aws.Source
-	ContainerdSource   containerd.SourceName
+	ContainerdSource   tracker.ContainerdSourceName
 	PackageManager     *packagemanager.DistroPackageManager
 	CredentialProvider creds.CredentialProvider
 	SsmRegion          string
