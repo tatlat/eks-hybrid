@@ -2,12 +2,14 @@ package addon
 
 import (
 	"context"
+	_ "embed"
 	"fmt"
 	"os"
 	"path/filepath"
-	"time"
+	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/service/eks"
+	"github.com/aws/eks-hybrid/test/e2e/cni"
 	"github.com/aws/eks-hybrid/test/e2e/kubernetes"
 	awspcav1beta1 "github.com/cert-manager/aws-privateca-issuer/pkg/api/v1beta1"
 	awspcaclientset "github.com/cert-manager/aws-privateca-issuer/pkg/clientset/v1beta1"
@@ -15,13 +17,12 @@ import (
 	cmmeta "github.com/cert-manager/cert-manager/pkg/apis/meta/v1"
 	certmanagerclientset "github.com/cert-manager/cert-manager/pkg/client/clientset/versioned"
 	"github.com/go-logr/logr"
-	"helm.sh/helm/v3/pkg/action"
-	"helm.sh/helm/v3/pkg/cli"
-	"helm.sh/helm/v3/pkg/cli/values"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/dynamic"
 	clientgo "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 )
@@ -45,9 +46,10 @@ const (
 	awsPcaCertName          = "aws-pca-test-cert"
 	awsPcaCertSecretName    = "aws-pca-cert-tls"
 	awsPcaArn               = "arn:aws:acm-pca:region:account:certificate-authority/id" // This should be configured based on actual ARN
-
-	helmTimeout = 300 * time.Second
 )
+
+//go:embed manifests/aws-pca-issuer.yaml
+var awsPcaIssuerRawManifests []byte
 
 type CertificateData struct {
 	CSR        []byte
@@ -130,74 +132,6 @@ func (c *CertManagerTest) Create(ctx context.Context) error {
 	}
 
 	c.Logger.Info("All cert-manager and AWS PCA issuer components are ready")
-	return nil
-}
-
-func (c *CertManagerTest) installAwsPcaIssuer(ctx context.Context) error {
-	c.Logger.Info("Installing AWS PCA issuer using Helm")
-
-	// Create AWS PCA issuer namespace if it doesn't exist
-	if _, err := c.K8S.CoreV1().Namespaces().Create(ctx, &v1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: awsPcaIssuerNamespace,
-		},
-	}, metav1.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
-		return err
-	}
-
-	// Initialize Helm configuration
-	settings := cli.New()
-	actionConfig := new(action.Configuration)
-	if err := actionConfig.Init(settings.RESTClientGetter(), awsPcaIssuerNamespace, os.Getenv("HELM_DRIVER"), c.Logger.Info); err != nil {
-		return fmt.Errorf("failed to initialize Helm configuration: %v", err)
-	}
-
-	// Create Helm client
-	client := action.NewInstall(actionConfig)
-	client.ReleaseName = awsPcaIssuerReleaseName
-	client.Namespace = awsPcaIssuerNamespace
-	client.CreateNamespace = true
-	client.Wait = true
-	client.Timeout = helmTimeout
-
-	// Add Helm repository
-	addRepo := action.NewRepoAdd(actionConfig)
-	addRepo.Name = "aws-privateca-issuer"
-	addRepo.URL = awsPcaIssuerHelmRepo
-	if err := addRepo.Run(); err != nil {
-		return fmt.Errorf("failed to add Helm repository: %v", err)
-	}
-
-	// Update Helm repositories
-	updateRepo := action.NewRepoUpdate(actionConfig)
-	if _, err := updateRepo.Run(); err != nil {
-		return fmt.Errorf("failed to update Helm repositories: %v", err)
-	}
-
-	// Set values for the Helm chart
-	valueOpts := &values.Options{}
-	vals, err := valueOpts.MergeValues()
-	if err != nil {
-		return fmt.Errorf("failed to merge Helm values: %v", err)
-	}
-
-	// Install the Helm chart
-	chartPath, err := client.ChartPathOptions.LocateChart(awsPcaIssuerHelmChart, settings)
-	if err != nil {
-		return fmt.Errorf("failed to locate Helm chart: %v", err)
-	}
-
-	chart, err := client.LoadChart(chartPath)
-	if err != nil {
-		return fmt.Errorf("failed to load Helm chart: %v", err)
-	}
-
-	_, err = client.Run(chart, vals)
-	if err != nil {
-		return fmt.Errorf("failed to install Helm chart: %v", err)
-	}
-
-	c.Logger.Info("Successfully installed AWS PCA issuer using Helm")
 	return nil
 }
 
@@ -453,37 +387,6 @@ func (c *CertManagerTest) cleanupAwsPcaIssuerResources(ctx context.Context) erro
 	return err
 }
 
-func (c *CertManagerTest) uninstallAwsPcaIssuer(ctx context.Context) error {
-	c.Logger.Info("Uninstalling AWS PCA issuer")
-
-	// Initialize Helm configuration
-	settings := cli.New()
-	actionConfig := new(action.Configuration)
-	if err := actionConfig.Init(settings.RESTClientGetter(), awsPcaIssuerNamespace, os.Getenv("HELM_DRIVER"), c.Logger.Info); err != nil {
-		return fmt.Errorf("failed to initialize Helm configuration: %v", err)
-	}
-
-	// Create Helm uninstall client
-	client := action.NewUninstall(actionConfig)
-	client.Wait = true
-	client.Timeout = helmTimeout
-
-	// Uninstall the Helm chart
-	_, err := client.Run(awsPcaIssuerReleaseName)
-	if err != nil {
-		return fmt.Errorf("failed to uninstall AWS PCA issuer: %v", err)
-	}
-
-	// Delete AWS PCA issuer namespace
-	err = c.K8S.CoreV1().Namespaces().Delete(ctx, awsPcaIssuerNamespace, metav1.DeleteOptions{})
-	if err != nil && !errors.IsNotFound(err) {
-		return fmt.Errorf("failed to delete AWS PCA issuer namespace: %v", err)
-	}
-
-	c.Logger.Info("Successfully uninstalled AWS PCA issuer")
-	return nil
-}
-
 func createSelfSignedIssuer(ctx context.Context, logger logr.Logger, certClient certmanagerclientset.Interface) error {
 	return wait.ExponentialBackoffWithContext(ctx, retryBackoff, func(ctx context.Context) (bool, error) {
 		issuer := &certmanagerv1.Issuer{
@@ -555,4 +458,88 @@ func validateCertificate(ctx context.Context, logger logr.Logger, certClient cer
 		logger.Info("certificate not valid yet")
 		return false, nil
 	})
+}
+
+func (c *CertManagerTest) installAwsPcaIssuer(ctx context.Context) error {
+	c.Logger.Info("Installing AWS PCA issuer using raw manifests")
+
+	// Create AWS PCA issuer namespace if it doesn't exist
+	if _, err := c.K8S.CoreV1().Namespaces().Create(ctx, &v1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: awsPcaIssuerNamespace,
+		},
+	}, metav1.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
+		return err
+	}
+
+	// Convert raw yaml to unstructured objects
+	objs, err := cni.YamlToUnstructured([]byte(awsPcaIssuerRawManifests))
+	if err != nil {
+		return fmt.Errorf("failed to parse AWS PCA issuer manifests: %v", err)
+	}
+
+	// Create dynamic client for installing manifests
+	dynamicClient, err := dynamic.NewForConfig(c.K8SConfig)
+	if err != nil {
+		return fmt.Errorf("failed to create dynamic client: %v", err)
+	}
+
+	// Apply the manifests
+	if err := cni.UpsertManifestsWithRetries(ctx, dynamicClient, objs); err != nil {
+		return fmt.Errorf("failed to apply AWS PCA issuer manifests: %v", err)
+	}
+
+	c.Logger.Info("Successfully installed AWS PCA issuer using raw manifests")
+	return nil
+}
+
+// uninstallAwsPcaIssuer removes all AWS PCA issuer resources
+func (c *CertManagerTest) uninstallAwsPcaIssuer(ctx context.Context) error {
+	c.Logger.Info("Uninstalling AWS PCA issuer")
+
+	// We'll convert the manifest to unstructured objects to get the GVK and name for deletion
+	objs, err := cni.YamlToUnstructured([]byte(awsPcaIssuerRawManifests))
+	if err != nil {
+		return fmt.Errorf("failed to parse AWS PCA issuer manifests: %v", err)
+	}
+
+	// Create dynamic client for removing manifests
+	dynamicClient, err := dynamic.NewForConfig(c.K8SConfig)
+	if err != nil {
+		return fmt.Errorf("failed to create dynamic client: %v", err)
+	}
+
+	// Delete resources in reverse order (from the end of the manifests to the beginning)
+	// This helps with dependencies - typically CRs should be deleted before CRDs, etc.
+	for i := len(objs) - 1; i >= 0; i-- {
+		obj := objs[i]
+		groupVersion := obj.GroupVersionKind()
+		resource := schema.GroupVersionResource{
+			Group:    groupVersion.Group,
+			Version:  groupVersion.Version,
+			Resource: strings.ToLower(groupVersion.Kind + "s"),
+		}
+
+		k8sResource := dynamicClient.Resource(resource).Namespace(obj.GetNamespace())
+
+		// Delete the resource if it exists
+		if err := k8sResource.Delete(ctx, obj.GetName(), metav1.DeleteOptions{}); err != nil {
+			if !errors.IsNotFound(err) {
+				c.Logger.Info(fmt.Sprintf("Warning: failed to delete %s %s: %v", groupVersion.Kind, obj.GetName(), err))
+				// Continue with deletion even if there's an error
+			}
+		} else {
+			c.Logger.Info(fmt.Sprintf("Deleted %s %s", groupVersion.Kind, obj.GetName()))
+		}
+	}
+
+	// Delete the namespace last
+	if err := c.K8S.CoreV1().Namespaces().Delete(ctx, awsPcaIssuerNamespace, metav1.DeleteOptions{}); err != nil {
+		if !errors.IsNotFound(err) {
+			return fmt.Errorf("failed to delete AWS PCA issuer namespace: %v", err)
+		}
+	}
+
+	c.Logger.Info("Successfully uninstalled AWS PCA issuer")
+	return nil
 }

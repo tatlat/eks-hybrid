@@ -1,0 +1,227 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: awspcaissuers.awspca.cert-manager.io
+spec:
+  group: awspca.cert-manager.io
+  names:
+    kind: AWSPCAIssuer
+    listKind: AWSPCAIssuerList
+    plural: awspcaissuers
+    singular: awspcaissuer
+  scope: Namespaced
+  versions:
+    - name: v1beta1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required: ["arn"]
+              properties:
+                arn:
+                  type: string
+                  description: "ARN is the AWS CA ARN"
+                region:
+                  type: string
+                  description: "Region is the AWS region"
+                secretRef:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                    namespace:
+                      type: string
+            status:
+              type: object
+              properties:
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    required: ["status", "type"]
+                    properties:
+                      lastTransitionTime:
+                        type: string
+                        format: date-time
+                      message:
+                        type: string
+                      reason:
+                        type: string
+                      status:
+                        type: string
+                        enum: ["True", "False", "Unknown"]
+                      type:
+                        type: string
+                        enum: ["Ready"]
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: ARN
+          type: string
+          jsonPath: .spec.arn
+        - name: Ready
+          type: string
+          jsonPath: .status.conditions[?(@.type=="Ready")].status
+        - name: Status
+          type: string
+          jsonPath: .status.conditions[?(@.type=="Ready")].message
+          priority: 1
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: awspcaclusterissuers.awspca.cert-manager.io
+spec:
+  group: awspca.cert-manager.io
+  names:
+    kind: AWSPCAClusterIssuer
+    listKind: AWSPCAClusterIssuerList
+    plural: awspcaclusterissuers
+    singular: awspcaclusterissuer
+  scope: Cluster
+  versions:
+    - name: v1beta1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required: ["arn"]
+              properties:
+                arn:
+                  type: string
+                  description: "ARN is the AWS CA ARN"
+                region:
+                  type: string
+                  description: "Region is the AWS region"
+                secretRef:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                    namespace:
+                      type: string
+            status:
+              type: object
+              properties:
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    required: ["status", "type"]
+                    properties:
+                      lastTransitionTime:
+                        type: string
+                        format: date-time
+                      message:
+                        type: string
+                      reason:
+                        type: string
+                      status:
+                        type: string
+                        enum: ["True", "False", "Unknown"]
+                      type:
+                        type: string
+                        enum: ["Ready"]
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: ARN
+          type: string
+          jsonPath: .spec.arn
+        - name: Ready
+          type: string
+          jsonPath: .status.conditions[?(@.type=="Ready")].status
+        - name: Status
+          type: string
+          jsonPath: .status.conditions[?(@.type=="Ready")].message
+          priority: 1
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: aws-pca-issuer
+  namespace: aws-pca-issuer
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: aws-pca-issuer
+rules:
+  - apiGroups: ["cert-manager.io"]
+    resources: ["certificaterequests", "certificates"]
+    verbs: ["get", "list", "watch", "update"]
+  - apiGroups: ["cert-manager.io"]
+    resources: ["certificaterequests/status", "certificates/status"]
+    verbs: ["update"]
+  - apiGroups: ["awspca.cert-manager.io"]
+    resources: ["awspcaissuers", "awspcaclusterissuers"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["awspca.cert-manager.io"]
+    resources: ["awspcaissuers/status", "awspcaclusterissuers/status"]
+    verbs: ["update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: aws-pca-issuer
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: aws-pca-issuer
+subjects:
+  - kind: ServiceAccount
+    name: aws-pca-issuer
+    namespace: aws-pca-issuer
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aws-pca-issuer
+  namespace: aws-pca-issuer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: aws-pca-issuer
+  template:
+    metadata:
+      labels:
+        app: aws-pca-issuer
+    spec:
+      serviceAccountName: aws-pca-issuer
+      containers:
+        - name: aws-pca-issuer
+          image: public.ecr.aws/cert-manager/aws-privateca-issuer:v1.2.0
+          args:
+            - --leader-elect=false
+            - --v=2
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+          resources:
+            limits:
+              cpu: 100m
+              memory: 128Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi

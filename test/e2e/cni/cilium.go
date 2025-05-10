@@ -71,19 +71,19 @@ func (c Cilium) Deploy(ctx context.Context) error {
 		return err
 	}
 
-	objs, err := yamlToUnstructured(installation.Bytes())
+	objs, err := YamlToUnstructured(installation.Bytes())
 	if err != nil {
 		return err
 	}
 
 	fmt.Println("Applying cilium installation")
 
-	return upsertManifestsWithRetries(ctx, c.k8s, objs)
+	return UpsertManifestsWithRetries(ctx, c.k8s, objs)
 }
 
 // Creates, or Updates existing CR, foreach manifest
 // Retries each up to 5 times
-func upsertManifestsWithRetries(ctx context.Context, k8s dynamic.Interface, manifests []unstructured.Unstructured) error {
+func UpsertManifestsWithRetries(ctx context.Context, k8s dynamic.Interface, manifests []unstructured.Unstructured) error {
 	for _, obj := range manifests {
 		err := retry.OnError(retry.DefaultRetry, func(err error) bool {
 			// Retry any error type

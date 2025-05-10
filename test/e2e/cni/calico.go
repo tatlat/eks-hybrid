@@ -62,12 +62,12 @@ func (c Calico) Deploy(ctx context.Context) error {
 		return err
 	}
 
-	objs, err := yamlToUnstructured(append(tigera.Bytes(), installation.Bytes()...))
+	objs, err := YamlToUnstructured(append(tigera.Bytes(), installation.Bytes()...))
 	if err != nil {
 		return err
 	}
 
 	fmt.Println("Applying calico installation")
 
-	return upsertManifestsWithRetries(ctx, c.K8s, objs)
+	return UpsertManifestsWithRetries(ctx, c.K8s, objs)
 }
