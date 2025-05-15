@@ -1,6 +1,7 @@
 package artifact
 
 import (
+	"compress/gzip"
 	"fmt"
 	"hash"
 	"io"
@@ -25,6 +26,20 @@ type ChecksumVerifier interface {
 
 	// ActualChecksum returns the actual checksum of underlying data.
 	ActualChecksum() []byte
+}
+
+// GzippedWithChecksum creates a gzip reader around rc and a checksum verifier.
+// The returned Source should be used to read the artifact contents.
+func GzippedWithChecksum(rc io.ReadCloser, digest hash.Hash, expect []byte) (Source, error) {
+	gzipReader, err := gzip.NewReader(rc)
+	if err != nil {
+		return nil, fmt.Errorf("getting gzip reader: %w", err)
+	}
+	gzipped := &gzipReadCloser{
+		Reader: gzipReader,
+		body:   rc,
+	}
+	return WithChecksum(gzipped, digest, expect)
 }
 
 // WithChecksum creates a checksumVerifier. The digest is used to calculate srcs checksum.
@@ -55,4 +70,14 @@ func WithNopChecksum(rc io.ReadCloser) Source {
 		ReadCloser:       rc,
 		ChecksumVerifier: nopChecksumVerifier{},
 	}
+}
+
+type gzipReadCloser struct {
+	*gzip.Reader
+	body io.ReadCloser
+}
+
+func (g *gzipReadCloser) Close() error {
+	g.Reader.Close()
+	return g.body.Close()
 }
