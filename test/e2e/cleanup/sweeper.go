@@ -9,9 +9,11 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/cloudformation"
+	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/eks"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
+	"github.com/aws/aws-sdk-go-v2/service/resourcegroupstaggingapi"
 	"github.com/aws/aws-sdk-go-v2/service/rolesanywhere"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
@@ -29,14 +31,16 @@ type SweeperInput struct {
 }
 
 type Sweeper struct {
-	cfn           *cloudformation.Client
-	ec2Client     *ec2.Client
-	eks           *eks.Client
-	iam           *iam.Client
-	logger        logr.Logger
-	s3Client      *s3.Client
-	ssm           *ssm.Client
-	rolesAnywhere *rolesanywhere.Client
+	cfn            *cloudformation.Client
+	ec2Client      *ec2.Client
+	eks            *eks.Client
+	iam            *iam.Client
+	logger         logr.Logger
+	s3Client       *s3.Client
+	ssm            *ssm.Client
+	rolesAnywhere  *rolesanywhere.Client
+	cloudwatchlogs *cloudwatchlogs.Client
+	taggingClient  *ResourceTaggingClient
 }
 
 type FilterInput struct {
@@ -49,14 +53,16 @@ type FilterInput struct {
 
 func NewSweeper(aws aws.Config, logger logr.Logger, endpoint string) Sweeper {
 	return Sweeper{
-		cfn:           cloudformation.NewFromConfig(aws),
-		ec2Client:     ec2.NewFromConfig(aws),
-		eks:           e2e.NewEKSClient(aws, endpoint),
-		iam:           iam.NewFromConfig(aws),
-		logger:        logger,
-		ssm:           ssm.NewFromConfig(aws),
-		s3Client:      s3.NewFromConfig(aws),
-		rolesAnywhere: rolesanywhere.NewFromConfig(aws),
+		cfn:            cloudformation.NewFromConfig(aws),
+		ec2Client:      ec2.NewFromConfig(aws),
+		eks:            e2e.NewEKSClient(aws, endpoint),
+		iam:            iam.NewFromConfig(aws),
+		logger:         logger,
+		ssm:            ssm.NewFromConfig(aws),
+		s3Client:       s3.NewFromConfig(aws),
+		rolesAnywhere:  rolesanywhere.NewFromConfig(aws),
+		cloudwatchlogs: cloudwatchlogs.NewFromConfig(aws),
+		taggingClient:  NewResourceTaggingClient(resourcegroupstaggingapi.NewFromConfig(aws)),
 	}
 }
 
@@ -175,6 +181,10 @@ func (c *Sweeper) Run(ctx context.Context, input SweeperInput) error {
 		{
 			Cleanup:        c.cleanupSSMHybridActivations,
 			FailureMessage: "cleaning up SSM hybrid activations",
+		},
+		{
+			Cleanup:        c.cleanupCloudWatchLogGroups,
+			FailureMessage: "cleaning up CloudWatch log groups",
 		},
 	}
 
@@ -670,6 +680,27 @@ func (c *Sweeper) cleanupTransitGateways(ctx context.Context, filterInput Filter
 			return fmt.Errorf("deleting transit gateway %s: %w", transitGatewayID, err)
 		}
 	}
+	return nil
+}
+
+func (c *Sweeper) cleanupCloudWatchLogGroups(ctx context.Context, filterInput FilterInput) error {
+	cleaner := NewCloudWatchLogsCleaner(c.cloudwatchlogs, c.taggingClient, c.logger)
+	logGroupNames, err := cleaner.ListLogGroups(ctx, filterInput)
+	if err != nil {
+		return fmt.Errorf("listing CloudWatch log groups: %w", err)
+	}
+
+	c.logger.Info("Deleting CloudWatch log groups", "logGroupNames", logGroupNames)
+	if filterInput.DryRun {
+		return nil
+	}
+
+	for _, logGroupName := range logGroupNames {
+		if err := cleaner.DeleteLogGroup(ctx, logGroupName); err != nil {
+			return fmt.Errorf("deleting CloudWatch log group %s: %w", logGroupName, err)
+		}
+	}
+
 	return nil
 }
 
