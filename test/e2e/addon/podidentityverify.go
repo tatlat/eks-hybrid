@@ -126,6 +126,13 @@ func (v VerifyPodIdentityAddon) Run(ctx context.Context) error {
 		return fmt.Errorf("creating the awscli pod %s: %w", podName, err)
 	}
 
+	defer func() {
+		if err := kubernetes.DeletePod(ctx, v.K8S, podName, namespace); err != nil {
+			// it's okay not fail this operation as the pod would be eventually deleted when the cluster is deleted
+			v.Logger.Info("Fail to delete aws pod", "podName", podName, "error", err)
+		}
+	}()
+
 	execCommand := []string{
 		"bash", "-c", fmt.Sprintf("aws s3 cp s3://%s/%s . > /dev/null && cat ./%s", v.PodIdentityS3Bucket, bucketObjectKey, bucketObjectKey),
 	}
@@ -136,10 +143,6 @@ func (v VerifyPodIdentityAddon) Run(ctx context.Context) error {
 
 	if stdout != bucketObjectContent {
 		return fmt.Errorf("getting object %s from S3 bucket %s", bucketObjectKey, v.PodIdentityS3Bucket)
-	}
-
-	if err := kubernetes.DeletePod(ctx, v.K8S, podName, namespace); err != nil {
-		return fmt.Errorf("deleting the awscli pod %s: %w", podName, err)
 	}
 
 	return nil
