@@ -3,6 +3,6 @@ version: 0.2
 phases:
   build:
     commands:
-    - aws s3 sync --no-progress _bin/amd64/ s3://$ARTIFACTS_BUCKET/latest/linux/amd64/ --acl public-read
-    - aws s3 sync --no-progress _bin/arm64/ s3://$ARTIFACTS_BUCKET/latest/linux/arm64/ --acl public-read
+    - aws s3 sync --no-progress --exclude "*nodeadm.gz" _bin/ s3://$ARTIFACTS_BUCKET/latest/linux/ --acl public-read
+    - aws s3 sync --no-progress --include "*nodeadm.gz" --content-encoding gzip _bin/ s3://$ARTIFACTS_BUCKET/latest/linux/ --acl public-read
     - aws s3 cp _bin/GIT_VERSION s3://$ARTIFACTS_BUCKET/latest/GIT_VERSION --acl public-read
