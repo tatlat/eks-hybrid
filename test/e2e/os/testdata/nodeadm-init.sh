@@ -17,12 +17,12 @@ NODEADM_ADDITIONAL_ARGS="${5-}"
 # so deletion succeeds and is not replaced by the running container
 rm -rf /etc/cni/net.d
 
-echo "Downloading nodeadm binary"
-for i in {1..5}; do curl --fail -s --retry 5 -L "$NODEADM_URL" -o /tmp/nodeadm-bin && break || sleep 5; done
-
-chmod +x /tmp/nodeadm-bin
+if [ ! -f /usr/local/bin/nodeadm ]; then
+    echo "Downloading nodeadm binary"
+    for i in {1..5}; do curl --compressed --fail -s --retry 5 -L "$NODEADM_URL" -o /usr/local/bin/nodeadm && break || sleep 5; done
+    chmod +x /usr/local/bin/nodeadm
+fi
 mv /tmp/nodeadm-wrapper.sh /tmp/nodeadm
-
 
 echo "Installing kubernetes components"
 # the test will wait up to 10 minutes for the node to become ready

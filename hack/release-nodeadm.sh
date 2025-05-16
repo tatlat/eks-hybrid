@@ -12,31 +12,25 @@ echo "Starting nodeadm release process..."
 
 # Upload to production
 echo "Uploading nodeadm to production..."
-aws s3 cp --no-progress _bin/amd64/nodeadm "s3://${PROD_BUCKET}/releases/${VERSION}/bin/linux/amd64/nodeadm" --profile "${PROFILE}"
-aws s3 cp --no-progress _bin/arm64/nodeadm "s3://${PROD_BUCKET}/releases/${VERSION}/bin/linux/arm64/nodeadm" --profile "${PROFILE}"
+for ARCH in amd64 arm64; do
+  aws s3 cp --no-progress _bin/${ARCH}/nodeadm "s3://${PROD_BUCKET}/releases/${VERSION}/bin/linux/${ARCH}/nodeadm" --profile "${PROFILE}"
+  aws s3 cp --no-progress _bin/${ARCH}/nodeadm.gz "s3://${PROD_BUCKET}/releases/${VERSION}/bin/linux/${ARCH}/nodeadm.gz" --profile "${PROFILE}" --content-encoding gzip
+done
 
 # Generate and upload checksums
 echo "Generating and uploading nodeadm checksums..."
-# AMD64 checksums
-sha256sum _bin/amd64/nodeadm > _bin/amd64/nodeadm.sha256
-aws s3 cp --no-progress _bin/amd64/nodeadm.sha256 "s3://${PROD_BUCKET}/releases/${VERSION}/bin/linux/amd64/nodeadm.sha256" --profile "${PROFILE}"
-sha512sum _bin/amd64/nodeadm > _bin/amd64/nodeadm.sha512
-aws s3 cp --no-progress _bin/amd64/nodeadm.sha512 "s3://${PROD_BUCKET}/releases/${VERSION}/bin/linux/amd64/nodeadm.sha512" --profile "${PROFILE}"
-
-# ARM64 checksums
-sha256sum _bin/arm64/nodeadm > _bin/arm64/nodeadm.sha256
-aws s3 cp --no-progress _bin/arm64/nodeadm.sha256 "s3://${PROD_BUCKET}/releases/${VERSION}/bin/linux/arm64/nodeadm.sha256" --profile "${PROFILE}"
-sha512sum _bin/arm64/nodeadm > _bin/arm64/nodeadm.sha512
-aws s3 cp --no-progress _bin/arm64/nodeadm.sha512 "s3://${PROD_BUCKET}/releases/${VERSION}/bin/linux/arm64/nodeadm.sha512" --profile "${PROFILE}"
+for ARCH in amd64 arm64; do
+  for FILE in nodeadm nodeadm.gz; do
+    for CHECKSUM in sha256 sha512; do
+      ${CHECKSUM}sum _bin/${ARCH}/${FILE} > _bin/${ARCH}/${FILE}.${CHECKSUM}
+      aws s3 cp --no-progress _bin/${ARCH}/${FILE}.${CHECKSUM} "s3://${PROD_BUCKET}/releases/${VERSION}/bin/linux/${ARCH}/${FILE}.${CHECKSUM}" --profile "${PROFILE}"
+    done
+  done
+done
 
 # Update latest symlinks
 echo "Updating latest symlinks for nodeadm..."
-aws s3 cp --no-progress _bin/amd64/nodeadm "s3://${PROD_BUCKET}/releases/latest/bin/linux/amd64/nodeadm" --profile "${PROFILE}"
-aws s3 cp --no-progress _bin/arm64/nodeadm "s3://${PROD_BUCKET}/releases/latest/bin/linux/arm64/nodeadm" --profile "${PROFILE}"
-aws s3 cp --no-progress _bin/amd64/nodeadm.sha256 "s3://${PROD_BUCKET}/releases/latest/bin/linux/amd64/nodeadm.sha256" --profile "${PROFILE}"
-aws s3 cp --no-progress _bin/arm64/nodeadm.sha256 "s3://${PROD_BUCKET}/releases/latest/bin/linux/arm64/nodeadm.sha256" --profile "${PROFILE}"
-aws s3 cp --no-progress _bin/amd64/nodeadm.sha512 "s3://${PROD_BUCKET}/releases/latest/bin/linux/amd64/nodeadm.sha512" --profile "${PROFILE}"
-aws s3 cp --no-progress _bin/arm64/nodeadm.sha512 "s3://${PROD_BUCKET}/releases/latest/bin/linux/arm64/nodeadm.sha512" --profile "${PROFILE}"
+aws s3 sync --no-progress s3://${PROD_BUCKET}/releases/${VERSION}/bin/linux/ s3://${PROD_BUCKET}/releases/latest/bin/linux/ --profile "${PROFILE}"
 
 # Generate and upload attribution
 echo "Generating and uploading attribution..."
