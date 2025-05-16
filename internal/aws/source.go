@@ -168,7 +168,13 @@ func (as Source) GetSigningHelper(ctx context.Context) (artifact.Source, error) 
 func getSource(ctx context.Context, artifactName string, availableArtifacts []Artifact) (artifact.Source, error) {
 	for _, releaseArtifact := range availableArtifacts {
 		if releaseArtifact.Name == artifactName && releaseArtifact.Arch == runtime.GOARCH && releaseArtifact.OS == runtime.GOOS {
-			obj, err := util.GetHttpFileReader(ctx, releaseArtifact.URI)
+			uri := releaseArtifact.URI
+			if releaseArtifact.GzipURI != "" {
+				// the same checksum will be used for both gzip and non-gzip uri
+				// gzip decompression will happen before checksum verification
+				uri = releaseArtifact.GzipURI
+			}
+			obj, err := util.GetHttpFileReader(ctx, uri)
 			if err != nil {
 				return nil, fmt.Errorf("getting artifact file reader: %w", err)
 			}
@@ -179,7 +185,13 @@ func getSource(ctx context.Context, artifactName string, availableArtifacts []Ar
 				return nil, fmt.Errorf("getting artifact checksum file reader: %w", err)
 			}
 
-			source, err := artifact.WithChecksum(obj, sha256.New(), artifactChecksum)
+			var source artifact.Source
+			if releaseArtifact.GzipURI != "" {
+				source, err = artifact.GzippedWithChecksum(obj, sha256.New(), artifactChecksum)
+			} else {
+				source, err = artifact.WithChecksum(obj, sha256.New(), artifactChecksum)
+			}
+
 			if err != nil {
 				obj.Close()
 				return nil, fmt.Errorf("getting artifact with checksum: %w", err)

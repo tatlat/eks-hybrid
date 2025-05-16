@@ -47,6 +47,7 @@ type Artifact struct {
 	OS          string `json:"os"`
 	URI         string `json:"uri"`
 	ChecksumURI string `json:"checksum_uri"`
+	GzipURI     string `json:"gzip_uri"`
 }
 
 // Read from the manifest file on s3 and parse into Manifest struct
