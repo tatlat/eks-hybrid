@@ -76,6 +76,10 @@ func findHybridVPC(ctx context.Context, client *ec2.Client, clusterVpcID string)
 				Name:   aws.String("resource-type"),
 				Values: []string{"vpc"},
 			},
+			{
+				Name:   aws.String("state"),
+				Values: []string{"available"},
+			},
 		},
 	})
 	if err != nil {
