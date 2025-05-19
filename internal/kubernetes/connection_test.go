@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"testing"
+	"time"
 
 	. "github.com/onsi/gomega"
 
@@ -34,7 +35,7 @@ func TestCheckConnectionSuccess(t *testing.T) {
 
 func TestCheckConnectionInvalidURL(t *testing.T) {
 	g := NewGomegaWithT(t)
-	ctx := context.Background()
+	ctx := test.ContextWithTimeout(t, 10*time.Millisecond)
 	informer := test.NewFakeInformer()
 
 	config := &api.NodeConfig{
@@ -54,7 +55,7 @@ func TestCheckConnectionInvalidURL(t *testing.T) {
 
 func TestCheckConnectionFailureWithAccess(t *testing.T) {
 	g := NewGomegaWithT(t)
-	ctx := context.Background()
+	ctx := test.ContextWithTimeout(t, 10*time.Millisecond)
 	informer := test.NewFakeInformer()
 
 	config := &api.NodeConfig{
@@ -68,6 +69,6 @@ func TestCheckConnectionFailureWithAccess(t *testing.T) {
 	err := kubernetes.CheckConnection(ctx, informer, config)
 	g.Expect(err).NotTo(Succeed())
 	g.Expect(informer.Started).To(BeTrue())
-	g.Expect(informer.DoneWith).To(HaveOccurred())
+	g.Expect(informer.DoneWith).To(MatchError(ContainSubstring("connect: connection refused")))
 	g.Expect(validation.Remediation(informer.DoneWith)).To(Equal("Ensure your network configuration allows the node to access the Kubernetes API endpoint."))
 }

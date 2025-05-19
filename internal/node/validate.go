@@ -2,19 +2,21 @@ package node
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/url"
 	"slices"
 	"strings"
 
+	"github.com/pkg/errors"
 	"golang.org/x/mod/semver"
 	authenticationv1 "k8s.io/api/authentication/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/aws/eks-hybrid/internal/api"
+	k8s "github.com/aws/eks-hybrid/internal/kubernetes"
 	"github.com/aws/eks-hybrid/internal/network"
+	"github.com/aws/eks-hybrid/internal/retry"
 	"github.com/aws/eks-hybrid/internal/validation"
 )
 
@@ -52,7 +54,7 @@ func (a APIServerValidator) MakeAuthenticatedRequest(ctx context.Context, inform
 		return err
 	}
 
-	_, err = client.CoreV1().Endpoints("default").Get(ctx, "kubernetes", metav1.GetOptions{})
+	_, err = k8s.GetRetry(ctx, client.CoreV1().Endpoints("default"), "kubernetes")
 	if err != nil {
 		err = validation.WithRemediation(err, badPermissionsRemediation)
 		return err
@@ -86,7 +88,11 @@ func (a APIServerValidator) CheckIdentity(ctx context.Context, informer validati
 
 	self := &authenticationv1.SelfSubjectReview{}
 
-	self, err = client.AuthenticationV1().SelfSubjectReviews().Create(ctx, self, metav1.CreateOptions{})
+	err = retry.NetworkRequest(ctx, func(ctx context.Context) error {
+		var err error
+		self, err = client.AuthenticationV1().SelfSubjectReviews().Create(ctx, self, metav1.CreateOptions{})
+		return err
+	})
 	if err != nil {
 		err = validation.WithRemediation(err, badPermissionsRemediation)
 		return err
@@ -140,7 +146,7 @@ func (a APIServerValidator) CheckVPCEndpointAccess(ctx context.Context, informer
 		return err
 	}
 
-	kubeEndpoint, err := client.CoreV1().Endpoints("default").Get(ctx, "kubernetes", metav1.GetOptions{})
+	kubeEndpoint, err := k8s.GetRetry(ctx, client.CoreV1().Endpoints("default"), "kubernetes")
 	if err != nil {
 		err = validation.WithRemediation(err, badPermissionsRemediation)
 		return err
@@ -172,7 +178,10 @@ func (a APIServerValidator) CheckVPCEndpointAccess(ctx context.Context, informer
 				Host:   fmt.Sprintf("%s:%d", address.IP, port),
 			}
 
-			if err = network.CheckConnectionToHost(ctx, u); err != nil {
+			err = retry.NetworkRequest(ctx, func(ctx context.Context) error {
+				return network.CheckConnectionToHost(ctx, u)
+			})
+			if err != nil {
 				err = validation.WithRemediation(err,
 					fmt.Sprintf("Ensure the node has access to the Kube-API server endpoint %s in the VPC", address.IP),
 				)
