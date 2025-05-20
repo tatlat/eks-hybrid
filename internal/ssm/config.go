@@ -1,13 +1,16 @@
 package ssm
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
+	"time"
 
 	"go.uber.org/zap"
 
 	"github.com/aws/eks-hybrid/internal/api"
+	"github.com/aws/eks-hybrid/internal/util/cmd"
 )
 
 type HybridInstanceRegistration struct {
@@ -31,16 +34,21 @@ func (s *ssm) registerMachine(cfg *api.NodeConfig) error {
 		}
 
 		s.logger.Info("Registering machine with SSM agent")
-		registerCmd := exec.Command(agentPath,
-			"-register", "-y",
-			"-region", cfg.Spec.Cluster.Region,
-			"-code", cfg.Spec.Hybrid.SSM.ActivationCode,
-			"-id", cfg.Spec.Hybrid.SSM.ActivationID,
-		)
 
-		out, err := registerCmd.CombinedOutput()
-		if err != nil {
-			return fmt.Errorf("running register machine command: %s, error: %v", out, err)
+		cmdBuilder := func(ctx context.Context) *exec.Cmd {
+			return exec.CommandContext(ctx, agentPath,
+				"-register", "-y",
+				"-region", cfg.Spec.Cluster.Region,
+				"-code", cfg.Spec.Hybrid.SSM.ActivationCode,
+				"-id", cfg.Spec.Hybrid.SSM.ActivationID,
+			)
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+
+		if err := cmd.Retry(ctx, cmdBuilder, 10*time.Second); err != nil {
+			return fmt.Errorf("failed to register machine with SSM after multiple attempts: %w", err)
 		}
 	}
 
