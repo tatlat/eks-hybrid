@@ -22,6 +22,12 @@ type Retrier struct {
 	// the backoff reaches its limit (if configured to do so) or
 	// the context is cancelled.
 	Timeout time.Duration
+	// OperationTimeout is the maximum time for a single operation.
+	// If zero, the operation is not timed out.
+	// This is controlled through the context, if the operation code
+	// doesn't respect the context cancellation, the operation might
+	// run for longer than this timeout.
+	OperationTimeout time.Duration
 	// Backoff is the backoff configuration for the retry loop.
 	Backoff Backoff
 }
@@ -57,6 +63,11 @@ func (r *Retrier) Do(ctx context.Context, op Operation) error {
 
 	var lastErr error
 	err := wait.ExponentialBackoffWithContext(ctx, backoff, func(ctx context.Context) (bool, error) {
+		if r.OperationTimeout != 0 {
+			var cancel func()
+			ctx, cancel = context.WithTimeout(ctx, r.OperationTimeout)
+			defer cancel()
+		}
 		done, err := op(ctx)
 		if err != nil {
 			lastErr = err
