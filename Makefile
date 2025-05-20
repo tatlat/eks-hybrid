@@ -13,7 +13,7 @@ GIT_VERSION?=0.0.0
 MANIFEST_HOST?=hybrid-assets.eks.amazonaws.com
 HYBRID_MANIFEST_URL=https://$(MANIFEST_HOST)/manifest.yaml
 
-E2E_SUITES?=./test/e2e/suite/nodeadm ./test/e2e/suite/conformance
+E2E_SUITES?=./test/e2e/suite/nodeadm ./test/e2e/suite/conformance ./test/e2e/suite/addons
 
 .PHONY: all
 all: crds generate fmt vet build
@@ -70,7 +70,7 @@ vet: ## Run go vet against code.
 
 .PHONY: test
 test: ## Run validate tests.
-	$(GO) test ./... 
+	$(GO) test ./...
 
 COVERAGEFILE = $(LOCALBIN)/coverage.out
 .PHONY: coverage
