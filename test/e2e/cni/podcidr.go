@@ -11,13 +11,14 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/util/retry"
 
-	"github.com/aws/eks-hybrid/test/e2e/kubernetes"
+	"github.com/aws/eks-hybrid/internal/kubernetes"
+	k8se2e "github.com/aws/eks-hybrid/test/e2e/kubernetes"
 )
 
 // NodePodCIDRs returns the pod CIDRs assigned to a node by the CNI.
 // Only Cilium and Calico are supported.
 func NodePodCIDRs(ctx context.Context, k8s dynamic.Interface, node *corev1.Node) ([]string, error) {
-	networkCondition := kubernetes.NetworkUnavailableCondition(node)
+	networkCondition := k8se2e.NetworkUnavailableCondition(node)
 	if networkCondition == nil {
 		return nil, fmt.Errorf("node %s does not have network unavailable condition, can't determine CNI", node.Name)
 	}
@@ -43,7 +44,7 @@ func ciliumNodePodCIDR(ctx context.Context, k8s dynamic.Interface, node *corev1.
 		Resource: "ciliumnodes",
 	}
 
-	obj, err := kubernetes.RetryGet(ctx, k8s.Resource(ciliumNodeGVR), node.Name)
+	obj, err := kubernetes.GetRetry(ctx, kubernetes.GetterForDynamic(k8s.Resource(ciliumNodeGVR)), node.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -78,7 +79,7 @@ func getCalicoNodePodCIDR(ctx context.Context, k8s dynamic.Interface, node *core
 		Resource: "ipamblocks",
 	}
 
-	ipamBlocks, err := kubernetes.RetryList(ctx, k8s.Resource(ipamBlockGVR))
+	ipamBlocks, err := kubernetes.ListRetry(ctx, k8s.Resource(ipamBlockGVR))
 	if err != nil {
 		return nil, err
 	}
