@@ -7,8 +7,11 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"math/rand"
 	"testing"
+	"time"
 
+	smithyTime "github.com/aws/smithy-go/time"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"gopkg.in/yaml.v2"
@@ -50,6 +53,10 @@ var _ = SynchronizedBeforeSuite(
 	// a struct that we can make accessible from the tests. We leave the rest
 	// for the per tests setup code.
 	func(ctx context.Context, data []byte) {
+		// add a small sleep to add jitter to the start of each test
+		randomSleep := rand.Intn(10)
+		err := smithyTime.SleepWithContext(ctx, time.Duration(randomSleep)*time.Second)
+		Expect(err).NotTo(HaveOccurred(), "failed to sleep")
 		suiteConfig = suite.BeforeSuiteCredentialUnmarshal(ctx, data)
 	},
 )
