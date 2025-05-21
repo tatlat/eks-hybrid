@@ -40,7 +40,7 @@ func NewKubeletDaemon(daemonManager daemon.DaemonManager, cfg *api.NodeConfig, a
 	}
 }
 
-func (k *kubelet) Configure() error {
+func (k *kubelet) Configure(ctx context.Context) error {
 	if err := k.writeKubeletConfig(); err != nil {
 		return err
 	}

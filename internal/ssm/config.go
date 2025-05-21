@@ -13,12 +13,20 @@ import (
 	"github.com/aws/eks-hybrid/internal/util/cmd"
 )
 
+const (
+	// SSMRegistrationTimeout is the maximum time to wait for SSM registration to complete
+	SSMRegistrationTimeout = 60 * time.Second
+
+	// SSMRegistrationBackoff is the time to wait between registration retry attempts
+	SSMRegistrationBackoff = 10 * time.Second
+)
+
 type HybridInstanceRegistration struct {
 	ManagedInstanceID string `json:"ManagedInstanceID"`
 	Region            string `json:"Region"`
 }
 
-func (s *ssm) registerMachine(cfg *api.NodeConfig) error {
+func (s *ssm) registerMachine(ctx context.Context, cfg *api.NodeConfig) error {
 	registration := NewSSMRegistration()
 	registered, err := registration.isRegistered()
 	if err != nil {
@@ -44,10 +52,7 @@ func (s *ssm) registerMachine(cfg *api.NodeConfig) error {
 			)
 		}
 
-		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-		defer cancel()
-
-		if err := cmd.Retry(ctx, cmdBuilder, 10*time.Second); err != nil {
+		if err := cmd.Retry(ctx, cmdBuilder, SSMRegistrationBackoff); err != nil {
 			return fmt.Errorf("failed to register machine with SSM after multiple attempts: %w", err)
 		}
 	}

@@ -68,7 +68,7 @@ type SSMAWSConfigurator struct {
 
 func (c SSMAWSConfigurator) Configure(ctx context.Context, nodeConfig *api.NodeConfig) error {
 	ssmDaemon := ssm.NewSsmDaemon(c.Manager, nodeConfig, c.Logger)
-	if err := ssmDaemon.Configure(); err != nil {
+	if err := ssmDaemon.Configure(ctx); err != nil {
 		return err
 	}
 	if err := ssmDaemon.EnsureRunning(ctx); err != nil {
@@ -107,7 +107,7 @@ func (c RolesAnywhereAWSConfigurator) Configure(ctx context.Context, nodeConfig 
 
 	c.Logger.Info("Configuring aws_signing_helper_update daemon")
 	signingHelper := iamrolesanywhere.NewSigningHelperDaemon(c.Manager, nodeConfig, c.Logger)
-	if err := signingHelper.Configure(); err != nil {
+	if err := signingHelper.Configure(ctx); err != nil {
 		return err
 	}
 	if err := signingHelper.EnsureRunning(ctx); err != nil {
