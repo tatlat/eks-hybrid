@@ -2,6 +2,7 @@ package kubernetes
 
 import (
 	"context"
+	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -31,7 +32,7 @@ func GetRetry[O runtime.Object](ctx context.Context, getter Getter[O], name stri
 	}
 
 	var obj O
-	err := retry.NetworkRequest(ctx, func(ctx context.Context) error {
+	err := retryRequest(ctx, func(ctx context.Context) error {
 		var err error
 		obj, err = getter.Get(ctx, name, getOpt.GetOptions)
 		return err
@@ -62,11 +63,44 @@ func ListRetry[O runtime.Object](ctx context.Context, lister Lister[O], opts ...
 	}
 
 	var obj O
-	err := retry.NetworkRequest(ctx, func(ctx context.Context) error {
+	err := retryRequest(ctx, func(ctx context.Context) error {
 		var err error
 		obj, err = lister.List(ctx, listOpt.ListOptions)
 		return err
 	})
 
 	return obj, err
+}
+
+func retryRequest(ctx context.Context, request func(context.Context) error) error {
+	return defaultRetrier().Do(ctx, func(ctx context.Context) (bool, error) {
+		if err := request(ctx); err != nil {
+			return false, err
+		}
+		return true, nil
+	})
+}
+
+func defaultRetrier() *retry.Retrier {
+	return &retry.Retrier{
+		// The slowest operations to return are usually the requests that are throttled
+		// by the API server, which clitn-go retries by itself. We have observed that
+		// most of them return in 30s or less. If something takes longer, we just assume
+		// it won't return, abort and retry.
+		OperationTimeout: 30 * time.Second,
+		// Regardless of the operation speed and the number of retries, we set the upper
+		// bound time to 2 minutes, if we can't get a successful response in that time,
+		// we assume this is not transient.
+		Timeout: 2 * time.Minute,
+		Backoff: retry.Backoff{
+			// Classic exponential backoff with 10% jitter
+			// to avoid syncronized requests.
+			Duration: 1 * time.Second,
+			Factor:   2,
+			Jitter:   0.1,
+			// We limit the number of retries in case the operations return fast,
+			// to avoid retrying for up to the max timeout.
+			Steps: 4,
+		},
+	}
 }
