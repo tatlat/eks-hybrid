@@ -8,12 +8,14 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/eks"
 	"github.com/aws/aws-sdk-go-v2/service/eks/types"
 	"github.com/go-logr/logr"
+	clientgo "k8s.io/client-go/kubernetes"
 
 	"github.com/aws/eks-hybrid/test/e2e/errors"
 )
 
 type Addon struct {
 	Name          string
+	Namespace     string
 	Cluster       string
 	Configuration string
 }
@@ -54,7 +56,7 @@ func (a Addon) describe(ctx context.Context, client *eks.Client) (*types.Addon, 
 	return describeAddonOutput.Addon, nil
 }
 
-func (a Addon) WaitUtilActive(ctx context.Context, client *eks.Client, logger logr.Logger) error {
+func (a Addon) WaitUntilActive(ctx context.Context, client *eks.Client, logger logr.Logger) error {
 	logger.Info("Describe cluster add-on", "ClusterAddon", a.Name)
 
 	for {
@@ -82,4 +84,33 @@ func (a Addon) WaitUtilActive(ctx context.Context, client *eks.Client, logger lo
 		case <-time.After(backoff):
 		}
 	}
+}
+
+func (a Addon) CreateAndWaitForActive(ctx context.Context, eksClient *eks.Client, k8s clientgo.Interface, logger logr.Logger) error {
+	if err := a.Create(ctx, eksClient, logger); err != nil {
+		return err
+	}
+
+	if err := a.WaitUntilActive(ctx, eksClient, logger); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (a Addon) Delete(ctx context.Context, client *eks.Client, logger logr.Logger) error {
+	logger.Info("Delete cluster add-on", "ClusterAddon", a.Name)
+
+	params := &eks.DeleteAddonInput{
+		ClusterName: &a.Cluster,
+		AddonName:   &a.Name,
+	}
+
+	_, err := client.DeleteAddon(ctx, params)
+
+	if err == nil || errors.IsType(err, &types.ResourceNotFoundException{}) {
+		// Ignore if add-on doesn't exist
+		return nil
+	}
+	return err
 }

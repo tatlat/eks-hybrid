@@ -57,8 +57,13 @@ func GetAndWait[O runtime.Object](ctx context.Context, timeout time.Duration, ge
 // It will retry until the timeout is reached or the condition is met.
 // To allow for longer wait times while avoiding to retry non-transient errors,
 // we only retry up to 3 consecutive errors coming from the API server.
-func ListAndWait[O runtime.Object](ctx context.Context, timeout time.Duration, list Lister[O], ready func(O) bool) (O, error) {
+func ListAndWait[O runtime.Object](ctx context.Context, timeout time.Duration, list Lister[O], ready func(O) bool, opts ...ListOption) (O, error) {
+	listOpt := &ListOptions{}
+	for _, opt := range opts {
+		opt(listOpt)
+	}
+
 	return WaitFor(ctx, timeout, func(ctx context.Context) (O, error) {
-		return list.List(ctx, metav1.ListOptions{})
+		return list.List(ctx, listOpt.ListOptions)
 	}, ready)
 }

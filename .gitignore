@@ -5,6 +5,7 @@ cover.out
 coverage.out
 .idea
 .vscode
+.zed
 .DS_Store
 vendor
 e2e-artifacts
