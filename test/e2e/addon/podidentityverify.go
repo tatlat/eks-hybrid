@@ -48,7 +48,19 @@ type PolicyDocument struct {
 type StatementEntry struct {
 	Effect   string
 	Action   []string
-	Resource []string
+	Resource *string
+}
+
+type TrustPolicyDocument struct {
+	Version   string
+	Statement []TrustStatement
+}
+
+type TrustStatement struct {
+	Effect    string
+	Action    []string
+	Principal map[string]string
+	Condition map[string]map[string]string
 }
 
 func (v VerifyPodIdentityAddon) Run(ctx context.Context) error {

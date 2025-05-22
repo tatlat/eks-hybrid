@@ -12,8 +12,8 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-// yamlToUnstructured takes a YAML and converts it to a list of Unstructured objects.
-func yamlToUnstructured(rawyaml []byte) ([]unstructured.Unstructured, error) {
+// YamlToUnstructured takes a YAML and converts it to a list of Unstructured objects.
+func YamlToUnstructured(rawyaml []byte) ([]unstructured.Unstructured, error) {
 	var ret []unstructured.Unstructured
 
 	reader := apiyaml.NewYAMLReader(bufio.NewReader(bytes.NewReader(rawyaml)))

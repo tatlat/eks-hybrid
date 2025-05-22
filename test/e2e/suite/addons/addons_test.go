@@ -112,6 +112,120 @@ var _ = Describe("Hybrid Nodes", func() {
 					Succeed(), "node monitoring agent should have been validated successfully",
 				)
 			}, Label("node-monitoring-agent"))
+
+			It("runs metrics server tests", func(ctx context.Context) {
+				metricsServer := addonEc2Test.NewMetricsServerTest()
+
+				DeferCleanup(func(ctx context.Context) {
+					Expect(metricsServer.Delete(ctx)).To(Succeed(), "should cleanup metrics server successfully")
+				})
+
+				Expect(metricsServer.Create(ctx)).To(
+					Succeed(), "metrics server should have created successfully",
+				)
+
+				DeferCleanup(func(ctx context.Context) {
+					// only print logs after addon successfully created
+					report := CurrentSpecReport()
+					if report.State.Is(types.SpecStateFailed) {
+						err := metricsServer.PrintLogs(ctx)
+						if err != nil {
+							// continue cleanup even if logs collection fails
+							GinkgoWriter.Printf("Failed to get metrics server logs: %v\n", err)
+						}
+					}
+				})
+
+				Expect(metricsServer.Validate(ctx)).To(
+					Succeed(), "metrics server should have been validated successfully",
+				)
+			}, Label("metrics-server"))
+
+			It("runs kube state metrics tests", func(ctx context.Context) {
+				kubeStateMetrics := addonEc2Test.NewKubeStateMetricsTest()
+
+				DeferCleanup(func(ctx context.Context) {
+					Expect(kubeStateMetrics.Delete(ctx)).To(Succeed(), "should cleanup kube state metrics successfully")
+				})
+
+				Expect(kubeStateMetrics.Create(ctx)).To(
+					Succeed(), "kube state metrics should have created successfully",
+				)
+
+				DeferCleanup(func(ctx context.Context) {
+					// only print logs after addon successfully created
+					report := CurrentSpecReport()
+					if report.State.Is(types.SpecStateFailed) {
+						err := kubeStateMetrics.PrintLogs(ctx)
+						if err != nil {
+							// continue cleanup even if logs collection fails
+							GinkgoWriter.Printf("Failed to get kube state metrics logs: %v\n", err)
+						}
+					}
+				})
+
+				Expect(kubeStateMetrics.Validate(ctx)).To(
+					Succeed(), "kube state metrics should have been validated successfully",
+				)
+			}, Label("kube-state-metrics"))
+
+			It("runs prometheus node exporter tests", func(ctx context.Context) {
+				prometheusNodeExporter := addonEc2Test.NewPrometheusNodeExporterTest()
+
+				DeferCleanup(func(ctx context.Context) {
+					Expect(prometheusNodeExporter.Delete(ctx)).To(Succeed(), "should cleanup prometheus node exporter successfully")
+				})
+
+				Expect(prometheusNodeExporter.Create(ctx)).To(
+					Succeed(), "prometheus node exporter should have created successfully",
+				)
+
+				DeferCleanup(func(ctx context.Context) {
+					// only print logs after addon successfully created
+					report := CurrentSpecReport()
+					if report.State.Is(types.SpecStateFailed) {
+						err := prometheusNodeExporter.PrintLogs(ctx)
+						if err != nil {
+							// continue cleanup even if logs collection fails
+							GinkgoWriter.Printf("Failed to get prometheus node exporter logs: %v\n", err)
+						}
+					}
+				})
+
+				Expect(prometheusNodeExporter.Validate(ctx)).To(
+					Succeed(), "prometheus node exporter should have been validated successfully",
+				)
+			}, Label("prometheus-node-exporter"))
+
+			It("runs cert manager tests", func(ctx context.Context) {
+				certManager := addonEc2Test.NewCertManagerTest()
+
+				DeferCleanup(func(ctx context.Context) {
+					Expect(certManager.Delete(ctx)).To(Succeed(), "should cleanup cert manager successfully")
+				})
+
+				Expect(certManager.Create(ctx)).To(
+					Succeed(), "cert manager should have created successfully",
+				)
+
+				DeferCleanup(func(ctx context.Context) {
+					// only print logs after addon successfully created
+					report := CurrentSpecReport()
+					if report.State.Is(types.SpecStateFailed) {
+						err := certManager.PrintLogs(ctx)
+						if err != nil {
+							// continue cleanup even if logs collection fails
+							GinkgoWriter.Printf("Failed to get cert manager logs: %v\n", err)
+						}
+					}
+				})
+
+				Expect(certManager.Validate(ctx)).To(
+					Succeed(), "cert manager should have been validated successfully",
+				)
+			}, Label("cert-manager", "aws-pca-issuer"))
+
+
 		})
 	})
 })

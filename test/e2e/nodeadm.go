@@ -22,7 +22,9 @@ type NodeadmOS interface {
 type InstanceSize int
 
 const (
-	Large InstanceSize = iota
+	Small InstanceSize = iota
+	Medium
+	Large
 	XLarge
 )
 

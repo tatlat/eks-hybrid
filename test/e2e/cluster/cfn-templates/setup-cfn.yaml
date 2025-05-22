@@ -1,4 +1,4 @@
-AWSTemplateFormatVersion: '2010-09-09'
+AWSTemplateFormatVersion: "2010-09-09"
 Description: CloudFormation template to create resources needed to run E2E tests
 
 Parameters:
@@ -13,7 +13,7 @@ Parameters:
   ClusterVPCCidr:
     Type: String
     Description: EKS Hybrid Cluster VPC CIDR block
-  
+
   ClusterPublicSubnetCidr:
     Type: String
     Description: EKS Hybrid Cluster public subnet VPC CIDR block
@@ -21,11 +21,11 @@ Parameters:
   ClusterPrivateSubnetCidr:
     Type: String
     Description: EKS Hybrid Cluster private subnet VPC CIDR block
-  
+
   HybridNodeVPCCidr:
     Type: String
     Description: EC2 Hybrid Nodes VPC CIDR block
-  
+
   HybridNodePodCidr:
     Type: String
     Description: EKS Hybrid Nodes Pod CIDR block
@@ -72,14 +72,14 @@ Resources:
             Effect: Allow
             Principal:
               Service: !Ref EKSClusterRoleSP
-        Version: '2012-10-17'
+        Version: "2012-10-17"
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AmazonEKSClusterPolicy
       Tags:
         - Key: !Ref TestClusterTagKey
           Value: !Ref ClusterName
       Path: !Ref RolePathPrefix
-  
+
   ClusterVPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -98,7 +98,7 @@ Resources:
   ClusterVPCPublicSubnet:
     Type: AWS::EC2::Subnet
     Properties:
-      AvailabilityZone: !Select [0, !GetAZs '']
+      AvailabilityZone: !Select [0, !GetAZs ""]
       CidrBlock: !Ref ClusterPublicSubnetCidr
       MapPublicIpOnLaunch: true
       Tags:
@@ -109,11 +109,11 @@ Resources:
         - Key: !Ref CreationTimeTagKey
           Value: !Ref CreationTime
       VpcId: !Ref ClusterVPC
-  
+
   ClusterVPCPrivateSubnet:
     Type: AWS::EC2::Subnet
     Properties:
-      AvailabilityZone: !Select [1, !GetAZs '']
+      AvailabilityZone: !Select [1, !GetAZs ""]
       CidrBlock: !Ref ClusterPrivateSubnetCidr
       Tags:
         - Key: Name
@@ -155,7 +155,7 @@ Resources:
 
   ClusterRouteToInternet:
     Type: AWS::EC2::Route
-    DependsOn: 
+    DependsOn:
       - ClusterInternetGatewayAttachment
     Properties:
       DestinationCidrBlock: 0.0.0.0/0
@@ -218,11 +218,11 @@ Resources:
           Value: !Ref ClusterName
         - Key: !Ref CreationTimeTagKey
           Value: !Ref CreationTime
-  
+
   HybridNodeVPCPublicSubnet:
     Type: AWS::EC2::Subnet
     Properties:
-      AvailabilityZone: !Select [0, !GetAZs '']
+      AvailabilityZone: !Select [0, !GetAZs ""]
       CidrBlock: !Ref HybridNodePublicSubnetCidr
       MapPublicIpOnLaunch: true
       Tags:
@@ -284,7 +284,25 @@ Resources:
       GroupId: !GetAtt HybridNodeVPC.DefaultSecurityGroup
       IpProtocol: tcp
       FromPort: 10250
-      ToPort: 10250
+      ToPort: 10275
+      CidrIp: !Ref ClusterVPCCidr
+
+  HybridNodePrometheusSecurityGroupIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !GetAtt HybridNodeVPC.DefaultSecurityGroup
+      IpProtocol: tcp
+      FromPort: 9100
+      ToPort: 9100
+      CidrIp: !Ref ClusterVPCCidr
+
+  HybridNodeKubeStateSecurityGroupIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !GetAtt HybridNodeVPC.DefaultSecurityGroup
+      IpProtocol: tcp
+      FromPort: 8080
+      ToPort: 8080
       CidrIp: !Ref ClusterVPCCidr
 
   HybridNodeAllowWebhooksIngress:
@@ -393,7 +411,7 @@ Resources:
       RouteTableId: !Ref ClusterRouteTable
       DestinationCidrBlock: !Ref HybridNodeVPCCidr
       TransitGatewayId: !Ref ClusterToHybridTGW
-  
+
   ClusterPrivateRouteToHybridNode:
     Type: AWS::EC2::Route
     # This explicit dep is needed to ensure the TransitGatewayAttachment is created before the route is created
@@ -441,15 +459,15 @@ Resources:
   JumpboxInstanceRole:
     Type: AWS::IAM::Role
     Properties:
-      AssumeRolePolicyDocument: 
-        Version: '2012-10-17'
-        Statement: 
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
           - Effect: Allow
-            Principal: 
+            Principal:
               Service: ssm.amazonaws.com
             Action: sts:AssumeRole
           - Effect: Allow
-            Principal: 
+            Principal:
               Service: ec2.amazonaws.com
             Action: sts:AssumeRole
       ManagedPolicyArns:
@@ -462,21 +480,21 @@ Resources:
   JumpboxInstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      Roles: 
+      Roles:
         - !Ref JumpboxInstanceRole
       Path: !Ref RolePathPrefix
 
   JumpboxKeyPair:
-    Type: 'AWS::EC2::KeyPair'
-    Properties: 
+    Type: "AWS::EC2::KeyPair"
+    Properties:
       KeyName: !Sub "${AWS::StackName}-jumpbox-key"
       Tags:
         - Key: !Ref TestClusterTagKey
           Value: !Ref ClusterName
-  
+
   Jumpbox:
     Type: AWS::EC2::Instance
-    CreationPolicy:   
+    CreationPolicy:
       ResourceSignal:
         Timeout: PT5M
     DependsOn:
@@ -524,11 +542,13 @@ Resources:
     DeletionPolicy: Delete
     Properties:
       # use a predictable prefix for PodIdentity S3 bucket while maintaining uniqueness requirement for S3 bucket name
-      BucketName:
-        !Sub
-          - '${PodIdentityS3BucketPrefix}-${AWS::AccountId}${TrimmedRegion}${UUID}' # podid-111111111uswest26d51lki0f4111f0b84e0a85c34565b7
-          - TrimmedRegion: !Join ['', !Split ['-', !Ref AWS::Region ]] # us-west-2 -> uswest2
-            UUID: !Join ['', !Split ['-', !Select [2, !Split [/, !Ref AWS::StackId ]]]] # arn:aws:cloudformation:us-west-2:111111111:stack/EKSHybridCI-Arch-name/6d51lki0-0f41-11f0-b84e-0a85c34565b7 -> 6d51lki0f4111f0b84e0a85c34565b7
+      BucketName: !Sub
+        - "${PodIdentityS3BucketPrefix}-${AWS::AccountId}${TrimmedRegion}${UUID}" # podid-111111111uswest26d51lki0f4111f0b84e0a85c34565b7
+        - TrimmedRegion: !Join ["", !Split ["-", !Ref AWS::Region]] # us-west-2 -> uswest2
+          UUID: !Join [
+              "",
+              !Split ["-", !Select [2, !Split [/, !Ref AWS::StackId]]],
+            ] # arn:aws:cloudformation:us-west-2:111111111:stack/EKSHybridCI-Arch-name/6d51lki0-0f41-11f0-b84e-0a85c34565b7 -> 6d51lki0f4111f0b84e0a85c34565b7
       Tags:
         - Key: !Ref TestClusterTagKey
           Value: !Ref ClusterName
@@ -539,7 +559,7 @@ Resources:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
@@ -550,7 +570,7 @@ Resources:
       Policies:
         - PolicyName: pod-identity-association-role-policy
           PolicyDocument:
-            Version: '2012-10-17'
+            Version: "2012-10-17"
             Statement:
               - Effect: Allow
                 Action:
@@ -559,11 +579,21 @@ Resources:
                 Resource:
                   - !Sub arn:aws:s3:::${PodIdentityS3Bucket}
                   - !Sub arn:aws:s3:::${PodIdentityS3Bucket}/*
+        - PolicyName: pca-issuer-policy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - acm-pca:IssueCertificate
+                  - acm-pca:GetCertificate
+                  - acm-pca:DescribeCertificateAuthority
+                Resource:
+                  - !Sub arn:aws:acm-pca:${AWS::Region}:${AWS::AccountId}:certificate-authority/*
       Tags:
         - Key: !Ref TestClusterTagKey
           Value: !Ref ClusterName
       Path: !Ref RolePathPrefix
-          
 
 Outputs:
   ClusterRole:
@@ -581,7 +611,7 @@ Outputs:
   ClusterVPCPrivateSubnet:
     Description: The ID of the EKS Hybrid Cluster VPC Private Subnet.
     Value: !Ref ClusterVPCPrivateSubnet
-  
+
   ClusterSecurityGroup:
     Description: The ID of the EKS Hybrid Cluster Security Group.
     Value: !GetAtt ClusterVPC.DefaultSecurityGroup
