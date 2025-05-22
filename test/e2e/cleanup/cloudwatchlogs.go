@@ -15,9 +15,9 @@ import (
 const (
 	// 14 days is the retention period for log groups
 	// on the 15th day, the log group will be deleted
-	clusterLogGroupRetentionDays = 15
-	clusterLogGroupPrefix        = "/aws/eks"
-	clusterLogGroupSuffix        = "/cluster"
+	clusterLogGroupRetentionThreshold = 15 * 24 * time.Hour
+	clusterLogGroupPrefix             = "/aws/eks"
+	clusterLogGroupSuffix             = "/cluster"
 )
 
 type CloudWatchLogsCleaner struct {
@@ -104,10 +104,17 @@ func (c *CloudWatchLogsCleaner) DeleteLogGroup(ctx context.Context, logGroupName
 }
 
 func shouldDeleteLogGroup(logGroup types.LogGroup, tags []Tag, filterInput FilterInput) bool {
-	filterInput.InstanceAgeThreshold = clusterLogGroupRetentionDays * 24 * time.Hour
-	return shouldDeleteResource(ResourceWithTags{
+	resource := ResourceWithTags{
 		ID:           *logGroup.LogGroupName,
 		CreationTime: time.UnixMilli(aws.ToInt64(logGroup.CreationTime)),
 		Tags:         tags,
-	}, filterInput)
+	}
+
+	// shouldDeleteResource will return true if the resource cluster tag matches the filter input
+	// exactly on a cluster-name match. we do not want to delete the log group if it is less than 15 days old
+	if time.Since(resource.CreationTime) < clusterLogGroupRetentionThreshold {
+		return false
+	}
+
+	return shouldDeleteResource(resource, filterInput)
 }
