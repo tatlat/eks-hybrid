@@ -262,3 +262,62 @@ func TestRetrier_Do_HandleError_ErrorIsNil(t *testing.T) {
 	g.Expect(opCalledCount).To(Equal(1))        // Should call op once
 	g.Expect(handleErrorCalledWith).To(BeNil()) // HandleError called with nil
 }
+
+func TestRetrier_Do_OperationTimeout(t *testing.T) {
+	t.Run("operation times out if it exceeds OperationTimeout", func(t *testing.T) {
+		g := NewWithT(t)
+		retrier := retry.Retrier{
+			Timeout:          0, // Infinite timeout
+			OperationTimeout: 2 * time.Millisecond,
+			Backoff:          retry.Backoff{Duration: 1 * time.Millisecond, Steps: 5, Factor: 1.0, Jitter: 0.0},
+		}
+		op := func(ctx context.Context) (bool, error) {
+			select {
+			case <-ctx.Done():
+				return false, ctx.Err()
+			case <-time.After(50 * time.Millisecond): // bigger than OperationTimeout, it should be interrupted
+				return true, nil
+			}
+		}
+		err := retrier.Do(context.Background(), op)
+		g.Expect(err).To(MatchError(ContainSubstring("context deadline exceeded")))
+	})
+
+	t.Run("operation completes if it finishes before OperationTimeout", func(t *testing.T) {
+		g := NewWithT(t)
+		retrier := retry.Retrier{
+			Timeout:          100 * time.Millisecond,
+			OperationTimeout: 50 * time.Millisecond,
+			Backoff:          retry.Backoff{Duration: 1 * time.Millisecond, Steps: 5, Factor: 1.0, Jitter: 0.0},
+		}
+		op := func(ctx context.Context) (bool, error) {
+			select {
+			case <-ctx.Done():
+				return false, ctx.Err()
+			case <-time.After(2 * time.Millisecond): // smaller than OperationTimeout, it should not be interrupted
+				return true, nil
+			}
+		}
+		err := retrier.Do(context.Background(), op)
+		g.Expect(err).ToNot(HaveOccurred())
+	})
+
+	t.Run("OperationTimeout is ignored if zero", func(t *testing.T) {
+		g := NewWithT(t)
+		retrier := retry.Retrier{
+			Timeout:          10 * time.Millisecond,
+			OperationTimeout: 0,
+			Backoff:          retry.Backoff{Duration: 1 * time.Millisecond, Steps: 5, Factor: 1.0, Jitter: 0.0},
+		}
+		op := func(ctx context.Context) (bool, error) {
+			select {
+			case <-ctx.Done():
+				return false, ctx.Err()
+			case <-time.After(time.Second): // Should be interrupted by timeout
+				return true, nil
+			}
+		}
+		err := retrier.Do(context.Background(), op)
+		g.Expect(err).To(MatchError(ContainSubstring("context deadline exceeded")))
+	})
+}
