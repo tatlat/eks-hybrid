@@ -47,7 +47,7 @@ func TestMakeUnauthenticatedRequestSuccess(t *testing.T) {
 
 func TestMakeUnauthenticatedRequestBadCA(t *testing.T) {
 	g := NewGomegaWithT(t)
-	ctx := context.Background()
+	ctx := test.ContextWithTimeout(t, time.Second)
 
 	resp := &apiServerResponse{
 		Status:  "Failure",
@@ -65,7 +65,7 @@ func TestMakeUnauthenticatedRequestBadCA(t *testing.T) {
 
 func TestMakeUnauthenticatedRequestBadEndpoint(t *testing.T) {
 	g := NewGomegaWithT(t)
-	ctx := context.Background()
+	ctx := test.ContextWithTimeout(t, time.Second)
 
 	resp := &apiServerResponse{
 		Status:  "Failure",
@@ -83,7 +83,7 @@ func TestMakeUnauthenticatedRequestBadEndpoint(t *testing.T) {
 
 func TestMakeUnauthenticatedRequestEndpointDown(t *testing.T) {
 	g := NewGomegaWithT(t)
-	ctx := context.Background()
+	ctx := test.ContextWithTimeout(t, time.Second)
 
 	resp := &apiServerResponse{
 		Status:  "Failure",
@@ -96,12 +96,13 @@ func TestMakeUnauthenticatedRequestEndpointDown(t *testing.T) {
 
 	err := kubernetes.MakeUnauthenticatedRequest(ctx, "https://my-cluster.example.com", server.CAPEM())
 	g.Expect(err).To(HaveOccurred())
+	g.Expect(err.Error()).To(ContainSubstring("no such host"))
 	g.Expect(validation.Remediation(err)).To(Equal("Ensure the provided Kubernetes API server endpoint is correct and the CA certificate is valid for that endpoint."))
 }
 
 func TestMakeUnauthenticatedRequestNotForbidden(t *testing.T) {
 	g := NewGomegaWithT(t)
-	ctx := context.Background()
+	ctx := test.ContextWithTimeout(t, time.Second)
 
 	resp := &apiServerResponse{
 		Status:  "Failure",
@@ -119,7 +120,7 @@ func TestMakeUnauthenticatedRequestNotForbidden(t *testing.T) {
 
 func TestMakeUnauthenticatedRequestUnauthorized(t *testing.T) {
 	g := NewGomegaWithT(t)
-	ctx := context.Background()
+	ctx := test.ContextWithTimeout(t, time.Second)
 
 	resp := &apiServerResponse{
 		Status:  "Failure",
@@ -163,7 +164,7 @@ func TestCheckUnauthenticatedAccessSuccess(t *testing.T) {
 
 func TestCheckUnauthenticatedAccessError(t *testing.T) {
 	g := NewGomegaWithT(t)
-	ctx := context.Background()
+	ctx := test.ContextWithTimeout(t, time.Second)
 	informer := test.NewFakeInformer()
 
 	resp := &apiServerResponse{

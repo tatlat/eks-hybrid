@@ -15,6 +15,7 @@ import (
 	testingk8s "k8s.io/client-go/testing"
 
 	"github.com/aws/eks-hybrid/internal/node"
+	"github.com/aws/eks-hybrid/internal/test"
 )
 
 func TestGetPodsOnNode(t *testing.T) {
@@ -54,7 +55,7 @@ func TestGetPodsOnNode(t *testing.T) {
 				})
 				return client
 			},
-			expectedError: "failed to list all pods running on the node: ",
+			expectedError: "listing all pods running on the node",
 		},
 	}
 
@@ -62,12 +63,13 @@ func TestGetPodsOnNode(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			g := NewWithT(t)
 			client := tt.setupFakeClient()
+			ctx := test.ContextWithTimeout(t, 10*time.Millisecond)
 
-			pods, err := node.GetPodsOnNode(context.Background(), "test-node", client, node.WithValidationInterval(1*time.Millisecond))
+			pods, err := node.GetPodsOnNode(ctx, "test-node", client)
 
 			if tt.expectedError != "" {
 				g.Expect(err).ToNot(BeNil())
-				g.Expect(err.Error()).To(Equal(tt.expectedError))
+				g.Expect(err).To(MatchError(ContainSubstring(tt.expectedError)))
 			} else {
 				g.Expect(err).To(BeNil())
 				g.Expect(len(pods)).To(Equal(tt.podCount))

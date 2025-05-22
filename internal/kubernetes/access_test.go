@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/eks"
@@ -51,7 +52,7 @@ func TestAccessValidatorRunFailSuccess(t *testing.T) {
 
 func TestAccessValidatorRunFailReadingClusterDetails(t *testing.T) {
 	g := NewGomegaWithT(t)
-	ctx := context.Background()
+	ctx := test.ContextWithTimeout(t, 10*time.Millisecond)
 	informer := test.NewFakeInformer()
 
 	unauthResponse := &apiServerResponse{
@@ -92,7 +93,7 @@ func TestAccessValidatorRunFailReadingClusterDetails(t *testing.T) {
 
 func TestAccessValidatorRunFailValidatingAccess(t *testing.T) {
 	g := NewGomegaWithT(t)
-	ctx := context.Background()
+	ctx := test.ContextWithTimeout(t, 10*time.Millisecond)
 	informer := test.NewFakeInformer()
 
 	unauthResponse := &apiServerResponse{

@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	. "github.com/onsi/gomega"
@@ -31,7 +32,7 @@ func TestCheckEndpointAccessSuccess(t *testing.T) {
 
 func TestCheckEndpointAccessFailure(t *testing.T) {
 	g := NewGomegaWithT(t)
-	ctx := context.Background()
+	ctx := test.ContextWithTimeout(t, 10*time.Millisecond)
 
 	config := aws.Config{
 		BaseEndpoint: aws.String("https://localhost:1234"),
@@ -65,7 +66,7 @@ func TestAccessValidatorRunSuccess(t *testing.T) {
 
 func TestAccessValidatorRunFailCheckingEndpoint(t *testing.T) {
 	g := NewGomegaWithT(t)
-	ctx := context.Background()
+	ctx := test.ContextWithTimeout(t, 10*time.Millisecond)
 
 	config := aws.Config{
 		BaseEndpoint: aws.String("https://localhost:1234"),
@@ -82,7 +83,7 @@ func TestAccessValidatorRunFailCheckingEndpoint(t *testing.T) {
 
 func TestAccessValidatorRunErrorFromGetCaller(t *testing.T) {
 	g := NewGomegaWithT(t)
-	ctx := context.Background()
+	ctx := test.ContextWithTimeout(t, 10*time.Millisecond)
 
 	server := test.NewHTTPSServer(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
