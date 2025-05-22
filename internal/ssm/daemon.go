@@ -44,8 +44,11 @@ func NewSsmDaemon(daemonManager daemon.DaemonManager, cfg *api.NodeConfig, logge
 	}
 }
 
-func (s *ssm) Configure() error {
-	if err := s.registerMachine(s.nodeConfig); err != nil {
+func (s *ssm) Configure(ctx context.Context) error {
+	ctx, cancel := context.WithTimeout(ctx, SSMRegistrationTimeout)
+	defer cancel()
+
+	if err := s.registerMachine(ctx, s.nodeConfig); err != nil {
 		if match := activationExpiredRegex.MatchString(err.Error()); match {
 			return fmt.Errorf("SSM activation expired. Please use a valid activation")
 		} else if match := invalidActivationRegex.MatchString(err.Error()); match {
