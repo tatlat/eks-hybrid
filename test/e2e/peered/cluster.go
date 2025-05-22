@@ -102,6 +102,10 @@ func findHybridVPC(ctx context.Context, client *ec2.Client, clusterVpcID string)
 				Name:   aws.String("transit-gateway-id"),
 				Values: []string{tgwID},
 			},
+			{
+				Name:   aws.String("state"),
+				Values: []string{"available"},
+			},
 		},
 	})
 	if err != nil {
