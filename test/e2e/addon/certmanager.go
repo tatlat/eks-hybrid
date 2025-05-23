@@ -125,12 +125,19 @@ func (c *CertManagerTest) Validate(ctx context.Context) error {
 
 // PrintLogs collects and prints logs for debugging
 func (c *CertManagerTest) PrintLogs(ctx context.Context) error {
+	// Fetch cert-manager logs
 	logs, err := kubernetes.FetchLogs(ctx, c.K8S, c.addon.Name, c.addon.Namespace)
 	if err != nil {
-		return fmt.Errorf("failed to collect logs for %s: %v", c.addon.Name, err)
+		c.Logger.Error(err, "Failed to collect logs for cert-manager")
+	} else {
+		c.Logger.Info("Logs for cert-manager", "controller", logs)
 	}
 
-	c.Logger.Info("Logs for cert-manager", "controller", logs)
+	// Fetch PCA issuer logs if applicable
+	if err := c.PCAIssuer.PrintLogs(ctx); err != nil {
+		c.Logger.Error(err, "Failed to collect AWS PCA Issuer logs")
+	}
+
 	return nil
 }
 

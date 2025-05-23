@@ -17,6 +17,7 @@ import (
 	cmmeta "github.com/cert-manager/cert-manager/pkg/apis/meta/v1"
 	certmanagerclientset "github.com/cert-manager/cert-manager/pkg/client/clientset/versioned"
 	"github.com/go-logr/logr"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -30,10 +31,11 @@ import (
 
 const (
 	awsPcaIssuerName     = "aws-pca-issuer"
-	awsPcaCertName       = "aws-pca-test-cert"
+	awsPcaCertName       = "aws-pca-cert"
 	awsPcaCertSecretName = "aws-pca-cert-tls"
-	defaultPollInterval  = 5 * time.Second
+	defaultPollInterval  = 15 * time.Second
 	pcaIssuerWaitTimeout = 2 * time.Minute
+	awsPcaControllerName = "aws-privateca-issuer"
 )
 
 //go:embed manifests/aws-pca-issuer.yaml
@@ -55,30 +57,51 @@ type PCAIssuerTest struct {
 	Logger             logr.Logger
 }
 
-// Setup initializes the AWS PCA Issuer test by creating the Private CA
+// Setup installs the AWS PCA Issuer add-on
 func (p *PCAIssuerTest) Setup(ctx context.Context) error {
 	p.Logger.Info("Setting up AWS PCA Issuer test")
 
-	// Create and activate a Private CA
-	if err := p.setupPrivateCA(ctx); err != nil {
-		return fmt.Errorf("failed to setup AWS Private CA: %v", err)
-	}
-
-	if err := p.setupPodIdentityForPCAIssuer(ctx); err != nil {
-		return fmt.Errorf("failed to setup Pod Identity for AWS PCA Issuer: %v", err)
-	}
-
-	// Apply the AWS PCA Issuer manifests
+	// Only apply the AWS PCA Issuer manifests in Setup
 	if err := p.applyAwsPcaIssuerManifests(ctx); err != nil {
 		return fmt.Errorf("failed to apply AWS PCA Issuer manifests: %v", err)
 	}
 
+	// Wait for the AWS PCA Issuer deployment to be ready
+	if _, err := ik8s.GetAndWait(
+		ctx,
+		pcaIssuerWaitTimeout,
+		p.K8S.AppsV1().Deployments(p.Namespace),
+		awsPcaControllerName,
+		func(d *appsv1.Deployment) bool {
+			ready := d.Status.Replicas == d.Status.ReadyReplicas
+			if !ready {
+				p.Logger.Info("Waiting for AWS PCA Issuer deployment to be ready",
+					"ready", d.Status.ReadyReplicas,
+					"desired", d.Status.Replicas)
+			}
+			return ready
+		},
+	); err != nil {
+		return fmt.Errorf("error waiting for AWS PCA Issuer deployment to be ready: %v", err)
+	}
+
+	p.Logger.Info("AWS PCA Issuer deployment is ready")
 	return nil
 }
 
 // Validate tests the AWS PCA Issuer by creating and validating certificates
 func (p *PCAIssuerTest) Validate(ctx context.Context) error {
 	p.Logger.Info("Validating AWS PCA Issuer")
+
+	// Create and activate a Private CA
+	if err := p.setupPrivateCA(ctx); err != nil {
+		return fmt.Errorf("failed to setup AWS Private CA: %v", err)
+	}
+
+	// Setup Pod Identity for PCA Issuer
+	if err := p.setupPodIdentityForPCAIssuer(ctx); err != nil {
+		return fmt.Errorf("failed to setup Pod Identity for AWS PCA Issuer: %v", err)
+	}
 
 	// Create AWS PCA Issuer resource
 	if err := p.createAwsPcaIssuer(ctx); err != nil {
@@ -96,6 +119,20 @@ func (p *PCAIssuerTest) Validate(ctx context.Context) error {
 	}
 
 	p.Logger.Info("AWS PCA Issuer validation completed successfully")
+	return nil
+}
+
+// PrintLogs collects and prints logs for debugging
+func (p *PCAIssuerTest) PrintLogs(ctx context.Context) error {
+	p.Logger.Info("Collecting AWS PCA Issuer logs")
+
+	// Fetch logs from the AWS PCA Issuer controller
+	logs, err := kubernetes.FetchLogs(ctx, p.K8S, awsPcaControllerName, p.Namespace)
+	if err != nil {
+		return fmt.Errorf("failed to collect logs for AWS PCA Issuer: %v", err)
+	}
+
+	p.Logger.Info("Logs for AWS PCA Issuer", "controller", logs)
 	return nil
 }
 
