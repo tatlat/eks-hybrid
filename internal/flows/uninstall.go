@@ -82,11 +82,14 @@ func (u *Uninstaller) uninstallDaemons(ctx context.Context) error {
 			return err
 		}
 
+		ssmClient := awsSsm.NewFromConfig(awsConfig, func(o *awsSsm.Options) {
+			o.RetryMaxAttempts = 6
+		})
 		if err := ssm.Uninstall(ctx, ssm.UninstallOptions{
 			Logger:          u.Logger,
 			SSMRegistration: ssmRegistration,
 			PkgSource:       u.PackageManager,
-			SSMClient:       awsSsm.NewFromConfig(awsConfig),
+			SSMClient:       ssmClient,
 		}); err != nil {
 			return fmt.Errorf("uninstalling SSM: %w", err)
 		}
