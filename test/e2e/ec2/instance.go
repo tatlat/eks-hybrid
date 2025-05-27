@@ -20,6 +20,7 @@ import (
 	"github.com/go-logr/logr"
 
 	"github.com/aws/eks-hybrid/test/e2e/constants"
+	e2eErrors "github.com/aws/eks-hybrid/test/e2e/errors"
 )
 
 const nodeRunningTimeout = 5 * time.Minute
@@ -195,7 +196,7 @@ func DeleteRoutesForInstance(ctx context.Context, ec2Client *ec2.Client, subnetI
 				RouteTableId:         routeTable.RouteTableId,
 				DestinationCidrBlock: route.DestinationCidrBlock,
 			})
-			if err != nil {
+			if err != nil && !e2eErrors.IsAwsError(err, "InvalidRoute.NotFound") {
 				return fmt.Errorf("deleting route for instance %s: %w", instanceID, err)
 			}
 		}
