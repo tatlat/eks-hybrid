@@ -7,7 +7,6 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/service/eks"
 	"github.com/go-logr/logr"
-	appsv1 "k8s.io/api/apps/v1"
 	clientgo "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	metricsv1beta1 "k8s.io/metrics/pkg/client/clientset/versioned"
@@ -42,13 +41,11 @@ func (m *MetricsServerTest) Create(ctx context.Context) error {
 	}
 
 	if err := m.addon.CreateAndWaitForActive(ctx, m.EKSClient, m.K8S, m.Logger); err != nil {
-		return err
+		return fmt.Errorf("waiting for metrics-server addon: %v", err)
 	}
 
-	if _, err := ik8s.GetAndWait(ctx, metricsServerTimeout, m.K8S.AppsV1().Deployments(m.addon.Namespace), m.addon.Name, func(d *appsv1.Deployment) bool {
-		return d.Status.Replicas == d.Status.ReadyReplicas
-	}); err != nil {
-		return err
+	if err := kubernetes.DeploymentWaitForReplicas(ctx, metricsServerTimeout, m.K8S, metricsServerNamespace, metricsServerName); err != nil {
+		return fmt.Errorf("waiting for metrics-server replicas: %v", err)
 	}
 
 	return nil
@@ -104,6 +101,10 @@ func validatePodMetrics(ctx context.Context, metricsClient metricsv1beta1.Interf
 	podMetrics, err := ik8s.ListRetry(ctx, metricsClient.MetricsV1beta1().PodMetricses(""))
 	if err != nil {
 		return fmt.Errorf("listing pod metrics: %v", err)
+	}
+
+	if len(podMetrics.Items) == 0 {
+		return fmt.Errorf("no pod metrics found")
 	}
 
 	logger.Info(fmt.Sprintf("Found metrics for %d pods", len(podMetrics.Items)))
