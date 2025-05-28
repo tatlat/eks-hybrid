@@ -3,6 +3,7 @@ package os
 import (
 	"bytes"
 	"context"
+	_ "embed"
 	"fmt"
 	"text/template"
 
@@ -47,6 +48,21 @@ var gpuInstanceSizeToType = map[architecture]map[e2e.InstanceSize]string{
 	},
 }
 
+//go:embed testdata/nodeadm-init.sh
+var nodeAdmInitScript []byte
+
+//go:embed testdata/log-collector.sh
+var logCollectorScript []byte
+
+//go:embed testdata/nodeadm-wrapper.sh
+var nodeadmWrapperScript []byte
+
+//go:embed testdata/install-containerd.sh
+var installContainerdScript []byte
+
+//go:embed testdata/nvidia-driver-install.sh
+var nvidiaDriverInstallScript []byte
+
 func (a architecture) String() string {
 	return string(a)
 }
@@ -70,6 +86,7 @@ func populateBaseScripts(userDataInput *e2e.UserDataInput) error {
 		e2e.File{Content: string(logCollector), Path: "/tmp/log-collector.sh", Permissions: "0755"},
 		e2e.File{Content: string(nodeadmWrapper), Path: "/tmp/nodeadm-wrapper.sh", Permissions: "0755"},
 		e2e.File{Content: string(installContainerdScript), Path: "/tmp/install-containerd.sh", Permissions: "0755"},
+		e2e.File{Content: string(nvidiaDriverInstallScript), Path: "/tmp/nvidia-driver-install.sh", Permissions: "0755"},
 	)
 
 	return nil
