@@ -47,9 +47,6 @@ const (
 	ssmPkgName      = "amazon-ssm-agent"
 )
 
-var aptDockerRepoConfig = fmt.Sprintf("deb [arch=%s signed-by=%s] %s %s stable\n", runtime.GOARCH, ubuntuDockerGpgKeyPath,
-	ubuntuDockerRepo, system.GetVersionCodeName())
-
 // DistroPackageManager defines a new package manager using apt or yum
 type DistroPackageManager struct {
 	manager             string
@@ -147,6 +144,7 @@ func (pm *DistroPackageManager) configureAptPackageManagerWithDockerRepo(ctx con
 		return err
 	}
 
+	aptDockerRepoConfig := fmt.Sprintf("deb [arch=%s signed-by=%s] %s %s stable\n", runtime.GOARCH, ubuntuDockerGpgKeyPath, ubuntuDockerRepo, system.GetVersionCodeName())
 	// Add docker repo config for ubuntu-apt to apt sources
 	if err := util.WriteFileWithDir(aptDockerRepoSourceFilePath, []byte(aptDockerRepoConfig), ubuntuDockerGpgKeyFilePerms); err != nil {
 		return err
