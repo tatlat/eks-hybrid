@@ -3,7 +3,6 @@ package cluster
 import (
 	"context"
 	_ "embed"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -187,17 +186,16 @@ func (s *stack) prepareStackParameters(test TestResources, eks EKSConfig) []type
 }
 
 func (s *stack) prepareAddonParameters(ingressConfig []securitygroup.IngessConfig) []types.Parameter {
-	addonConfigsJSON, err := json.Marshal(ingressConfig)
-	if err != nil {
-		// This should never happen with our static config, but handle it gracefully
-		s.logger.Error(err, "Failed to marshal addon configurations to JSON")
-		return []types.Parameter{}
+	var ports []string
+
+	for _, cfg := range ingressConfig {
+		ports = append(ports, fmt.Sprintf("%d", cfg.Port))
 	}
 
 	return []types.Parameter{
 		{
-			ParameterKey:   aws.String("AddonConfigs"),
-			ParameterValue: aws.String(string(addonConfigsJSON)),
+			ParameterKey:   aws.String("AddonPorts"),
+			ParameterValue: aws.String(strings.Join(ports, ",")),
 		},
 	}
 }

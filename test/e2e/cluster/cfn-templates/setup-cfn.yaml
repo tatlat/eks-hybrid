@@ -35,9 +35,9 @@ Parameters:
     Type: String
     Description: EKS Hybrid Nodes public subnet VPC CIDR block
 
-  AddonConfigs:
-    Type: String
-    Description: JSON string containing addon configurations with appName and port fields
+  AddonPorts:
+    Type: CommaDelimitedList
+    Description: EKS addon port list
 
   TestClusterTagKey:
     Type: String
@@ -303,15 +303,15 @@ Resources:
 
   # Security Group Ingress rules for addon services
   'Fn::ForEach::AddonLoop':
-    - AddonConfig
-    - !Ref AddonConfigs
-    - "HybridNode${AddonConfig.appName}SecurityGroupIngress":
+    - Port
+    - !Ref AddonPorts
+    - "HybridNode${Port}SecurityGroupIngress":
         Type: AWS::EC2::SecurityGroupIngress
         Properties:
           GroupId: !GetAtt HybridNodeVPC.DefaultSecurityGroup
           IpProtocol: tcp
-          FromPort: !Ref AddonConfig.port
-          ToPort: !Ref AddonConfig.port
+          FromPort: !Ref Port
+          ToPort: !Ref Port
           CidrIp: !Ref ClusterVPCCidr
 
   ClusterToHybridTGW:
