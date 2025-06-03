@@ -24,12 +24,13 @@ func MakeUnauthenticatedRequest(ctx context.Context, endpoint string, caCertific
 		)
 	}
 
+	// ensure proxy configuration is inherited from the default transport
+	tr := http.DefaultTransport.(*http.Transport).Clone()
+	tr.TLSClientConfig = &tls.Config{
+		RootCAs: caCertPool,
+	}
 	client := &http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{
-				RootCAs: caCertPool,
-			},
-		},
+		Transport: tr,
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
