@@ -25,7 +25,6 @@ import (
 	"github.com/aws/eks-hybrid/test/e2e/constants"
 	e2eErrors "github.com/aws/eks-hybrid/test/e2e/errors"
 	"github.com/aws/eks-hybrid/test/e2e/peered"
-	"github.com/aws/eks-hybrid/test/e2e/securitygroup"
 	e2eSSM "github.com/aws/eks-hybrid/test/e2e/ssm"
 )
 
@@ -110,7 +109,7 @@ func (s *stack) deploy(ctx context.Context, test TestResources) (*resourcesStack
 }
 
 func (s *stack) prepareStackParameters(test TestResources, eks EKSConfig) []types.Parameter {
-	params := []types.Parameter{
+	return []types.Parameter{
 		{
 			ParameterKey:   aws.String("ClusterName"),
 			ParameterValue: aws.String(test.ClusterName),
@@ -178,26 +177,6 @@ func (s *stack) prepareStackParameters(test TestResources, eks EKSConfig) []type
 			ParameterValue: aws.String(eks.PodIdentitySP),
 		},
 	}
-
-	// Add addon parameters
-	ingressConfig := securitygroup.DefaultIngress()
-	params = append(params, s.prepareAddonParameters(ingressConfig)...)
-	return params
-}
-
-func (s *stack) prepareAddonParameters(ingressConfig []securitygroup.IngessConfig) []types.Parameter {
-	var ports []string
-
-	for _, cfg := range ingressConfig {
-		ports = append(ports, fmt.Sprintf("%d|%s", cfg.Port, cfg.Description))
-	}
-
-	return []types.Parameter{
-		{
-			ParameterKey:   aws.String("AddonPortsWithDescriptions"),
-			ParameterValue: aws.String(strings.Join(ports, ",")),
-		},
-	}
 }
 
 func (s *stack) createOrUpdateStack(ctx context.Context, stackName string, params []types.Parameter, test TestResources) error {
@@ -218,7 +197,6 @@ func (s *stack) createOrUpdateStack(ctx context.Context, stackName string, param
 			Capabilities: []types.Capability{
 				types.CapabilityCapabilityIam,
 				types.CapabilityCapabilityNamedIam,
-				types.CapabilityCapabilityAutoExpand,
 			},
 			Tags: []types.Tag{{
 				Key:   aws.String(constants.TestClusterTagKey),
