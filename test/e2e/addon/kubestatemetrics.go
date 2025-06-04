@@ -10,7 +10,6 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/service/eks"
 	"github.com/go-logr/logr"
-	appsv1 "k8s.io/api/apps/v1"
 	clientgo "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
@@ -47,10 +46,8 @@ func (k *KubeStateMetricsTest) Create(ctx context.Context) error {
 		return err
 	}
 
-	if _, err := ik8s.GetAndWait(ctx, kubeStateMetricsWaitTimeout, k.K8S.AppsV1().Deployments(k.addon.Namespace), k.addon.Name, func(d *appsv1.Deployment) bool {
-		return d.Status.Replicas == d.Status.ReadyReplicas
-	}); err != nil {
-		return err
+	if err := kubernetes.DeploymentWaitForReplicas(ctx, kubeStateMetricsWaitTimeout, k.K8S, kubeStateMetricsNamespace, kubeStateMetricsName); err != nil {
+		return fmt.Errorf("failed to wait for kube state metrics replicas: %v", err)
 	}
 
 	return nil

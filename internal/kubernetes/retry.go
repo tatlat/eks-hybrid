@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 
@@ -70,6 +71,72 @@ func ListRetry[O runtime.Object](ctx context.Context, lister Lister[O], opts ...
 	})
 
 	return obj, err
+}
+
+// Deleter deletes an object from the Kubernetes API.
+// It matches the Delete signature of client-go clients.
+type Deleter interface {
+	Delete(ctx context.Context, name string, options metav1.DeleteOptions) error
+}
+
+// DeleteOptions configures a Delete request.
+type DeleteOptions struct {
+	metav1.DeleteOptions
+}
+
+// DeleteOption is an option for the Delete request.
+type DeleteOption func(*DeleteOptions)
+
+// IdempotentDelete retries the delete request until it succeeds, returns a NotFound error, or the retry limit is reached.
+// NotFound errors will not be returned as errors
+func IdempotentDelete(ctx context.Context, deleter Deleter, name string, opts ...DeleteOption) error {
+	deleteOpt := &DeleteOptions{}
+	for _, opt := range opts {
+		opt(deleteOpt)
+	}
+
+	err := retryRequest(ctx, func(ctx context.Context) error {
+		err := deleter.Delete(ctx, name, deleteOpt.DeleteOptions)
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		return err
+	})
+	return err
+}
+
+// Creator creates an object in the Kubernetes API.
+// It matches the Create signature of client-go clients.
+type Creator[O runtime.Object] interface {
+	Create(ctx context.Context, obj O, options metav1.CreateOptions) (O, error)
+}
+
+// CreateOptions configures a Create request.
+type CreateOptions struct {
+	metav1.CreateOptions
+}
+
+// CreateOption is an option for the Create request.
+type CreateOption func(*CreateOptions)
+
+// IdempotentCreate retries the create request until it succeeds, returns an AlreadyExists error, or the retry limit is reached.
+// AlreadyExists errors will not be returned as errors
+func IdempotentCreate[O runtime.Object](ctx context.Context, creator Creator[O], obj O, opts ...CreateOption) error {
+	createOpt := &CreateOptions{}
+	for _, opt := range opts {
+		opt(createOpt)
+	}
+
+	err := retryRequest(ctx, func(ctx context.Context) error {
+		var err error
+		_, err = creator.Create(ctx, obj, createOpt.CreateOptions)
+		if apierrors.IsAlreadyExists(err) {
+			return nil
+		}
+		return err
+	})
+
+	return err
 }
 
 func retryRequest(ctx context.Context, request func(context.Context) error) error {

@@ -64,11 +64,7 @@ func (a AuthenticationValidator) Run(ctx context.Context, informer validation.In
 
 	client := sts_sdk.NewFromConfig(a.aws)
 
-	err = retry.NetworkRequest(ctx, func(ctx context.Context) error {
-		_, err := client.GetCallerIdentity(ctx, &sts_sdk.GetCallerIdentityInput{})
-		return err
-	})
-	if err != nil {
+	if _, err = client.GetCallerIdentity(ctx, &sts_sdk.GetCallerIdentityInput{}); err != nil {
 		err = validation.WithRemediation(err, "Check your AWS configuration and make sure you can obtain valid AWS credentials.")
 		return err
 	}

@@ -101,11 +101,6 @@ func (n *testNode) Start(ctx context.Context) error {
 		})
 
 		Expect(n.PeeredNetwork.CreateRoutesForNode(ctx, n.node)).Should(Succeed(), "EC2 route to pod CIDR should have been created successfully")
-
-		version, err := nodeadm.RunNodeadmVersion(ctx, n.PeeredNode.RemoteCommandRunner, n.node.Instance.IP)
-		Expect(err).NotTo(HaveOccurred(), "nodeadm version should have been retrieved successfully")
-		Expect(version).NotTo(BeEmpty(), "nodeadm version should not be empty")
-		AddReportEntry(constants.TestNodeadmVersion, version)
 	})
 	return nil
 }
@@ -139,8 +134,17 @@ func (n *testNode) waitForNodeToJoin(ctx context.Context, flakeRun FlakeRun) {
 		expect = Expect
 		debugErr = nodeadm.RunNodeadmDebug(ctx, n.PeeredNode.RemoteCommandRunner, n.node.Instance.IP)
 	}
+
+	// attempt to get the nodeadm version regardless of previous errors
+	version, versionErr := nodeadm.RunNodeadmVersion(ctx, n.PeeredNode.RemoteCommandRunner, n.node.Instance.IP)
+	if versionErr == nil && version != "" {
+		AddReportEntry(constants.TestNodeadmVersion, version)
+	}
+
 	expect(err).To(Succeed(), "node should have joined the cluster successfully")
 	Expect(debugErr).NotTo(HaveOccurred(), "nodeadm debug should have been run successfully")
+	Expect(versionErr).NotTo(HaveOccurred(), "nodeadm version should have been retrieved successfully")
+	Expect(version).NotTo(BeEmpty(), "nodeadm version should not be empty")
 }
 
 func (n *testNode) NewVerifyNode(nodeName, nodeIP string) *kubernetes.VerifyNode {

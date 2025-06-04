@@ -21,6 +21,11 @@ export function createNodeadmTestsCreationCleanupPolicy(
   return new iam.Policy(stack, 'nodeadm-e2e-tests-runner-policy', {
     statements: [
       new iam.PolicyStatement({
+         effect: iam.Effect.ALLOW,
+         actions: ['cloudformation:CreateChangeSet', 'cloudformation:ExecuteChangeSet'],
+         resources: ['arn:aws:cloudformation:*:aws:transform/LanguageExtensions'],
+       }),
+      new iam.PolicyStatement({
         actions: [
           'iam:AttachRolePolicy',
           'iam:DetachRolePolicy',
@@ -278,6 +283,9 @@ export function createNodeadmTestsCreationCleanupPolicy(
           'cloudformation:DescribeStacks',
           'cloudformation:DescribeStackResource',
           'cloudformation:UpdateStack',
+          'cloudformation:CreateChangeSet',
+          'cloudformation:ExecuteChangeSet',
+          'cloudformation:DescribeChangeSet',
         ],
         resources: [`arn:aws:cloudformation:${stack.region}:${stack.account}:stack/*`],
       }),

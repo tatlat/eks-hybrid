@@ -53,7 +53,7 @@ func Deregister(ctx context.Context, registration *SSMRegistration, ssmClient SS
 		return errors.Wrapf(err, "reading ssm registration file")
 	}
 
-	managed, err := isInstanceManaged(ssmClient, instanceId)
+	managed, err := isInstanceManaged(ctx, ssmClient, instanceId)
 	if err != nil {
 		return errors.Wrapf(err, "getting managed instance information")
 	}
@@ -61,7 +61,7 @@ func Deregister(ctx context.Context, registration *SSMRegistration, ssmClient SS
 	// Only deregister the instance if init/ssm init was run and
 	// if instances is actively listed as managed
 	if managed {
-		if err := deregister(ssmClient, instanceId); err != nil {
+		if err := deregister(ctx, ssmClient, instanceId); err != nil {
 			return errors.Wrapf(err, "deregistering ssm managed instance")
 		}
 	}

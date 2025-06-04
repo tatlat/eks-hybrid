@@ -10,6 +10,7 @@ import (
 
 	"github.com/aws/eks-hybrid/internal/api"
 	"github.com/aws/eks-hybrid/internal/daemon"
+	"github.com/aws/eks-hybrid/internal/kubelet"
 	"github.com/aws/eks-hybrid/internal/nodeprovider"
 )
 
@@ -27,9 +28,9 @@ type HybridNodeProvider struct {
 	cluster       *types.Cluster
 	skipPhases    []string
 	network       Network
-	// InstallRoot is optionally the root directory of the installation
-	// If not provided, the cert
-	installRoot string
+	// CertPath is the path to the kubelet certificate
+	// If not provided, defaults to kubelet.KubeletCurrentCertPath
+	certPath string
 }
 
 type NodeProviderOpt func(*HybridNodeProvider)
@@ -40,6 +41,7 @@ func NewHybridNodeProvider(nodeConfig *api.NodeConfig, skipPhases []string, logg
 		logger:     logger,
 		skipPhases: skipPhases,
 		network:    &defaultKubeletNetwork{},
+		certPath:   kubelet.KubeletCurrentCertPath,
 	}
 	np.withHybridValidators()
 	if err := np.withDaemonManager(); err != nil {
@@ -73,10 +75,10 @@ func WithNetwork(network Network) NodeProviderOpt {
 	}
 }
 
-// WithInstallRoot sets the root directory for installation paths
-func WithInstallRoot(root string) NodeProviderOpt {
+// WithCertPath sets the path to the kubelet certificate
+func WithCertPath(path string) NodeProviderOpt {
 	return func(hnp *HybridNodeProvider) {
-		hnp.installRoot = root
+		hnp.certPath = path
 	}
 }
 
@@ -96,7 +98,14 @@ func (hnp *HybridNodeProvider) Validate() error {
 	}
 
 	if !slices.Contains(hnp.skipPhases, kubeletCertValidation) {
-		if err := ValidateKubeletCert(hnp.logger, hnp.installRoot, hnp.nodeConfig.Spec.Cluster.CertificateAuthority); err != nil {
+		hnp.logger.Info("Validating kubelet certificate...")
+		if err := ValidateKubeletCert(hnp.certPath, hnp.nodeConfig.Spec.Cluster.CertificateAuthority); err != nil {
+			// Ignore date validation errors in the hybrid provider since kubelet will regenerate them
+			// Ignore no cert errors since we expect it to not exist
+			if IsDateValidationError(err) || IsNoCertError(err) {
+				return nil
+			}
+
 			return err
 		}
 	}
