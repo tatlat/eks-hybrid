@@ -1,6 +1,8 @@
 package suite
 
 import (
+	metricsv1beta1 "k8s.io/metrics/pkg/client/clientset/versioned"
+
 	"github.com/aws/eks-hybrid/test/e2e/addon"
 	"github.com/aws/eks-hybrid/test/e2e/ssm"
 )
@@ -48,5 +50,20 @@ func (a *AddonEc2Test) NewKubeStateMetricsTest() *addon.KubeStateMetricsTest {
 		EKSClient: a.eksClient,
 		K8SConfig: a.K8sClientConfig,
 		Logger:    a.Logger,
+	}
+}
+
+// NewMetricsServerTest creates a new MetricsServerTest
+func (a *AddonEc2Test) NewMetricsServerTest() *addon.MetricsServerTest {
+	metricsClient, err := metricsv1beta1.NewForConfig(a.K8sClientConfig)
+	if err != nil {
+		a.Logger.Error(err, "Failed to create metrics client")
+	}
+	return &addon.MetricsServerTest{
+		Cluster:       a.Cluster.Name,
+		K8S:           a.k8sClient,
+		EKSClient:     a.eksClient,
+		Logger:        a.Logger,
+		MetricsClient: metricsClient,
 	}
 }
