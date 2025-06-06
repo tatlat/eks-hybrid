@@ -18,7 +18,8 @@ echo "Starting nodeadm release process..."
 # Upload to production
 echo "Uploading artifacts to production..."
 aws s3 sync --no-progress --exclude "*nodeadm.gz" latest/ s3://${PROD_BUCKET}/releases/${VERSION}/ ${PUBLIC_READ_ACL_ARG}
-aws s3 sync --no-progress --include "*nodeadm.gz" --content-encoding gzip latest/ s3://${PROD_BUCKET}/releases/${VERSION}/ ${PUBLIC_READ_ACL_ARG}
+# uploading nodeadm.gz files separately to ensure the content-encoding/disposition is applied
+aws s3 sync --no-progress --include "*nodeadm.gz" --content-encoding gzip --content-disposition "attachment; filename=\"nodeadm\"" latest/ s3://${PROD_BUCKET}/releases/${VERSION}/ ${PUBLIC_READ_ACL_ARG}
 
 # Update latest symlinks
 echo "Updating latest symlinks for nodeadm..."
