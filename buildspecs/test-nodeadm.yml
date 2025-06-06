@@ -16,8 +16,8 @@ phases:
     commands:
       # Upload binaries to versioned paths
       - echo "Uploading binaries for e2e tests..."
-      - aws s3 cp --no-progress --content-encoding gzip _bin/amd64/nodeadm.gz s3://$ARTIFACTS_BUCKET/test-release/${VERSION}/bin/linux/amd64/nodeadm.gz
-      - aws s3 cp --no-progress --content-encoding gzip _bin/arm64/nodeadm.gz s3://$ARTIFACTS_BUCKET/test-release/${VERSION}/bin/linux/arm64/nodeadm.gz
+      - aws s3 cp --no-progress --content-encoding gzip --content-disposition "attachment; filename=\"nodeadm\"" _bin/amd64/nodeadm.gz s3://$ARTIFACTS_BUCKET/test-release/${VERSION}/bin/linux/amd64/nodeadm.gz
+      - aws s3 cp --no-progress --content-encoding gzip --content-disposition "attachment; filename=\"nodeadm\"" _bin/arm64/nodeadm.gz s3://$ARTIFACTS_BUCKET/test-release/${VERSION}/bin/linux/arm64/nodeadm.gz
       
       # Run the e2e tests with versioned paths
       - SANITIZED_CODEBUILD_BUILD_ID=$(echo $CODEBUILD_BUILD_ID | tr ':' '-')
