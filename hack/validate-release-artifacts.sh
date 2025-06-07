@@ -17,18 +17,18 @@ EXPECTED_FILES_FILE=$(mktemp)
 cat <<EOF > ${EXPECTED_FILES_FILE}
 ATTRIBUTION.txt
 GIT_VERSION
-linux/amd64/nodeadm
-linux/amd64/nodeadm.gz
-linux/amd64/nodeadm.gz.sha256
-linux/amd64/nodeadm.gz.sha512
-linux/amd64/nodeadm.sha256
-linux/amd64/nodeadm.sha512
-linux/arm64/nodeadm
-linux/arm64/nodeadm.gz
-linux/arm64/nodeadm.gz.sha256
-linux/arm64/nodeadm.gz.sha512
-linux/arm64/nodeadm.sha256
-linux/arm64/nodeadm.sha512
+bin/linux/amd64/nodeadm
+bin/linux/amd64/nodeadm.gz
+bin/linux/amd64/nodeadm.gz.sha256
+bin/linux/amd64/nodeadm.gz.sha512
+bin/linux/amd64/nodeadm.sha256
+bin/linux/amd64/nodeadm.sha512
+bin/linux/arm64/nodeadm
+bin/linux/arm64/nodeadm.gz
+bin/linux/arm64/nodeadm.gz.sha256
+bin/linux/arm64/nodeadm.gz.sha512
+bin/linux/arm64/nodeadm.sha256
+bin/linux/arm64/nodeadm.sha512
 EOF
 # *********************************************************************
 
