@@ -31,17 +31,33 @@ bin/linux/arm64/nodeadm.sha256
 bin/linux/arm64/nodeadm.sha512
 EOF
 # *********************************************************************
+sort -o ${EXPECTED_FILES_FILE} ${EXPECTED_FILES_FILE}
 
 echo "Validating release artifacts..."
-
 # get a list of files via s3 cli
-if ! S3_FILES=$(aws s3 ls s3://${ARTIFACTS_BUCKET}/${BUCKET_PREFIX}/ --recursive | awk '{print $4}' | sed -e "s#^${BUCKET_PREFIX}/##"); then
+# ignore empty files since they are place holders for directories
+if ! S3_FILES=$(aws s3api list-objects-v2  --bucket $ARTIFACTS_BUCKET --prefix $BUCKET_PREFIX  --query "Contents[?Size!=\`0\`].Key" --output text ); then
     echo "Failed to get list of files from S3"
     exit 1
 fi
 
 S3_FILES_FILE=$(mktemp)
-sort <(echo "${S3_FILES[@]}") > ${S3_FILES_FILE}
+# remove the bucket prefix from the list of files
+for file in ${S3_FILES[@]}; do
+    echo $file | sed -e "s#^${BUCKET_PREFIX}/##" >> ${S3_FILES_FILE}
+done
+
+sort -o ${S3_FILES_FILE} ${S3_FILES_FILE}
+
+if ! [ -s ${S3_FILES_FILE} ]; then
+    echo "Actual files list is empty"
+    exit 1
+fi
+
+if ! [ -s ${EXPECTED_FILES_FILE} ]; then
+    echo "Expected files list is empty"
+    exit 1
+fi
 
 if ! diff -q ${EXPECTED_FILES_FILE} ${S3_FILES_FILE} &>/dev/null; then
     echo "Artifacts directory on S3 does not matched expected!"
