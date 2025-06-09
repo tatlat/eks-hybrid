@@ -8,6 +8,8 @@ import (
 	"os"
 	"path"
 	"text/template"
+
+	"golang.org/x/net/http/httpproxy"
 )
 
 const (
@@ -64,7 +66,8 @@ func WriteAWSConfig(cfg AWSConfig) error {
 		cfg.ConfigPath = DefaultAWSConfigPath
 	}
 
-	if httpProxy, httpsProxy := os.Getenv("HTTP_PROXY"), os.Getenv("HTTPS_PROXY"); httpProxy != "" || httpsProxy != "" {
+	proxyEnv := httpproxy.FromEnvironment()
+	if proxyEnv.HTTPProxy != "" || proxyEnv.HTTPSProxy != "" {
 		cfg.ProxyEnabled = true
 	}
 

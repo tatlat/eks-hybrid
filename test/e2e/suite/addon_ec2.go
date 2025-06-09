@@ -69,6 +69,17 @@ func (a *AddonEc2Test) NewMetricsServerTest() *addon.MetricsServerTest {
 	}
 }
 
+// NewPrometheusNodeExporterTest creates a new PrometheusNodeExporterTest
+func (a *AddonEc2Test) NewPrometheusNodeExporterTest() *addon.PrometheusNodeExporterTest {
+	return &addon.PrometheusNodeExporterTest{
+		Cluster:   a.Cluster.Name,
+		K8S:       a.k8sClient,
+		EKSClient: a.eksClient,
+		K8SConfig: a.K8sClientConfig,
+		Logger:    a.Logger,
+	}
+}
+
 // NewCertManagerTest creates a new CertManagerTest
 func (a *AddonEc2Test) NewCertManagerTest() *addon.CertManagerTest {
 	// Create cert-manager client

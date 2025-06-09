@@ -11,7 +11,7 @@ ExecStart={{ .SigningHelperBinPath }} update \
         --profile-arn {{ .ProfileARN }} \
         --role-arn {{ .RoleARN }} \
         --role-session-name {{ .NodeName }} \
-        --region {{ .Region }}
+        --region {{ .Region }}{{ if .ProxyEnabled }} --with-proxy{{end}}
 StandardOutput=journal
 StandardError=journal
 Restart=always

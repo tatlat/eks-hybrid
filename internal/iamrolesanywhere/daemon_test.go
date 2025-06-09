@@ -13,10 +13,30 @@ import (
 func TestGenerateUpdateSystemdService(t *testing.T) {
 	g := NewWithT(t)
 
-	expect, err := os.ReadFile("./testdata/expected-systemd-service-unit")
-	g.Expect(err).To(BeNil())
-	if err != nil {
-		t.Fatal(err)
+	testCases := []struct {
+		name         string
+		envVars      map[string]string
+		expectedFile string
+	}{
+		{
+			name: "proxy enabled via HTTP_PROXY",
+			envVars: map[string]string{
+				"HTTP_PROXY": "http://proxy.example.com:8080",
+			},
+			expectedFile: "./testdata/expected-systemd-service-unit-with-proxy",
+		},
+		{
+			name: "proxy enabled via HTTPS_PROXY",
+			envVars: map[string]string{
+				"HTTPS_PROXY": "https://proxy.example.com:8080",
+			},
+			expectedFile: "./testdata/expected-systemd-service-unit-with-proxy",
+		},
+		{
+			name:         "proxy disabled",
+			envVars:      map[string]string{},
+			expectedFile: "./testdata/expected-systemd-service-unit",
+		},
 	}
 
 	node := &api.NodeConfig{
@@ -37,7 +57,25 @@ func TestGenerateUpdateSystemdService(t *testing.T) {
 		},
 	}
 
-	service, err := iamrolesanywhere.GenerateUpdateSystemdService(node)
-	g.Expect(err).NotTo(HaveOccurred())
-	g.Expect(string(service)).To(BeComparableTo(string(expect)))
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Set up environment variables
+			for k, v := range tc.envVars {
+				os.Setenv(k, v)
+			}
+			defer func() {
+				// Clean up environment variables
+				for env := range tc.envVars {
+					os.Unsetenv(env)
+				}
+			}()
+
+			expect, err := os.ReadFile(tc.expectedFile)
+			g.Expect(err).To(BeNil())
+
+			service, err := iamrolesanywhere.GenerateUpdateSystemdService(node)
+			g.Expect(err).To(BeNil())
+			g.Expect(string(service)).To(BeComparableTo(string(expect)))
+		})
+	}
 }

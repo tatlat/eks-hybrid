@@ -10,8 +10,6 @@ import (
 	cmmeta "github.com/cert-manager/cert-manager/pkg/apis/meta/v1"
 	certmanagerclientset "github.com/cert-manager/cert-manager/pkg/client/clientset/versioned"
 	"github.com/go-logr/logr"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientgo "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -79,7 +77,7 @@ func (c *CertManagerTest) Validate(ctx context.Context) error {
 	c.Logger.Info("Starting cert-manager validation")
 
 	// Create test namespace if it doesn't exist
-	if err := createNamespaceIfNotExists(ctx, c.K8S, certTestNamespace); err != nil {
+	if err := kubernetes.CreateNamespace(ctx, c.K8S, certTestNamespace); err != nil {
 		return fmt.Errorf("failed to create test namespace: %v", err)
 	}
 
@@ -98,11 +96,6 @@ func (c *CertManagerTest) Validate(ctx context.Context) error {
 		return fmt.Errorf("failed to validate certificate: %v", err)
 	}
 
-	// AWS PCA Issuer validation if it's configured
-	c.Logger.Info("Starting AWS PCA Issuer validation")
-
-	c.Logger.Info("AWS PCA Issuer validation completed successfully")
-
 	c.Logger.Info("Cert-manager validation completed successfully")
 	return nil
 }
@@ -112,11 +105,10 @@ func (c *CertManagerTest) PrintLogs(ctx context.Context) error {
 	// Fetch cert-manager logs
 	logs, err := kubernetes.FetchLogs(ctx, c.K8S, c.addon.Name, c.addon.Namespace)
 	if err != nil {
-		c.Logger.Error(err, "Failed to collect logs for cert-manager")
-	} else {
-		c.Logger.Info("Logs for cert-manager", "controller", logs)
+		return fmt.Errorf("failed to collect logs for %s: %v", c.addon.Name, err)
 	}
 
+	c.Logger.Info("Logs for cert-manager", "controller", logs)
 	return nil
 }
 
@@ -126,40 +118,25 @@ func (c *CertManagerTest) Delete(ctx context.Context) error {
 	c.Logger.Info("Cleaning up cert-manager test resources")
 
 	// Delete certificate
-	err := c.CertClient.CertmanagerV1().Certificates(certTestNamespace).Delete(
-		ctx, certName, metav1.DeleteOptions{})
-	if err != nil && !errors.IsNotFound(err) {
-		c.Logger.Error(err, "Failed to delete certificate")
+	err := ik8s.IdempotentDelete(ctx, c.CertClient.CertmanagerV1().Certificates(certTestNamespace), certName)
+	if err != nil {
+		return fmt.Errorf("failed to delete certificate: %v", err)
 	}
 
 	// Delete issuer
-	err = c.CertClient.CertmanagerV1().Issuers(certTestNamespace).Delete(
-		ctx, issuerName, metav1.DeleteOptions{})
-	if err != nil && !errors.IsNotFound(err) {
-		c.Logger.Error(err, "Failed to delete issuer")
+	err = ik8s.IdempotentDelete(ctx, c.CertClient.CertmanagerV1().Issuers(certTestNamespace), issuerName)
+	if err != nil {
+		return fmt.Errorf("failed to delete issuer: %v", err)
 	}
 
 	// Delete test namespace
-	err = c.K8S.CoreV1().Namespaces().Delete(ctx, certTestNamespace, metav1.DeleteOptions{})
-	if err != nil && !errors.IsNotFound(err) {
-		c.Logger.Error(err, "Failed to delete test namespace")
+	err = kubernetes.DeleteNamespace(ctx, c.K8S, certTestNamespace)
+	if err != nil {
+		return fmt.Errorf("failed to delete test namespace: %v", err)
 	}
 
 	// Delete cert-manager addon
 	return c.addon.Delete(ctx, c.EKSClient, c.Logger)
-}
-
-func createNamespaceIfNotExists(ctx context.Context, k8s clientgo.Interface, namespace string) error {
-	ns := &corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: namespace,
-		},
-	}
-	_, err := k8s.CoreV1().Namespaces().Create(ctx, ns, metav1.CreateOptions{})
-	if errors.IsAlreadyExists(err) {
-		return nil
-	}
-	return err
 }
 
 func createSelfSignedIssuer(ctx context.Context, logger logr.Logger, certClient certmanagerclientset.Interface, namespace, name string) error {
@@ -175,8 +152,8 @@ func createSelfSignedIssuer(ctx context.Context, logger logr.Logger, certClient 
 		},
 	}
 
-	_, err := certClient.CertmanagerV1().Issuers(namespace).Create(ctx, issuer, metav1.CreateOptions{})
-	if err != nil && !errors.IsAlreadyExists(err) {
+	err := ik8s.IdempotentCreate(ctx, certClient.CertmanagerV1().Issuers(namespace), issuer)
+	if err != nil {
 		return err
 	}
 
@@ -203,8 +180,8 @@ func createCertificate(ctx context.Context, logger logr.Logger, certClient certm
 		},
 	}
 
-	_, err := certClient.CertmanagerV1().Certificates(namespace).Create(ctx, cert, metav1.CreateOptions{})
-	if err != nil && !errors.IsAlreadyExists(err) {
+	err := ik8s.IdempotentCreate(ctx, certClient.CertmanagerV1().Certificates(namespace), cert)
+	if err != nil {
 		return err
 	}
 
