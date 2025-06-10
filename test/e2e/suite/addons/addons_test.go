@@ -198,6 +198,7 @@ var _ = Describe("Hybrid Nodes", func() {
 					Succeed(), "prometheus node exporter should have been validated successfully",
 				)
 			}, Label("prometheus-node-exporter"))
+
 			It("runs nvidia device plugin tests", func(ctx context.Context) {
 				osList := suite.OSProviderList(credentialProviders)
 				Expect(osList).ToNot(BeEmpty(), "OS list should not be empty")
@@ -211,9 +212,28 @@ var _ = Describe("Hybrid Nodes", func() {
 				provider := osList[0].Provider
 				instanceName := addonEc2Test.InstanceName("addon-nvidia-test", os, provider)
 				nodeName := fmt.Sprintf("addon-nvidia-node-%s-%s", provider.Name(), os.Name())
+
+				// wait for node to join EKS cluster
+				addonEc2Test.Logger.Info("Creating GPU node for nvidia test", "nodeName", nodeName)
 				testNode := addonEc2Test.NewTestNode(ctx, instanceName, nodeName, addonEc2Test.Cluster.KubernetesVersion, os, provider, e2e.Large, e2e.GPUInstance)
 				Expect(testNode.Start(ctx)).To(Succeed(), "node should start successfully")
 				Expect(testNode.Verify(ctx)).To(Succeed(), "node should be fully functional")
+
+				// wait for nvidia drivers to be installed
+				addonEc2Test.Logger.Info("Checking NVIDIA drivers on node")
+				devicePluginTest := addonEc2Test.NewNvidiaDevicePluginTest(nodeName)
+				Expect(devicePluginTest.WaitForNvidiaDriverReady(ctx)).NotTo(HaveOccurred(), "NVIDIA drivers should be ready")
+
+				// clean up node
+				addonEc2Test.Logger.Info("Resetting hybrid node...")
+				n := testNode.PeerdNode()
+				cleanNode := addonEc2Test.NewCleanNode(
+					provider,
+					testNode.PeeredNode.NodeInfrastructureCleaner(*n),
+					n.Name,
+					n.Instance.IP,
+				)
+				Expect(cleanNode.Run(ctx)).To(Succeed(), "node should have been reset successfully")
 			}, Label("nvidia-device-plugin"))
 		})
 	})

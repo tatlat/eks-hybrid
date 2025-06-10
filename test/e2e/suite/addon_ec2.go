@@ -78,3 +78,17 @@ func (a *AddonEc2Test) NewPrometheusNodeExporterTest() *addon.PrometheusNodeExpo
 		Logger:    a.Logger,
 	}
 }
+
+// NewNvidiaDevicePluginTest creates a new NvidiaDevicePluginTest
+func (a *AddonEc2Test) NewNvidiaDevicePluginTest(nodeName string) *addon.NvidiaDevicePluginTest {
+	commandRunner := ssm.NewSSHOnSSMCommandRunner(a.SSMClient, a.JumpboxInstanceId, a.Logger)
+	return &addon.NvidiaDevicePluginTest{
+		Cluster:       a.Cluster.Name,
+		K8S:           a.k8sClient,
+		EKSClient:     a.eksClient,
+		K8SConfig:     a.K8sClientConfig,
+		Logger:        a.Logger,
+		CommandRunner: commandRunner,
+		NodeName:      nodeName,
+	}
+}
