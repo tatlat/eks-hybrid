@@ -36,8 +36,6 @@
     "RotateKubeletServerCertificate": true
   },
   "hairpinMode": "hairpin-veth",
-  "kubeAPIBurst": 20,
-  "kubeAPIQPS": 10,
   "kubeReservedCgroup": "/runtime",
   "logging": {
     "verbosity": 2

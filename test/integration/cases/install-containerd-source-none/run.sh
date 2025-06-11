@@ -12,7 +12,7 @@ wait::dbus-ready
 # remove previously installed containerd to test installation via nodeadm
 dnf remove -y containerd
 
-declare SUPPORTED_VERSIONS=(1.26 1.27 1.28 1.29 1.30)
+declare SUPPORTED_VERSIONS=(1.27 1.28 1.29 1.30 1.31 1.32 1.33)
 
 for VERSION in ${SUPPORTED_VERSIONS}
 do

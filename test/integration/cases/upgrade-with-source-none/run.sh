@@ -9,8 +9,8 @@ source /helpers.sh
 mock::aws
 wait::dbus-ready
 
-declare INITIAL_VERSION=1.26
-declare TARGET_VERSION=1.32
+declare INITIAL_VERSION=1.27
+declare TARGET_VERSION=1.33
 
 mkdir -p /etc/iam/pki
 touch /etc/iam/pki/server.pem
@@ -25,8 +25,8 @@ install-previous-containerd-version
 generate::birth-file /usr/bin/containerd
 
 # Test nodeadm upgrade with iam as credential provider
-# initial: version 1.26
-# target: version 1.32
+# initial: version 1.27
+# target: version 1.33
 nodeadm install $INITIAL_VERSION --credential-provider iam-ra --containerd-source none
 assert::files-equal /opt/nodeadm/tracker expected-nodeadm-tracker
 assert::birth-match /usr/bin/containerd
