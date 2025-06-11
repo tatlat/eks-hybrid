@@ -61,17 +61,14 @@ func (c *EKSClusterCleanup) ListEKSClusters(ctx context.Context, input FilterInp
 	return clusterNames, nil
 }
 
-type resourceInUseRetryable struct{}
-
 func (c *EKSClusterCleanup) DeleteCluster(ctx context.Context, clusterName string) error {
 	_, err := c.eksClient.DeleteCluster(ctx, &eks.DeleteClusterInput{
 		Name: aws.String(clusterName),
 	}, func(o *eks.Options) {
 		o.ClientLogMode = aws.LogRetries
-		o.Retryer = retry.NewStandard(func(o *retry.StandardOptions) {
-			o.MaxAttempts = 60 // ~ 20 minutes
-			o.Retryables = append(o.Retryables, resourceInUseRetryable{})
-		})
+		clientRetryer := o.Retryer
+		persistentResourceInUseExceptionRetryer := retry.AddWithMaxAttempts(retry.AddWithErrorCodes(clientRetryer, "ResourceInUseException"), 60)
+		o.Retryer = persistentResourceInUseExceptionRetryer
 	})
 
 	if err != nil && errors.IsAwsError(err, "AccessDeniedException") {
@@ -116,12 +113,4 @@ func shouldDeleteCluster(cluster *types.Cluster, input FilterInput) bool {
 		Tags:         tags,
 	}
 	return shouldDeleteResource(resource, input)
-}
-
-func (c resourceInUseRetryable) IsErrorRetryable(err error) aws.Ternary {
-	if errors.IsAwsError(err, "ResourceInUseException") {
-		return aws.BoolTernary(true)
-	}
-
-	return aws.BoolTernary(false)
 }

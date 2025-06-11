@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/aws/retry"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	"github.com/aws/aws-sdk-go-v2/service/ssm/types"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -73,8 +74,12 @@ func (s *SsmProvider) createSSMActivation(ctx context.Context, clusterName, node
 		},
 	}
 
+	withValidationExceptionRetryer := func(o *ssm.Options) {
+		o.Retryer = retry.AddWithErrorCodes(o.Retryer, "ValidationException")
+	}
+
 	// Call CreateActivation to create the SSM activation
-	result, err := s.SSM.CreateActivation(ctx, input)
+	result, err := s.SSM.CreateActivation(ctx, input, withValidationExceptionRetryer)
 	if err != nil {
 		return nil, fmt.Errorf("creating SSM activation: %v", err)
 	}

@@ -86,10 +86,7 @@ func (s *Stack) Deploy(ctx context.Context, logger logr.Logger) (*StackOutput, e
 		PrincipalArn: &output.SSMNodeRoleARN,
 		Type:         aws.String("HYBRID_LINUX"),
 	}, func(o *eks.Options) {
-		o.Retryer = retry.NewStandard(func(o *retry.StandardOptions) {
-			o.MaxAttempts = 10 // ~ 2 minutes
-			o.Retryables = append(o.Retryables, invalidParameterExceptionRetryable{})
-		})
+		o.Retryer = retry.AddWithErrorCodes(o.Retryer, "InvalidParameterException")
 	})
 	if err != nil && !isResourceAlreadyInUse(err) {
 		return nil, err
@@ -102,10 +99,7 @@ func (s *Stack) Deploy(ctx context.Context, logger logr.Logger) (*StackOutput, e
 			PrincipalArn: &output.IRANodeRoleARN,
 			Type:         aws.String("HYBRID_LINUX"),
 		}, func(o *eks.Options) {
-			o.Retryer = retry.NewStandard(func(o *retry.StandardOptions) {
-				o.MaxAttempts = 10 // ~ 2 minutes
-				o.Retryables = append(o.Retryables, invalidParameterExceptionRetryable{})
-			})
+			o.Retryer = retry.AddWithErrorCodes(o.Retryer, "InvalidParameterException")
 		})
 		if err != nil && !isResourceAlreadyInUse(err) {
 			return nil, err
@@ -367,16 +361,4 @@ func skipIRATest() bool {
 
 func isResourceAlreadyInUse(err error) bool {
 	return e2errors.IsAwsError(err, "ResourceInUseException")
-}
-
-// InvalidParameterException is a retryable error because it can be caused by a race condition
-// when creating the access entry and the role is not yet ready.
-type invalidParameterExceptionRetryable struct{}
-
-func (c invalidParameterExceptionRetryable) IsErrorRetryable(err error) aws.Ternary {
-	if e2errors.IsAwsError(err, "InvalidParameterException") {
-		return aws.BoolTernary(true)
-	}
-
-	return aws.BoolTernary(false)
 }

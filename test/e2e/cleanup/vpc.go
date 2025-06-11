@@ -129,10 +129,7 @@ func (v *VPCCleaner) DeleteVPC(ctx context.Context, vpcID string) error {
 	_, err := v.ec2Client.DeleteVpc(ctx, &ec2.DeleteVpcInput{
 		VpcId: aws.String(vpcID),
 	}, func(o *ec2.Options) {
-		o.Retryer = retry.NewStandard(func(o *retry.StandardOptions) {
-			o.MaxAttempts = 10 // ~ 2 minutes
-			o.Retryables = append(o.Retryables, dependencyViolationRetryable{})
-		})
+		o.Retryer = retry.AddWithErrorCodes(o.Retryer, "DependencyViolation")
 	})
 	if err != nil && errors.IsAwsError(err, "InvalidVpcID.NotFound") {
 		v.logger.Info("VPC already deleted", "vpcID", vpcID)
@@ -256,10 +253,7 @@ func (v *VPCCleaner) DeleteSubnet(ctx context.Context, subnetID string) error {
 	_, err := v.ec2Client.DeleteSubnet(ctx, &ec2.DeleteSubnetInput{
 		SubnetId: aws.String(subnetID),
 	}, func(o *ec2.Options) {
-		o.Retryer = retry.NewStandard(func(o *retry.StandardOptions) {
-			o.MaxAttempts = 10 // ~ 2 minutes
-			o.Retryables = append(o.Retryables, dependencyViolationRetryable{})
-		})
+		o.Retryer = retry.AddWithErrorCodes(o.Retryer, "DependencyViolation")
 	})
 	if err != nil && (errors.IsAwsError(err, "InvalidSubnetID.NotFound") || errors.IsAwsError(err, "InvalidSubnetId.NotFound")) {
 		v.logger.Info("Subnet already deleted", "subnetID", subnetID)
@@ -480,16 +474,6 @@ func creationTimeFromTags(tags []types.Tag) (time.Time, error) {
 	return time.Now(), nil
 }
 
-type dependencyViolationRetryable struct{}
-
-func (c dependencyViolationRetryable) IsErrorRetryable(err error) aws.Ternary {
-	if errors.IsAwsError(err, "DependencyViolation") {
-		return aws.BoolTernary(true)
-	}
-
-	return aws.BoolTernary(false)
-}
-
 // ListTransitGateways lists all transit gateways
 func (v *VPCCleaner) ListTransitGateways(ctx context.Context, input FilterInput) ([]string, error) {
 	paginator := ec2.NewDescribeTransitGatewaysPaginator(v.ec2Client, &ec2.DescribeTransitGatewaysInput{
@@ -567,10 +551,7 @@ func (v *VPCCleaner) DeleteTransitGateway(ctx context.Context, tgwID string) err
 	_, err = v.ec2Client.DeleteTransitGateway(ctx, &ec2.DeleteTransitGatewayInput{
 		TransitGatewayId: aws.String(tgwID),
 	}, func(o *ec2.Options) {
-		o.Retryer = retry.NewStandard(func(o *retry.StandardOptions) {
-			o.MaxAttempts = 10 // ~ 2 minutes
-			o.Retryables = append(o.Retryables, dependencyViolationRetryable{})
-		})
+		o.Retryer = retry.AddWithErrorCodes(o.Retryer, "DependencyViolation")
 	})
 
 	if err != nil && !errors.IsAwsError(err, "InvalidTransitGatewayID.NotFound") {
