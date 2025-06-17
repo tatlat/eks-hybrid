@@ -27,6 +27,10 @@ type Network struct {
 
 // CreateRoutesForNode creates routes in the VPC route table for the node's pod CIDRs.
 func (n *Network) CreateRoutesForNode(ctx context.Context, peerdNode *PeerdNode) error {
+	if err := ec2.DisableSourceDestCheck(ctx, n.EC2, peerdNode.Instance.ID); err != nil {
+		return fmt.Errorf("disabling source/dest check: %w", err)
+	}
+
 	node, err := kubernetes.CheckForNodeWithE2ELabel(ctx, n.K8s, peerdNode.Name)
 	if err != nil {
 		return fmt.Errorf("reading node: %w", err)
