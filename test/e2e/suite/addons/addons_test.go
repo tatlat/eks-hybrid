@@ -235,6 +235,34 @@ var _ = Describe("Hybrid Nodes", func() {
 				)
 				Expect(cleanNode.Run(ctx)).To(Succeed(), "node should have been reset successfully")
 			}, Label("nvidia-device-plugin"))
+
+			It("runs cert manager tests", func(ctx context.Context) {
+				certManager := addonEc2Test.NewCertManagerTest()
+
+				DeferCleanup(func(ctx context.Context) {
+					Expect(certManager.Delete(ctx)).To(Succeed(), "should cleanup cert manager successfully")
+				})
+
+				Expect(certManager.Create(ctx)).To(
+					Succeed(), "cert manager should have created successfully",
+				)
+
+				DeferCleanup(func(ctx context.Context) {
+					// only print logs after addon successfully created
+					report := CurrentSpecReport()
+					if report.State.Is(types.SpecStateFailed) {
+						err := certManager.PrintLogs(ctx)
+						if err != nil {
+							// continue cleanup even if logs collection fails
+							GinkgoWriter.Printf("Failed to get cert manager logs: %v\n", err)
+						}
+					}
+				})
+
+				Expect(certManager.Validate(ctx)).To(
+					Succeed(), "cert manager should have been validated successfully",
+				)
+			}, Label("cert-manager"))
 		})
 	})
 })
