@@ -5,20 +5,20 @@ go 1.24.0
 require (
 	github.com/ProtonMail/gopenpgp/v3 v3.3.0
 	github.com/aws/aws-sdk-go v1.55.7
-	github.com/aws/aws-sdk-go-v2/config v1.29.15
-	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.16.30
-	github.com/aws/aws-sdk-go-v2/service/cloudformation v1.60.1
-	github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs v1.50.1
-	github.com/aws/aws-sdk-go-v2/service/ec2 v1.224.1
-	github.com/aws/aws-sdk-go-v2/service/ec2instanceconnect v1.28.2
-	github.com/aws/aws-sdk-go-v2/service/ecr v1.44.1
-	github.com/aws/aws-sdk-go-v2/service/eks v1.65.1
-	github.com/aws/aws-sdk-go-v2/service/iam v1.42.0
-	github.com/aws/aws-sdk-go-v2/service/resourcegroupstaggingapi v1.26.4
-	github.com/aws/aws-sdk-go-v2/service/rolesanywhere v1.17.3
-	github.com/aws/aws-sdk-go-v2/service/s3 v1.80.1
-	github.com/aws/aws-sdk-go-v2/service/ssm v1.59.1
-	github.com/aws/aws-sdk-go-v2/service/sts v1.33.20
+	github.com/aws/aws-sdk-go-v2/config v1.29.16
+	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.16.31
+	github.com/aws/aws-sdk-go-v2/service/cloudformation v1.60.2
+	github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs v1.50.2
+	github.com/aws/aws-sdk-go-v2/service/ec2 v1.225.1
+	github.com/aws/aws-sdk-go-v2/service/ec2instanceconnect v1.28.3
+	github.com/aws/aws-sdk-go-v2/service/ecr v1.44.2
+	github.com/aws/aws-sdk-go-v2/service/eks v1.66.0
+	github.com/aws/aws-sdk-go-v2/service/iam v1.42.1
+	github.com/aws/aws-sdk-go-v2/service/resourcegroupstaggingapi v1.26.5
+	github.com/aws/aws-sdk-go-v2/service/rolesanywhere v1.17.4
+	github.com/aws/aws-sdk-go-v2/service/s3 v1.80.2
+	github.com/aws/aws-sdk-go-v2/service/ssm v1.59.2
+	github.com/aws/aws-sdk-go-v2/service/sts v1.33.21
 	github.com/aws/smithy-go v1.22.3
 	github.com/containerd/containerd v1.7.27
 	github.com/coreos/go-systemd/v22 v22.5.0
@@ -47,9 +47,9 @@ require (
 	github.com/MakeNowJust/heredoc v1.0.0 // indirect
 	github.com/ProtonMail/go-crypto v1.3.0 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.6.10 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/v4a v1.3.34 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.7.2 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.18.15 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/v4a v1.3.35 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.7.3 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.18.16 // indirect
 	github.com/chai2010/gettext-go v1.0.3 // indirect
 	github.com/cloudflare/circl v1.6.1 // indirect
 	github.com/exponent-io/jsonpath v0.0.0-20210407135951-1de76d718b3f // indirect
@@ -84,15 +84,15 @@ require (
 require (
 	dario.cat/mergo v1.0.2 // direct
 	github.com/Microsoft/go-winio v0.6.2 // indirect
-	github.com/aws/aws-sdk-go-v2 v1.36.3
-	github.com/aws/aws-sdk-go-v2/credentials v1.17.68 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/configsources v1.3.34 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.6.34 // indirect
+	github.com/aws/aws-sdk-go-v2 v1.36.4
+	github.com/aws/aws-sdk-go-v2/credentials v1.17.69 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/configsources v1.3.35 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.6.35 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/ini v1.8.3 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.12.3 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.12.15 // indirect
-	github.com/aws/aws-sdk-go-v2/service/sso v1.25.3 // indirect
-	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.30.1 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.12.16 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sso v1.25.4 // indirect
+	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.30.2 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/blang/semver/v4 v4.0.0
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
@@ -126,7 +126,7 @@ require (
 	github.com/spf13/pflag v1.0.6 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	golang.org/x/net v0.40.0
+	golang.org/x/net v0.41.0
 	golang.org/x/oauth2 v0.28.0 // indirect
 	golang.org/x/sync v0.15.0 // indirect
 	golang.org/x/sys v0.33.0 // indirect
