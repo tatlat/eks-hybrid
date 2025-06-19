@@ -262,7 +262,7 @@ var _ = Describe("Hybrid Nodes", func() {
 				Expect(certManager.Validate(ctx)).To(
 					Succeed(), "cert manager should have been validated successfully",
 				)
-			}, Label("cert-manager"))
+			}, Label("cert-manager", "aws-pca-issuer"))
 		})
 	})
 })
