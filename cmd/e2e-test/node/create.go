@@ -169,11 +169,6 @@ func (c *create) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return fmt.Errorf("waiting for EC2 instance for node to be running: %w", err)
 	}
 
-	logger.Info("Disabling source/destination check...", "instanceID", peerdNode.Instance.ID)
-	if err := ec2.DisableSourceDestCheck(ctx, ec2Client, peerdNode.Instance.ID); err != nil {
-		return err
-	}
-
 	logger.Info("Connecting to the node serial console...")
 	serial, err := node.SerialConsole(ctx, peerdNode.Instance.ID)
 	if err != nil {
