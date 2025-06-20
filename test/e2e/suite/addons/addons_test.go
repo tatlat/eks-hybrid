@@ -55,7 +55,7 @@ var _ = SynchronizedBeforeSuite(
 			nodesToCreate = append(nodesToCreate, suite.NodeCreate{
 				OS:           os,
 				Provider:     provider,
-				InstanceName: test.InstanceName("addon-smoke-test", os, provider),
+				InstanceName: test.InstanceName("addon-smoke-test", os.Name(), string(provider.Name())),
 				InstanceSize: e2e.Large,
 				NodeName:     fmt.Sprintf("addon-test-node-%s-%s", provider.Name(), os.Name()),
 			})
@@ -210,13 +210,14 @@ var _ = Describe("Hybrid Nodes", func() {
 
 				os := osList[0].OS
 				provider := osList[0].Provider
-				instanceName := addonEc2Test.InstanceName("addon-nvidia-test", os, provider)
+				instanceName := addonEc2Test.InstanceName("addon-nvidia-test", os.Name(), string(provider.Name()))
 				nodeName := fmt.Sprintf("addon-nvidia-node-%s-%s", provider.Name(), os.Name())
 
 				// wait for node to join EKS cluster
 				addonEc2Test.Logger.Info("Creating GPU node for nvidia test", "nodeName", nodeName)
 				testNode := addonEc2Test.NewTestNode(ctx, instanceName, nodeName, addonEc2Test.Cluster.KubernetesVersion, os, provider, e2e.Large, e2e.GPUInstance)
 				Expect(testNode.Start(ctx)).To(Succeed(), "node should start successfully")
+				Expect(testNode.WaitForJoin(ctx)).To(Succeed(), "node should join successfully")
 				Expect(testNode.Verify(ctx)).To(Succeed(), "node should be fully functional")
 
 				// wait for nvidia drivers to be installed
@@ -226,12 +227,12 @@ var _ = Describe("Hybrid Nodes", func() {
 
 				// clean up node
 				addonEc2Test.Logger.Info("Resetting hybrid node...")
-				n := testNode.PeerdNode()
+				i := testNode.PeeredInstance()
 				cleanNode := addonEc2Test.NewCleanNode(
 					provider,
-					testNode.PeeredNode.NodeInfrastructureCleaner(*n),
-					n.Name,
-					n.Instance.IP,
+					testNode.PeeredNode.NodeInfrastructureCleaner(*i),
+					i.Name,
+					i.IP,
 				)
 				Expect(cleanNode.Run(ctx)).To(Succeed(), "node should have been reset successfully")
 			}, Label("nvidia-device-plugin"))

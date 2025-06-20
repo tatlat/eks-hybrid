@@ -21,30 +21,46 @@ const (
 	commandWaitTimeout           = commandExecTimeout + time.Minute
 	instanceRegisterTimeout      = 5 * time.Minute
 	instanceRegisterSleepTimeout = 15 * time.Second
+	standardLinuxSSHUser         = "root"
+	bottlerocketSSHUser          = "ec2-user"
 )
 
-// ssm commands run as root user on jumpbox
-func makeSshCommand(instanceIP string, commands []string) string {
-	return fmt.Sprintf("ssh %s \"%s\"", instanceIP, strings.ReplaceAll(strings.Join(commands, ";"), "\"", "\\\""))
-}
-
-type SSHOnSSM struct {
+type StandardLinuxSSHOnSSM struct {
 	client            *ssm.Client
 	jumpboxInstanceId string
 	logger            logr.Logger
 }
 
-func NewSSHOnSSMCommandRunner(client *ssm.Client, jumpboxInstanceId string, logger logr.Logger) e2eCommands.RemoteCommandRunner {
-	return &SSHOnSSM{
+type BottlerocketSSHOnSSM struct {
+	client            *ssm.Client
+	jumpboxInstanceId string
+	logger            logr.Logger
+}
+
+func NewStandardLinuxSSHOnSSMCommandRunner(client *ssm.Client, jumpboxInstanceId string, logger logr.Logger) e2eCommands.RemoteCommandRunner {
+	return &StandardLinuxSSHOnSSM{
 		client:            client,
 		jumpboxInstanceId: jumpboxInstanceId,
 		logger:            logger,
 	}
 }
 
-func (s *SSHOnSSM) Run(ctx context.Context, ip string, commands []string) (e2eCommands.RemoteCommandOutput, error) {
-	command := makeSshCommand(ip, commands)
-	return RunCommand(ctx, s.client, s.jumpboxInstanceId, command, s.logger)
+func NewBottlerocketSSHOnSSMCommandRunner(client *ssm.Client, jumpboxInstanceId string, logger logr.Logger) e2eCommands.RemoteCommandRunner {
+	return &BottlerocketSSHOnSSM{
+		client:            client,
+		jumpboxInstanceId: jumpboxInstanceId,
+		logger:            logger,
+	}
+}
+
+func (s *StandardLinuxSSHOnSSM) Run(ctx context.Context, ip string, commands []string) (e2eCommands.RemoteCommandOutput, error) {
+	sshCommand := fmt.Sprintf("ssh %s@%s \"%s\"", standardLinuxSSHUser, ip, strings.ReplaceAll(strings.Join(commands, ";"), "\"", "\\\""))
+	return RunCommand(ctx, s.client, s.jumpboxInstanceId, sshCommand, s.logger)
+}
+
+func (s *BottlerocketSSHOnSSM) Run(ctx context.Context, ip string, commands []string) (e2eCommands.RemoteCommandOutput, error) {
+	sshCommand := fmt.Sprintf("ssh %s@%s \"%s\"", bottlerocketSSHUser, ip, strings.ReplaceAll(strings.Join(commands, ";"), "\"", "\\\""))
+	return RunCommand(ctx, s.client, s.jumpboxInstanceId, sshCommand, s.logger)
 }
 
 func RunCommand(ctx context.Context, client *ssm.Client, instanceId, command string, logger logr.Logger) (e2eCommands.RemoteCommandOutput, error) {
