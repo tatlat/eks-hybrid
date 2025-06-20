@@ -149,7 +149,7 @@ func (c *create) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		instanceSize = e2e.XLarge
 	}
 
-	peerdNode, err := node.Create(ctx, &peered.NodeSpec{
+	peeredInstance, err := node.Create(ctx, &peered.NodeSpec{
 		InstanceName:   c.instanceName,
 		InstanceSize:   instanceSize,
 		InstanceType:   c.instanceType,
@@ -162,15 +162,15 @@ func (c *create) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return err
 	}
 
-	logger.Info("Node created", "instanceID", peerdNode.Instance.ID)
+	logger.Info("Node created", "instanceID", peeredInstance.ID)
 
-	logger.Info("Waiting for EC2 Instance to be running...", "instanceID", peerdNode.Instance.ID)
-	if err := ec2.WaitForEC2InstanceRunning(ctx, ec2Client, peerdNode.Instance.ID); err != nil {
+	logger.Info("Waiting for EC2 Instance to be running...", "instanceID", peeredInstance.ID)
+	if err := ec2.WaitForEC2InstanceRunning(ctx, ec2Client, peeredInstance.ID); err != nil {
 		return fmt.Errorf("waiting for EC2 instance for node to be running: %w", err)
 	}
 
 	logger.Info("Connecting to the node serial console...")
-	serial, err := node.SerialConsole(ctx, peerdNode.Instance.ID)
+	serial, err := node.SerialConsole(ctx, peeredInstance.ID)
 	if err != nil {
 		return fmt.Errorf("preparing EC2 for serial connection: %w", err)
 	}
@@ -190,8 +190,8 @@ func (c *create) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	verifyNode := kubernetes.VerifyNode{
 		K8s:      k8s,
 		Logger:   logr.Discard(),
-		NodeName: peerdNode.Name,
-		NodeIP:   peerdNode.Instance.IP,
+		NodeName: peeredInstance.Name,
+		NodeIP:   peeredInstance.IP,
 	}
 	vn, err := verifyNode.WaitForNodeReady(ctx)
 	if err != nil {
@@ -211,7 +211,7 @@ func (c *create) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		Cluster: cluster,
 	}
 
-	if err := network.CreateRoutesForNode(ctx, &peerdNode); err != nil {
+	if err := network.CreateRoutesForNode(ctx, &peeredInstance); err != nil {
 		return fmt.Errorf("creating routes for node: %w", err)
 	}
 
@@ -264,5 +264,9 @@ var oses = map[string]map[string]func() e2e.NodeadmOS{
 		"arm64": func() e2e.NodeadmOS {
 			return osystem.NewRedHat9ARM(os.Getenv("RHEL_USERNAME"), os.Getenv("RHEL_PASSWORD"))
 		},
+	},
+	"bottlerocket": {
+		"amd64": func() e2e.NodeadmOS { return osystem.NewBottleRocket() },
+		"arm64": func() e2e.NodeadmOS { return osystem.NewBottleRocketARM() },
 	},
 }
