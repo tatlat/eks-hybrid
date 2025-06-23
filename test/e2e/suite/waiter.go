@@ -111,6 +111,8 @@ func isImpaired(ctx context.Context, waitErr error, ec2Client *ec2v2.Client, ins
 		return false
 	}
 	isImpaired, err := ec2.IsEC2InstanceImpaired(ctx, ec2Client, instanceID)
-	logger.Error(err, "describing instance status")
+	if err != nil {
+		logger.Error(err, "describing instance status")
+	}
 	return isImpaired
 }
