@@ -415,3 +415,35 @@ func replaceCreationTimeParameter(existingParams, newParams []cfnTypes.Parameter
 	}
 	return newParams
 }
+
+func ensureAllStackOutputsNonEmpty(stackOut *resourcesStackOutput) error {
+	var missing []string
+
+	if stackOut.clusterRole == "" {
+		missing = append(missing, "ClusterRole")
+	}
+	if stackOut.clusterVpcConfig.vpcID == "" {
+		missing = append(missing, "ClusterVPC")
+	}
+	if stackOut.clusterVpcConfig.publicSubnet == "" {
+		missing = append(missing, "ClusterVPCPublicSubnet")
+	}
+	if stackOut.clusterVpcConfig.privateSubnet == "" {
+		missing = append(missing, "ClusterVPCPrivateSubnet")
+	}
+	if stackOut.clusterVpcConfig.securityGroup == "" {
+		missing = append(missing, "ClusterSecurityGroup")
+	}
+	if stackOut.podIdentity.roleArn == "" {
+		missing = append(missing, "PodIdentityAssociationRoleARN")
+	}
+	if stackOut.podIdentity.s3Bucket == "" {
+		missing = append(missing, "PodIdentityS3BucketName")
+	}
+
+	if len(missing) > 0 {
+		return fmt.Errorf("missing required CloudFormation outputs after stack deployment: %v", missing)
+	}
+
+	return nil
+}
