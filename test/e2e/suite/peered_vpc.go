@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
@@ -356,6 +357,21 @@ func BeforeSuiteCredentialSetup(ctx context.Context, filePath string) SuiteConfi
 	// DeferCleanup is context aware, so it will behave as SynchronizedAfterSuite
 	// We prefer this because it's simpler and it avoids having to share global state
 	DeferCleanup(func(ctx context.Context) {
+		logCollector := peered.JumpboxLogCollection{
+			JumpboxInstanceID: infra.JumpboxInstanceId,
+			LogsBucket:        config.LogsBucket,
+			ClusterName:       config.ClusterName,
+			S3Client:          s3v2.NewFromConfig(aws),
+			SSMClient:         ssmv2.NewFromConfig(aws),
+			Logger:            logger,
+		}
+
+		logCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+		defer cancel()
+		if err := peered.CollectJumpboxLogs(logCtx, logCollector); err != nil {
+			logger.Error(err, "issue collecting jumpbox logs")
+		}
+
 		if skipCleanup {
 			logger.Info("Skipping cleanup of e2e resources stack")
 			return

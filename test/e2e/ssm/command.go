@@ -131,7 +131,14 @@ func sanitizeS3PresignedURL(command string) string {
 	if questionMarkPos == -1 {
 		return command
 	}
-	return command[:questionMarkPos] + "?[REDACTED]'\""
+
+	// if there is a space after the s3 presigned url there are additional arguments, we need to include them in the sanitized command
+	var afterS3PresignedURL string
+	spaceAfterPos := strings.Index(command[questionMarkPos:], " ")
+	if spaceAfterPos != -1 {
+		afterS3PresignedURL = command[questionMarkPos+spaceAfterPos:]
+	}
+	return command[:questionMarkPos] + "?[REDACTED]'" + afterS3PresignedURL
 }
 
 // WaitForInstance uses DescribeInstanceInformation in a loop to wait for it be registered
