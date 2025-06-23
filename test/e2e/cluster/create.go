@@ -100,6 +100,11 @@ func (c *Create) Run(ctx context.Context, test TestResources) error {
 		return fmt.Errorf("creating stack for cluster infra: %w", err)
 	}
 
+	err = ensureAllStackOutputsNonEmpty(stackOut)
+	if err != nil {
+		return err
+	}
+
 	hybridCluster := hybridCluster{
 		Name:              test.ClusterName,
 		Region:            test.ClusterRegion,
