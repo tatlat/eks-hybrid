@@ -87,6 +87,14 @@ func (v VerifyPodIdentityAddon) Run(ctx context.Context) error {
 				{
 					Name:  podName,
 					Image: fmt.Sprintf("%s.dkr.ecr.%s.amazonaws.com/ecr-public/aws-cli/aws-cli:latest", constants.EcrAccounId, v.Region),
+					Env: []corev1.EnvVar{
+						// default value for AWS_MAX_ATTEMPTS is 3. We are seeing the s3 cp command
+						// fail due to rate limits form additional tests so increasing the number of retries
+						{
+							Name:  "AWS_MAX_ATTEMPTS",
+							Value: "10",
+						},
+					},
 					Command: []string{
 						"/bin/bash",
 						"-c",
