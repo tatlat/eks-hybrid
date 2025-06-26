@@ -50,7 +50,7 @@ func NewCreateCommand() cli.Command {
 	createCmd.AddPositionalValue(&cmd.instanceName, "INSTANCE_NAME", 1, true, "Name of the instance to create.")
 	createCmd.String(&cmd.configFile, "f", "config-file", "Path tests config file.")
 	createCmd.String(&cmd.credsProvider, "c", "creds-provider", "Credentials provider to use (iam-ra, ssm).")
-	createCmd.String(&cmd.os, "o", "os", "OS to use (al23, ubuntu2004, ubuntu2204, ubuntu2404, rhel8, rhel9).")
+	createCmd.String(&cmd.os, "o", "os", "OS to use (al23, ubuntu2004, ubuntu2204, ubuntu2404, rhel8, rhel9, bottlerocket).")
 	createCmd.String(&cmd.arch, "a", "arch", "Architecture to use (amd64, arm64).")
 	createCmd.String(&cmd.instanceSize, "s", "instance-size", "Instance size to use (Large, XLarge).")
 	createCmd.String(&cmd.instanceType, "t", "instance-type", "Instance type to use (t3.large, g4dn.xlarge, etc). If provided, instance size would be ignored.")
@@ -120,6 +120,8 @@ func (c *create) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 
 		NodeadmURLs: *urls,
 		PublicKey:   infra.NodesPublicSSHKey,
+
+		K8sClientConfig: clientConfig,
 	}
 
 	nodeOS, err := buildOS(c.os, c.arch)
