@@ -54,7 +54,7 @@ var gpuInstanceSizeToType = map[architecture]map[e2e.InstanceSize]string{
 var nodeAdmInitScript []byte
 
 //go:embed testdata/log-collector.sh
-var logCollectorScript []byte
+var LogCollectorScript []byte
 
 //go:embed testdata/nodeadm-wrapper.sh
 var nodeadmWrapperScript []byte
@@ -74,7 +74,7 @@ func (a architecture) arm() bool {
 }
 
 func populateBaseScripts(userDataInput *e2e.UserDataInput) error {
-	logCollector, err := executeTemplate(logCollectorScript, userDataInput)
+	logCollector, err := executeTemplate(LogCollectorScript, userDataInput)
 	if err != nil {
 		return fmt.Errorf("generating log collector script: %w", err)
 	}
