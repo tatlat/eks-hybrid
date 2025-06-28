@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/aws/retry"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	"github.com/aws/aws-sdk-go-v2/service/ssm/types"
 	smithytime "github.com/aws/smithy-go/time"
@@ -20,30 +21,46 @@ const (
 	commandWaitTimeout           = commandExecTimeout + time.Minute
 	instanceRegisterTimeout      = 5 * time.Minute
 	instanceRegisterSleepTimeout = 15 * time.Second
+	standardLinuxSSHUser         = "root"
+	bottlerocketSSHUser          = "ec2-user"
 )
 
-// ssm commands run as root user on jumpbox
-func makeSshCommand(instanceIP string, commands []string) string {
-	return fmt.Sprintf("ssh %s \"%s\"", instanceIP, strings.ReplaceAll(strings.Join(commands, ";"), "\"", "\\\""))
-}
-
-type SSHOnSSM struct {
+type StandardLinuxSSHOnSSM struct {
 	client            *ssm.Client
 	jumpboxInstanceId string
 	logger            logr.Logger
 }
 
-func NewSSHOnSSMCommandRunner(client *ssm.Client, jumpboxInstanceId string, logger logr.Logger) e2eCommands.RemoteCommandRunner {
-	return &SSHOnSSM{
+type BottlerocketSSHOnSSM struct {
+	client            *ssm.Client
+	jumpboxInstanceId string
+	logger            logr.Logger
+}
+
+func NewStandardLinuxSSHOnSSMCommandRunner(client *ssm.Client, jumpboxInstanceId string, logger logr.Logger) e2eCommands.RemoteCommandRunner {
+	return &StandardLinuxSSHOnSSM{
 		client:            client,
 		jumpboxInstanceId: jumpboxInstanceId,
 		logger:            logger,
 	}
 }
 
-func (s *SSHOnSSM) Run(ctx context.Context, ip string, commands []string) (e2eCommands.RemoteCommandOutput, error) {
-	command := makeSshCommand(ip, commands)
-	return RunCommand(ctx, s.client, s.jumpboxInstanceId, command, s.logger)
+func NewBottlerocketSSHOnSSMCommandRunner(client *ssm.Client, jumpboxInstanceId string, logger logr.Logger) e2eCommands.RemoteCommandRunner {
+	return &BottlerocketSSHOnSSM{
+		client:            client,
+		jumpboxInstanceId: jumpboxInstanceId,
+		logger:            logger,
+	}
+}
+
+func (s *StandardLinuxSSHOnSSM) Run(ctx context.Context, ip string, commands []string) (e2eCommands.RemoteCommandOutput, error) {
+	sshCommand := fmt.Sprintf("ssh %s@%s \"%s\"", standardLinuxSSHUser, ip, strings.ReplaceAll(strings.Join(commands, ";"), "\"", "\\\""))
+	return RunCommand(ctx, s.client, s.jumpboxInstanceId, sshCommand, s.logger)
+}
+
+func (s *BottlerocketSSHOnSSM) Run(ctx context.Context, ip string, commands []string) (e2eCommands.RemoteCommandOutput, error) {
+	sshCommand := fmt.Sprintf("ssh %s@%s \"%s\"", bottlerocketSSHUser, ip, strings.ReplaceAll(strings.Join(commands, ";"), "\"", "\\\""))
+	return RunCommand(ctx, s.client, s.jumpboxInstanceId, sshCommand, s.logger)
 }
 
 func RunCommand(ctx context.Context, client *ssm.Client, instanceId, command string, logger logr.Logger) (e2eCommands.RemoteCommandOutput, error) {
@@ -57,8 +74,20 @@ func RunCommand(ctx context.Context, client *ssm.Client, instanceId, command str
 		},
 		InstanceIds: []string{instanceId},
 	}
+	// when running e2e tests in the CI account, we occasionally see throttling errors from
+	// the SSM SendCommand operation which exhaust our standard 40 attempts
+	// this usually happens when we are running multiple pipelines in parallel
+	// we increase the max attempts to 120 and set the max backoff to 40 seconds
+	// to give the operation more time to complete
 	optsFn := func(opts *ssm.Options) {
-		opts.RetryMaxAttempts = 60
+		opts.Retryer = retry.NewAdaptiveMode(func(o *retry.AdaptiveModeOptions) {
+			o.StandardOptions = []func(*retry.StandardOptions){
+				func(o *retry.StandardOptions) {
+					o.MaxAttempts = 120
+					o.MaxBackoff = 40 * time.Second
+				},
+			}
+		})
 	}
 	output, err := client.SendCommand(ctx, input, optsFn)
 	if err != nil {
@@ -102,7 +131,14 @@ func sanitizeS3PresignedURL(command string) string {
 	if questionMarkPos == -1 {
 		return command
 	}
-	return command[:questionMarkPos] + "?[REDACTED]'\""
+
+	// if there is a space after the s3 presigned url there are additional arguments, we need to include them in the sanitized command
+	var afterS3PresignedURL string
+	spaceAfterPos := strings.Index(command[questionMarkPos:], " ")
+	if spaceAfterPos != -1 {
+		afterS3PresignedURL = command[questionMarkPos+spaceAfterPos:]
+	}
+	return command[:questionMarkPos] + "?[REDACTED]'" + afterS3PresignedURL
 }
 
 // WaitForInstance uses DescribeInstanceInformation in a loop to wait for it be registered

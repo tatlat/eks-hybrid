@@ -3,12 +3,15 @@ package os
 import (
 	"bytes"
 	"context"
+	_ "embed"
 	"fmt"
 	"text/template"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
+	"sigs.k8s.io/yaml"
 
+	"github.com/aws/eks-hybrid/internal/api"
 	"github.com/aws/eks-hybrid/test/e2e"
 )
 
@@ -36,6 +39,32 @@ var instanceSizeToType = map[architecture]map[e2e.InstanceSize]string{
 	},
 }
 
+var gpuInstanceSizeToType = map[architecture]map[e2e.InstanceSize]string{
+	amd64: {
+		e2e.XLarge: "g4dn.2xlarge",
+		e2e.Large:  "g4dn.xlarge",
+	},
+	arm64: {
+		e2e.XLarge: "g5g.2xlarge",
+		e2e.Large:  "g5g.xlarge",
+	},
+}
+
+//go:embed testdata/nodeadm-init.sh
+var nodeAdmInitScript []byte
+
+//go:embed testdata/log-collector.sh
+var LogCollectorScript []byte
+
+//go:embed testdata/nodeadm-wrapper.sh
+var nodeadmWrapperScript []byte
+
+//go:embed testdata/install-containerd.sh
+var installContainerdScript []byte
+
+//go:embed testdata/nvidia-driver-install.sh
+var nvidiaDriverInstallScript []byte
+
 func (a architecture) String() string {
 	return string(a)
 }
@@ -45,7 +74,7 @@ func (a architecture) arm() bool {
 }
 
 func populateBaseScripts(userDataInput *e2e.UserDataInput) error {
-	logCollector, err := executeTemplate(logCollectorScript, userDataInput)
+	logCollector, err := executeTemplate(LogCollectorScript, userDataInput)
 	if err != nil {
 		return fmt.Errorf("generating log collector script: %w", err)
 	}
@@ -59,6 +88,7 @@ func populateBaseScripts(userDataInput *e2e.UserDataInput) error {
 		e2e.File{Content: string(logCollector), Path: "/tmp/log-collector.sh", Permissions: "0755"},
 		e2e.File{Content: string(nodeadmWrapper), Path: "/tmp/nodeadm-wrapper.sh", Permissions: "0755"},
 		e2e.File{Content: string(installContainerdScript), Path: "/tmp/install-containerd.sh", Permissions: "0755"},
+		e2e.File{Content: string(nvidiaDriverInstallScript), Path: "/tmp/nvidia-driver-install.sh", Permissions: "0755"},
 	)
 
 	return nil
@@ -94,10 +124,27 @@ func getAmiIDFromSSM(ctx context.Context, client *ssm.Client, amiName string) (*
 }
 
 // an unknown size and arch combination is a coding error, so we panic
-func getInstanceTypeFromRegionAndArch(_ string, arch architecture, instanceSize e2e.InstanceSize) string {
-	instanceType, ok := instanceSizeToType[arch][instanceSize]
+func getInstanceTypeFromRegionAndArch(_ string, arch architecture, instanceSize e2e.InstanceSize, computeType e2e.ComputeType) string {
+	var instanceType string
+	var ok bool
+
+	if computeType == e2e.GPUInstance {
+		instanceType, ok = gpuInstanceSizeToType[arch][instanceSize]
+	} else {
+		instanceType, ok = instanceSizeToType[arch][instanceSize]
+	}
+
 	if !ok {
 		panic(fmt.Errorf("unknown instance size %d for architecture %s", instanceSize, arch))
 	}
 	return instanceType
+}
+
+func generateNodeadmConfigYaml(nodeadmConfig *api.NodeConfig) (string, error) {
+	nodeadmConfigYaml, err := yaml.Marshal(nodeadmConfig)
+	if err != nil {
+		return "", fmt.Errorf("marshalling nodeadm config to YAML: %w", err)
+	}
+
+	return string(nodeadmConfigYaml), nil
 }

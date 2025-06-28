@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/aws/retry"
 	"github.com/aws/aws-sdk-go-v2/service/cloudformation"
 	cfnTypes "github.com/aws/aws-sdk-go-v2/service/cloudformation/types"
 	"github.com/aws/aws-sdk-go-v2/service/eks"
@@ -84,6 +85,8 @@ func (s *Stack) Deploy(ctx context.Context, logger logr.Logger) (*StackOutput, e
 		ClusterName:  &s.ClusterName,
 		PrincipalArn: &output.SSMNodeRoleARN,
 		Type:         aws.String("HYBRID_LINUX"),
+	}, func(o *eks.Options) {
+		o.Retryer = retry.AddWithErrorCodes(o.Retryer, "InvalidParameterException")
 	})
 	if err != nil && !isResourceAlreadyInUse(err) {
 		return nil, err
@@ -95,6 +98,8 @@ func (s *Stack) Deploy(ctx context.Context, logger logr.Logger) (*StackOutput, e
 			ClusterName:  &s.ClusterName,
 			PrincipalArn: &output.IRANodeRoleARN,
 			Type:         aws.String("HYBRID_LINUX"),
+		}, func(o *eks.Options) {
+			o.Retryer = retry.AddWithErrorCodes(o.Retryer, "InvalidParameterException")
 		})
 		if err != nil && !isResourceAlreadyInUse(err) {
 			return nil, err
@@ -163,7 +168,7 @@ func (s *Stack) deployStack(ctx context.Context, logger logr.Logger) error {
 			TemplateBody:    aws.String(buf.String()),
 			Parameters:      params,
 			Capabilities: []cfnTypes.Capability{
-				"CAPABILITY_NAMED_IAM",
+				cfnTypes.CapabilityCapabilityNamedIam,
 			},
 			Tags: []cfnTypes.Tag{{
 				Key:   aws.String(constants.TestClusterTagKey),
@@ -187,7 +192,7 @@ func (s *Stack) deployStack(ctx context.Context, logger logr.Logger) error {
 			DisableRollback: aws.Bool(true),
 			StackName:       aws.String(s.Name),
 			Capabilities: []cfnTypes.Capability{
-				"CAPABILITY_NAMED_IAM",
+				cfnTypes.CapabilityCapabilityNamedIam,
 			},
 			TemplateBody: aws.String(buf.String()),
 			Parameters:   params,

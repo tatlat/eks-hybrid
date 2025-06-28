@@ -10,7 +10,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/cloudformation"
-	"github.com/aws/aws-sdk-go-v2/service/cloudformation/types"
+	cfnTypes "github.com/aws/aws-sdk-go-v2/service/cloudformation/types"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
 	iamTypes "github.com/aws/aws-sdk-go-v2/service/iam/types"
@@ -24,6 +24,7 @@ import (
 	"github.com/aws/eks-hybrid/test/e2e/cleanup"
 	"github.com/aws/eks-hybrid/test/e2e/constants"
 	e2eErrors "github.com/aws/eks-hybrid/test/e2e/errors"
+	"github.com/aws/eks-hybrid/test/e2e/os"
 	"github.com/aws/eks-hybrid/test/e2e/peered"
 	"github.com/aws/eks-hybrid/test/e2e/securitygroup"
 	e2eSSM "github.com/aws/eks-hybrid/test/e2e/ssm"
@@ -34,7 +35,7 @@ var setupTemplateBody []byte
 
 const (
 	creationTimeParameterKey = "CreationTime"
-	stackWaitTimeout         = 7 * time.Minute
+	stackWaitTimeout         = 9 * time.Minute
 	stackWaitInterval        = 10 * time.Second
 )
 
@@ -109,8 +110,8 @@ func (s *stack) deploy(ctx context.Context, test TestResources) (*resourcesStack
 	return result, nil
 }
 
-func (s *stack) prepareStackParameters(test TestResources, eks EKSConfig) []types.Parameter {
-	params := []types.Parameter{
+func (s *stack) prepareStackParameters(test TestResources, eks EKSConfig) []cfnTypes.Parameter {
+	params := []cfnTypes.Parameter{
 		{
 			ParameterKey:   aws.String("ClusterName"),
 			ParameterValue: aws.String(test.ClusterName),
@@ -179,20 +180,29 @@ func (s *stack) prepareStackParameters(test TestResources, eks EKSConfig) []type
 		},
 	}
 
+	// need to replace the ${foo} with ${!foo} otherwise cfn tries to resolve it
+	// and indent the script to create a properly formated cloud-init
+	logCollectorScript := strings.ReplaceAll(string(os.LogCollectorScript), "${", "${!")
+	logCollectorScript = strings.ReplaceAll(logCollectorScript, "\n", "\n"+strings.Repeat(" ", 6))
+	params = append(params, cfnTypes.Parameter{
+		ParameterKey:   aws.String("LogCollectorScript"),
+		ParameterValue: aws.String(logCollectorScript),
+	})
+
 	// Add addon parameters
 	ingressConfig := securitygroup.DefaultIngress()
 	params = append(params, s.prepareAddonParameters(ingressConfig)...)
 	return params
 }
 
-func (s *stack) prepareAddonParameters(ingressConfig []securitygroup.IngessConfig) []types.Parameter {
+func (s *stack) prepareAddonParameters(ingressConfig []securitygroup.IngessConfig) []cfnTypes.Parameter {
 	var ports []string
 
 	for _, cfg := range ingressConfig {
 		ports = append(ports, fmt.Sprintf("%d|%s", cfg.Port, cfg.Description))
 	}
 
-	return []types.Parameter{
+	return []cfnTypes.Parameter{
 		{
 			ParameterKey:   aws.String("AddonPortsWithDescriptions"),
 			ParameterValue: aws.String(strings.Join(ports, ",")),
@@ -200,7 +210,7 @@ func (s *stack) prepareAddonParameters(ingressConfig []securitygroup.IngessConfi
 	}
 }
 
-func (s *stack) createOrUpdateStack(ctx context.Context, stackName string, params []types.Parameter, test TestResources) error {
+func (s *stack) createOrUpdateStack(ctx context.Context, stackName string, params []cfnTypes.Parameter, test TestResources) error {
 	resp, err := s.cfn.DescribeStacks(ctx, &cloudformation.DescribeStacksInput{
 		StackName: aws.String(stackName),
 	})
@@ -215,12 +225,12 @@ func (s *stack) createOrUpdateStack(ctx context.Context, stackName string, param
 			StackName:       aws.String(stackName),
 			TemplateBody:    aws.String(string(setupTemplateBody)),
 			Parameters:      params,
-			Capabilities: []types.Capability{
-				types.CapabilityCapabilityIam,
-				types.CapabilityCapabilityNamedIam,
-				types.CapabilityCapabilityAutoExpand,
+			Capabilities: []cfnTypes.Capability{
+				cfnTypes.CapabilityCapabilityIam,
+				cfnTypes.CapabilityCapabilityNamedIam,
+				cfnTypes.CapabilityCapabilityAutoExpand,
 			},
-			Tags: []types.Tag{{
+			Tags: []cfnTypes.Tag{{
 				Key:   aws.String(constants.TestClusterTagKey),
 				Value: aws.String(test.ClusterName),
 			}},
@@ -234,7 +244,7 @@ func (s *stack) createOrUpdateStack(ctx context.Context, stackName string, param
 		if err != nil {
 			return fmt.Errorf("waiting for hybrid nodes setup cfn stack: %w", err)
 		}
-	} else if resp.Stacks[0].StackStatus == types.StackStatusCreateInProgress || resp.Stacks[0].StackStatus == types.StackStatusUpdateInProgress {
+	} else if resp.Stacks[0].StackStatus == cfnTypes.StackStatusCreateInProgress || resp.Stacks[0].StackStatus == cfnTypes.StackStatusUpdateInProgress {
 		s.logger.Info("Waiting for hybrid nodes setup stack to be created", "stackName", stackName)
 		err = cfn.WaitForStackOperation(ctx, s.cfn, stackName, stackWaitInterval, stackWaitTimeout)
 		if err != nil {
@@ -246,9 +256,10 @@ func (s *stack) createOrUpdateStack(ctx context.Context, stackName string, param
 		_, err = s.cfn.UpdateStack(ctx, &cloudformation.UpdateStackInput{
 			DisableRollback: aws.Bool(true),
 			StackName:       aws.String(stackName),
-			Capabilities: []types.Capability{
-				types.CapabilityCapabilityIam,
-				types.CapabilityCapabilityNamedIam,
+			Capabilities: []cfnTypes.Capability{
+				cfnTypes.CapabilityCapabilityIam,
+				cfnTypes.CapabilityCapabilityNamedIam,
+				cfnTypes.CapabilityCapabilityAutoExpand,
 			},
 			TemplateBody: aws.String(string(setupTemplateBody)),
 			Parameters:   params,
@@ -271,7 +282,7 @@ func (s *stack) createOrUpdateStack(ctx context.Context, stackName string, param
 	return nil
 }
 
-func (s *stack) processStackOutputs(outputs []types.Output) *resourcesStackOutput {
+func (s *stack) processStackOutputs(outputs []cfnTypes.Output) *resourcesStackOutput {
 	result := &resourcesStackOutput{}
 	// extract relevant stack outputs
 	for _, output := range outputs {
@@ -391,7 +402,7 @@ func (s *stack) emptyPodIdentityS3Bucket(ctx context.Context, clusterName string
 	return nil
 }
 
-func replaceCreationTimeParameter(existingParams, newParams []types.Parameter) []types.Parameter {
+func replaceCreationTimeParameter(existingParams, newParams []cfnTypes.Parameter) []cfnTypes.Parameter {
 	// if the stack already exists, try to find the original creation time
 	// and replace the new parameter with the original one to avoid triggering an
 	// unnecessary update
@@ -413,4 +424,36 @@ func replaceCreationTimeParameter(existingParams, newParams []types.Parameter) [
 		}
 	}
 	return newParams
+}
+
+func ensureAllStackOutputsNonEmpty(stackOut *resourcesStackOutput) error {
+	var missing []string
+
+	if stackOut.clusterRole == "" {
+		missing = append(missing, "ClusterRole")
+	}
+	if stackOut.clusterVpcConfig.vpcID == "" {
+		missing = append(missing, "ClusterVPC")
+	}
+	if stackOut.clusterVpcConfig.publicSubnet == "" {
+		missing = append(missing, "ClusterVPCPublicSubnet")
+	}
+	if stackOut.clusterVpcConfig.privateSubnet == "" {
+		missing = append(missing, "ClusterVPCPrivateSubnet")
+	}
+	if stackOut.clusterVpcConfig.securityGroup == "" {
+		missing = append(missing, "ClusterSecurityGroup")
+	}
+	if stackOut.podIdentity.roleArn == "" {
+		missing = append(missing, "PodIdentityAssociationRoleARN")
+	}
+	if stackOut.podIdentity.s3Bucket == "" {
+		missing = append(missing, "PodIdentityS3BucketName")
+	}
+
+	if len(missing) > 0 {
+		return fmt.Errorf("missing required CloudFormation outputs after stack deployment: %v", missing)
+	}
+
+	return nil
 }

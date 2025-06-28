@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
@@ -127,6 +128,8 @@ func BuildPeeredVPCTestForSuite(ctx context.Context, suite *SuiteConfiguration) 
 	}
 	test.RolesAnywhereCA = ca
 
+	// TODO: ideally this should be an input to the tests and not just
+	// assume same name/path used by the setup command.
 	clientConfig, err := clientcmd.BuildConfigFromFlags("", cluster.KubeconfigPath(suite.TestConfig.ClusterName))
 	if err != nil {
 		return nil, err
@@ -172,27 +175,32 @@ func BuildPeeredVPCTestForSuite(ctx context.Context, suite *SuiteConfiguration) 
 }
 
 func (t *PeeredVPCTest) NewPeeredNode(logger logr.Logger) *peered.Node {
+	remoteCommandRunner := ssm.NewStandardLinuxSSHOnSSMCommandRunner(t.SSMClient, t.JumpboxInstanceId, t.Logger)
 	return &peered.Node{
 		NodeCreate: peered.NodeCreate{
-			AWS:             t.aws,
-			EC2:             t.ec2Client,
-			SSM:             t.SSMClient,
-			Logger:          logger,
-			Cluster:         t.Cluster,
-			NodeadmURLs:     t.nodeadmURLs,
-			PublicKey:       t.publicKey,
-			SetRootPassword: t.setRootPassword,
-		},
-		NodeCleanup: peered.NodeCleanup{
-			RemoteCommandRunner: ssm.NewSSHOnSSMCommandRunner(t.SSMClient, t.JumpboxInstanceId, logger),
+			AWS:                 t.aws,
 			EC2:                 t.ec2Client,
 			SSM:                 t.SSMClient,
-			S3:                  t.s3Client,
-			K8s:                 t.k8sClient,
+			K8sClientConfig:     t.K8sClientConfig,
 			Logger:              logger,
-			SkipDelete:          t.SkipCleanup,
 			Cluster:             t.Cluster,
-			LogsBucket:          t.logsBucket,
+			NodeadmURLs:         t.nodeadmURLs,
+			PublicKey:           t.publicKey,
+			SetRootPassword:     t.setRootPassword,
+			RemoteCommandRunner: remoteCommandRunner,
+		},
+		NodeCleanup: peered.NodeCleanup{
+			EC2:        t.ec2Client,
+			SSM:        t.SSMClient,
+			S3:         t.s3Client,
+			K8s:        t.k8sClient,
+			Logger:     logger,
+			SkipDelete: t.SkipCleanup,
+			Cluster:    t.Cluster,
+			LogsBucket: t.logsBucket,
+			LogCollector: osystem.StandardLinuxLogCollector{
+				Runner: remoteCommandRunner,
+			},
 		},
 	}
 }
@@ -209,7 +217,7 @@ func (t *PeeredVPCTest) NewPeeredNetwork(logger logr.Logger) *peered.Network {
 func (t *PeeredVPCTest) NewCleanNode(provider e2e.NodeadmCredentialsProvider, infraCleaner nodeadm.NodeInfrastructureCleaner, nodeName, nodeIP string) *nodeadm.CleanNode {
 	return &nodeadm.CleanNode{
 		K8s:                   t.k8sClient,
-		RemoteCommandRunner:   ssm.NewSSHOnSSMCommandRunner(t.SSMClient, t.JumpboxInstanceId, t.Logger),
+		RemoteCommandRunner:   ssm.NewStandardLinuxSSHOnSSMCommandRunner(t.SSMClient, t.JumpboxInstanceId, t.Logger),
 		Verifier:              provider,
 		Logger:                t.Logger,
 		InfrastructureCleaner: infraCleaner,
@@ -221,7 +229,7 @@ func (t *PeeredVPCTest) NewCleanNode(provider e2e.NodeadmCredentialsProvider, in
 func (t *PeeredVPCTest) NewUpgradeNode(nodeName, nodeIP string) *nodeadm.UpgradeNode {
 	return &nodeadm.UpgradeNode{
 		K8s:                 t.k8sClient,
-		RemoteCommandRunner: ssm.NewSSHOnSSMCommandRunner(t.SSMClient, t.JumpboxInstanceId, t.Logger),
+		RemoteCommandRunner: ssm.NewStandardLinuxSSHOnSSMCommandRunner(t.SSMClient, t.JumpboxInstanceId, t.Logger),
 		Logger:              t.Logger,
 		NodeName:            nodeName,
 		NodeIP:              nodeIP,
@@ -229,12 +237,12 @@ func (t *PeeredVPCTest) NewUpgradeNode(nodeName, nodeIP string) *nodeadm.Upgrade
 	}
 }
 
-func (t *PeeredVPCTest) InstanceName(testName string, os e2e.NodeadmOS, provider e2e.NodeadmCredentialsProvider) string {
+func (t *PeeredVPCTest) InstanceName(testName, osName, providerName string) string {
 	return fmt.Sprintf("EKSHybridCI-%s-%s-%s-%s",
 		testName,
 		e2e.SanitizeForAWSName(t.Cluster.Name),
-		e2e.SanitizeForAWSName(os.Name()),
-		e2e.SanitizeForAWSName(string(provider.Name())),
+		e2e.SanitizeForAWSName(osName),
+		e2e.SanitizeForAWSName(string(providerName)),
 	)
 }
 
@@ -263,7 +271,7 @@ func WithLogging(loggerControl e2e.PausableLogger, serialOutputWriter io.Writer)
 	}
 }
 
-func (t *PeeredVPCTest) NewTestNode(ctx context.Context, instanceName, nodeName, k8sVersion string, os e2e.NodeadmOS, provider e2e.NodeadmCredentialsProvider, instanceSize e2e.InstanceSize, opts ...TestNodeOption) *testNode {
+func (t *PeeredVPCTest) NewTestNode(ctx context.Context, instanceName, nodeName, k8sVersion string, os e2e.NodeadmOS, provider e2e.NodeadmCredentialsProvider, instanceSize e2e.InstanceSize, computeType e2e.ComputeType, opts ...TestNodeOption) *testNode {
 	node := &testNode{
 		ArtifactsPath:   t.ArtifactsPath,
 		ClusterName:     t.Cluster.Name,
@@ -282,6 +290,7 @@ func (t *PeeredVPCTest) NewTestNode(ctx context.Context, instanceName, nodeName,
 		OS:              os,
 		Provider:        provider,
 		Region:          t.Cluster.Region,
+		ComputeType:     computeType,
 	}
 
 	for _, opt := range opts {
@@ -348,6 +357,21 @@ func BeforeSuiteCredentialSetup(ctx context.Context, filePath string) SuiteConfi
 	// DeferCleanup is context aware, so it will behave as SynchronizedAfterSuite
 	// We prefer this because it's simpler and it avoids having to share global state
 	DeferCleanup(func(ctx context.Context) {
+		logCollector := peered.JumpboxLogCollection{
+			JumpboxInstanceID: infra.JumpboxInstanceId,
+			LogsBucket:        config.LogsBucket,
+			ClusterName:       config.ClusterName,
+			S3Client:          s3v2.NewFromConfig(aws),
+			SSMClient:         ssmv2.NewFromConfig(aws),
+			Logger:            logger,
+		}
+
+		logCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+		defer cancel()
+		if err := peered.CollectJumpboxLogs(logCtx, logCollector); err != nil {
+			logger.Error(err, "issue collecting jumpbox logs")
+		}
+
 		if skipCleanup {
 			logger.Info("Skipping cleanup of e2e resources stack")
 			return
@@ -427,6 +451,13 @@ func OSProviderList(credentialProviders []e2e.NodeadmCredentialsProvider) []OSPr
 	return osProviderList
 }
 
+func BottlerocketOSList() []e2e.NodeadmOS {
+	return []e2e.NodeadmOS{
+		osystem.NewBottleRocket(),
+		osystem.NewBottleRocketARM(),
+	}
+}
+
 func CredentialProviders() []e2e.NodeadmCredentialsProvider {
 	return []e2e.NodeadmCredentialsProvider{
 		&credentials.SsmProvider{},
@@ -458,6 +489,7 @@ type NodeCreate struct {
 	NodeName     string
 	OS           e2e.NodeadmOS
 	Provider     e2e.NodeadmCredentialsProvider
+	ComputeType  e2e.ComputeType
 }
 
 func CreateNodes(ctx context.Context, test *PeeredVPCTest, nodesToCreate []NodeCreate) {
@@ -480,10 +512,11 @@ func CreateNodes(ctx context.Context, test *PeeredVPCTest, nodesToCreate []NodeC
 
 			// Create a new logger that uses our SwitchWriter
 			controlledLogger := e2e.NewPausableLogger(e2e.WithWriter(outputControl))
-			testNode := test.NewTestNode(ctx, entry.InstanceName, entry.NodeName, test.Cluster.KubernetesVersion, entry.OS, entry.Provider, entry.InstanceSize,
+			testNode := test.NewTestNode(ctx, entry.InstanceName, entry.NodeName, test.Cluster.KubernetesVersion, entry.OS, entry.Provider, entry.InstanceSize, entry.ComputeType,
 				WithLogging(controlledLogger, outputControl))
 
 			Expect(testNode.Start(ctx)).To(Succeed(), "node should start successfully")
+			Expect(testNode.WaitForJoin(ctx)).To(Succeed(), "node should join successfully")
 			Expect(testNode.Verify(ctx)).To(Succeed(), "node should be fully functional")
 
 			mu.Lock()

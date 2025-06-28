@@ -5,9 +5,7 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/base64"
-	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -16,7 +14,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	"github.com/aws/aws-sdk-go/aws/awsutil"
-	"github.com/aws/smithy-go"
 	"github.com/go-logr/logr"
 
 	"github.com/aws/eks-hybrid/test/e2e/constants"
@@ -36,6 +33,7 @@ type InstanceConfig struct {
 	UserData           []byte
 	SubnetID           string
 	SecurityGroupID    string
+	OS                 string
 }
 
 type Instance struct {
@@ -122,6 +120,10 @@ func (e *InstanceConfig) Create(ctx context.Context, ec2Client *ec2.Client, ssmC
 						Key:   aws.String(constants.TestClusterTagKey),
 						Value: aws.String(e.ClusterName),
 					},
+					{
+						Key:   aws.String(constants.OSArchTagKey),
+						Value: aws.String(e.OS),
+					},
 				},
 			},
 		},
@@ -130,10 +132,9 @@ func (e *InstanceConfig) Create(ctx context.Context, ec2Client *ec2.Client, ssmC
 			HttpEndpoint: types.InstanceMetadataEndpointStateEnabled,
 		},
 	}, func(o *ec2.Options) {
-		o.Retryer = retry.NewStandard(func(o *retry.StandardOptions) {
-			o.MaxAttempts = 60
-			o.Retryables = append(o.Retryables, invalidInstanceProfileRetryable{})
-		})
+		clientRetryer := o.Retryer
+		persistentInvalidParameterValueRetryer := retry.AddWithMaxAttempts(retry.AddWithErrorCodes(clientRetryer, "InvalidParameterValue"), 60)
+		o.Retryer = persistentInvalidParameterValueRetryer
 	})
 	if err != nil {
 		return Instance{}, fmt.Errorf("could not create hybrid EC2 instance: %w", err)
@@ -268,25 +269,4 @@ func LogEC2InstanceDescribe(ctx context.Context, ec2Client *ec2.Client, instance
 	}
 	logger.Info("Instance status", "instanceID", instanceID, "describeInstanceStatusResponse", awsutil.Prettify(describeStatusOutput.InstanceStatuses))
 	return nil
-}
-
-type invalidInstanceProfileRetryable struct{}
-
-func (c invalidInstanceProfileRetryable) IsErrorRetryable(err error) aws.Ternary {
-	var awsErr smithy.APIError
-	if ok := errors.As(err, &awsErr); ok {
-		// We retry invalid instance profile errors because sometimes there is a delay between creating
-		// the instance profile and that profile being available in EC2. We trust that if this error comes
-		// back, it's just an eventual consistency issue and not that our setup code is not creating the
-		// instance profile correctly.
-		// The error message can be:
-		// - Invalid IAM Instance Profile name
-		// - Invalid IAM Instance Profile ARN
-		// Depending if the input uses the name or the ARN in the params.
-		if awsErr.ErrorCode() == "InvalidParameterValue" && strings.Contains(awsErr.ErrorMessage(), "Invalid IAM Instance Profile") {
-			return aws.BoolTernary(true)
-		}
-	}
-
-	return aws.BoolTernary(false)
 }

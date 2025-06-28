@@ -12,7 +12,6 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/aws/eks-hybrid/internal/api"
-	"github.com/aws/eks-hybrid/internal/retry"
 	"github.com/aws/eks-hybrid/internal/validation"
 )
 
@@ -24,12 +23,13 @@ func MakeUnauthenticatedRequest(ctx context.Context, endpoint string, caCertific
 		)
 	}
 
+	// ensure proxy configuration is inherited from the default transport
+	tr := http.DefaultTransport.(*http.Transport).Clone()
+	tr.TLSClientConfig = &tls.Config{
+		RootCAs: caCertPool,
+	}
 	client := &http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{
-				RootCAs: caCertPool,
-			},
-		},
+		Transport: tr,
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
@@ -39,7 +39,7 @@ func MakeUnauthenticatedRequest(ctx context.Context, endpoint string, caCertific
 
 	var resp *http.Response
 	var body []byte
-	err = retry.NetworkRequest(ctx, func(ctx context.Context) error {
+	err = retryRequest(ctx, func(ctx context.Context) error {
 		var err error
 		resp, err = client.Do(req)
 		if err != nil {

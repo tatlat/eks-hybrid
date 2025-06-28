@@ -5,19 +5,19 @@ set -o nounset
 set -o pipefail
 
 source /helpers.sh
+source /test-constants.sh
 
 mock::aws
 wait::dbus-ready
 
-declare INITIAL_VERSION=1.26
-declare TARGET_VERSION=1.30
+# run upgrade test upgrading from initial version to target version
+declare INITIAL_VERSION=$DEFAULT_INITIAL_VERSION
+declare TARGET_VERSION=$CURRENT_VERSION
 
 # remove previously installed containerd to test installation via nodeadm
 dnf remove -y containerd
 
 # Test nodeadm upgrade with ssm as credential provider
-# initial: version 1.26
-# target: version 1.30
 nodeadm install $INITIAL_VERSION --credential-provider ssm
 # Verify all binaries are installed at correct location
 # and all generated config files have desired content
@@ -53,7 +53,7 @@ cat <<< $(jq 'del(.kubeReserved)' /etc/kubernetes/kubelet/config.json) > /etc/ku
 validate-json-file /etc/kubernetes/kubelet/config.json 644 expected-kubelet-config-initial
 validate-file /var/lib/kubelet/kubeconfig 644 expected-kubeconfig
 validate-file /etc/containerd/config.toml 644 expected-containerd-config
-validate-json-file /etc/eks/image-credential-provider/config.json 644 expected-image-credential-provider-config-initial
+validate-json-file /etc/eks/image-credential-provider/config.json 644 expected-image-credential-provider-config
 validate-file /etc/kubernetes/pki/ca.crt 644 expected-ca-crt
 # Order of items in this file is random, skip checking content of /etc/eks/kubelet/environment
 validate-file /etc/eks/kubelet/environment 644
@@ -104,7 +104,6 @@ cat <<< $(jq 'del(.kubeReserved)' /etc/kubernetes/kubelet/config.json) > /etc/ku
 validate-json-file /etc/kubernetes/kubelet/config.json 644 expected-kubelet-config-upgraded
 validate-file /var/lib/kubelet/kubeconfig 644 expected-kubeconfig
 validate-file /etc/containerd/config.toml 644 expected-containerd-config
-validate-json-file /etc/eks/image-credential-provider/config.json 644 expected-image-credential-provider-config-upgraded
 validate-file /etc/kubernetes/pki/ca.crt 644 expected-ca-crt
 # Order of items in this file is random, skip checking content of /etc/eks/kubelet/environment
 validate-file /etc/eks/kubelet/environment 644

@@ -20,18 +20,6 @@ var ubuntu2204CloudInit []byte
 //go:embed testdata/ubuntu/2404/cloud-init.txt
 var ubuntu2404CloudInit []byte
 
-//go:embed testdata/nodeadm-init.sh
-var nodeAdmInitScript []byte
-
-//go:embed testdata/log-collector.sh
-var logCollectorScript []byte
-
-//go:embed testdata/nodeadm-wrapper.sh
-var nodeadmWrapperScript []byte
-
-//go:embed testdata/install-containerd.sh
-var installContainerdScript []byte
-
 type ubuntuCloudInitData struct {
 	e2e.UserDataInput
 	NodeadmUrl            string
@@ -87,16 +75,22 @@ func (u Ubuntu2004) Name() string {
 	return name
 }
 
-func (u Ubuntu2004) InstanceType(region string, instanceSize e2e.InstanceSize) string {
-	return getInstanceTypeFromRegionAndArch(region, u.architecture, instanceSize)
+func (u Ubuntu2004) InstanceType(region string, instanceSize e2e.InstanceSize, computeType e2e.ComputeType) string {
+	return getInstanceTypeFromRegionAndArch(region, u.architecture, instanceSize, computeType)
 }
 
-func (u Ubuntu2004) AMIName(ctx context.Context, awsConfig aws.Config) (string, error) {
+func (u Ubuntu2004) AMIName(ctx context.Context, awsConfig aws.Config, _ string) (string, error) {
 	amiId, err := getAmiIDFromSSM(ctx, ssm.NewFromConfig(awsConfig), "/aws/service/canonical/ubuntu/server/20.04/stable/current/"+u.amiArchitecture+"/hvm/ebs-gp2/ami-id")
 	return *amiId, err
 }
 
 func (u Ubuntu2004) BuildUserData(userDataInput e2e.UserDataInput) ([]byte, error) {
+	nodeadmConfigYaml, err := generateNodeadmConfigYaml(userDataInput.NodeadmConfig)
+	if err != nil {
+		return nil, err
+	}
+	userDataInput.NodeadmConfigYaml = nodeadmConfigYaml
+
 	if err := populateBaseScripts(&userDataInput); err != nil {
 		return nil, err
 	}
@@ -155,16 +149,22 @@ func (u Ubuntu2204) Name() string {
 	return name
 }
 
-func (u Ubuntu2204) InstanceType(region string, instanceSize e2e.InstanceSize) string {
-	return getInstanceTypeFromRegionAndArch(region, u.architecture, instanceSize)
+func (u Ubuntu2204) InstanceType(region string, instanceSize e2e.InstanceSize, computeType e2e.ComputeType) string {
+	return getInstanceTypeFromRegionAndArch(region, u.architecture, instanceSize, computeType)
 }
 
-func (u Ubuntu2204) AMIName(ctx context.Context, awsConfig aws.Config) (string, error) {
+func (u Ubuntu2204) AMIName(ctx context.Context, awsConfig aws.Config, _ string) (string, error) {
 	amiId, err := getAmiIDFromSSM(ctx, ssm.NewFromConfig(awsConfig), "/aws/service/canonical/ubuntu/server/22.04/stable/current/"+u.amiArchitecture+"/hvm/ebs-gp2/ami-id")
 	return *amiId, err
 }
 
 func (u Ubuntu2204) BuildUserData(userDataInput e2e.UserDataInput) ([]byte, error) {
+	nodeadmConfigYaml, err := generateNodeadmConfigYaml(userDataInput.NodeadmConfig)
+	if err != nil {
+		return nil, err
+	}
+	userDataInput.NodeadmConfigYaml = nodeadmConfigYaml
+
 	if err := populateBaseScripts(&userDataInput); err != nil {
 		return nil, err
 	}
@@ -234,16 +234,22 @@ func (u Ubuntu2404) Name() string {
 	return name
 }
 
-func (u Ubuntu2404) InstanceType(region string, instanceSize e2e.InstanceSize) string {
-	return getInstanceTypeFromRegionAndArch(region, u.architecture, instanceSize)
+func (u Ubuntu2404) InstanceType(region string, instanceSize e2e.InstanceSize, computeType e2e.ComputeType) string {
+	return getInstanceTypeFromRegionAndArch(region, u.architecture, instanceSize, computeType)
 }
 
-func (u Ubuntu2404) AMIName(ctx context.Context, awsConfig aws.Config) (string, error) {
+func (u Ubuntu2404) AMIName(ctx context.Context, awsConfig aws.Config, _ string) (string, error) {
 	amiId, err := getAmiIDFromSSM(ctx, ssm.NewFromConfig(awsConfig), "/aws/service/canonical/ubuntu/server/24.04/stable/current/"+u.amiArchitecture+"/hvm/ebs-gp3/ami-id")
 	return *amiId, err
 }
 
 func (u Ubuntu2404) BuildUserData(userDataInput e2e.UserDataInput) ([]byte, error) {
+	nodeadmConfigYaml, err := generateNodeadmConfigYaml(userDataInput.NodeadmConfig)
+	if err != nil {
+		return nil, err
+	}
+	userDataInput.NodeadmConfigYaml = nodeadmConfigYaml
+
 	if err := populateBaseScripts(&userDataInput); err != nil {
 		return nil, err
 	}
@@ -266,9 +272,4 @@ func (u Ubuntu2404) BuildUserData(userDataInput e2e.UserDataInput) ([]byte, erro
 	}
 
 	return executeTemplate(ubuntu2404CloudInit, data)
-}
-
-// IsUbuntu2004 returns true if the given name is an Ubuntu 2004 OS name.
-func IsUbuntu2004(name string) bool {
-	return strings.HasPrefix(name, "ubuntu2004")
 }
