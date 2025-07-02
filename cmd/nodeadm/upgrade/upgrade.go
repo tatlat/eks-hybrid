@@ -114,10 +114,14 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return err
 	}
 
-	credsProvider, err := creds.GetCredentialProviderFromNodeConfig(nodeProvider.GetNodeConfig())
+	nodeConfig := nodeProvider.GetNodeConfig()
+
+	credsProvider, err := creds.GetCredentialProviderFromNodeConfig(nodeConfig)
 	if err != nil {
 		return err
 	}
+
+	region := nodeConfig.Spec.Cluster.Region
 
 	// Validating credential provider. Upgrade does not allow changes to credential providers
 	installedCredsProvider, err := creds.GetCredentialProviderFromInstalledArtifacts(installed.Artifacts)
@@ -130,7 +134,7 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 
 	log.Info("Validating Kubernetes version", zap.Reflect("kubernetes version", c.kubernetesVersion))
 	// Create a Source for all AWS managed artifacts.
-	awsSource, err := aws.GetLatestSource(ctx, c.kubernetesVersion)
+	awsSource, err := aws.GetLatestSource(ctx, c.kubernetesVersion, region)
 	if err != nil {
 		return err
 	}
