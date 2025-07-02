@@ -1,18 +1,21 @@
 package hybrid
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
 
 	"github.com/aws/eks-hybrid/internal/api"
 	"github.com/aws/eks-hybrid/internal/util/file"
+	"github.com/aws/eks-hybrid/internal/validation"
 )
 
 const (
 	// https://docs.aws.amazon.com/systems-manager/latest/APIReference/API_CreateActivation.html#systemsmanager-CreateActivation-response-ActivationId
 	ssmActivationIDPattern   = `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`
 	ssmActivationCodePattern = `^.{20,250}$`
+	iamRolesCertGuideURL     = "To generate a new IAM Roles Anywhere (IAM-RA) certificate, see the steps in the documentation: https://docs.aws.amazon.com/eks/latest/userguide/hybrid-nodes-creds.html#hybrid-nodes-role"
 )
 
 func extractFlagValue(args []string, flag string) string {
@@ -107,20 +110,51 @@ func validateRolesAnywhereNode(node *api.NodeConfig) error {
 	if len(node.Spec.Hybrid.IAMRolesAnywhere.NodeName) > 64 {
 		return fmt.Errorf("NodeName can't be longer than 64 characters in hybrid iam roles anywhere configuration")
 	}
+
+	// IAM roles anywhere certificate validation
 	if node.Spec.Hybrid.IAMRolesAnywhere.CertificatePath == "" {
 		return fmt.Errorf("CertificatePath is missing in hybrid iam roles anywhere configuration")
 	}
-	if node.Spec.Hybrid.IAMRolesAnywhere.PrivateKeyPath == "" {
-		return fmt.Errorf("PrivateKeyPath is missing in hybrid iam roles anywhere configuration")
-	}
-
 	if !file.Exists(node.Spec.Hybrid.IAMRolesAnywhere.CertificatePath) {
 		return fmt.Errorf("IAM Roles Anywhere certificate %s not found", node.Spec.Hybrid.IAMRolesAnywhere.CertificatePath)
 	}
+	if err := ValidateCertificate(node.Spec.Hybrid.IAMRolesAnywhere.CertificatePath, nil); err != nil {
+		return addIAMRARemediation(node.Spec.Hybrid.IAMRolesAnywhere.CertificatePath, err)
+	}
 
+	// IAM roles anywhere key validation
+	if node.Spec.Hybrid.IAMRolesAnywhere.PrivateKeyPath == "" {
+		return fmt.Errorf("PrivateKeyPath is missing in hybrid iam roles anywhere configuration")
+	}
 	if !file.Exists(node.Spec.Hybrid.IAMRolesAnywhere.PrivateKeyPath) {
 		return fmt.Errorf("IAM Roles Anywhere private key %s not found", node.Spec.Hybrid.IAMRolesAnywhere.PrivateKeyPath)
 	}
 
 	return nil
+}
+
+// addIAMRARemediation adds IAM Role Anywhere specific remediation messages based on error type
+func addIAMRARemediation(certPath string, err error) error {
+	var validationErr *ValidationError
+	if !errors.As(err, &validationErr) {
+		return err
+	}
+
+	errWithContext := fmt.Errorf("validating iam-roles-anywhere certificate: %w", err)
+	switch validationErr.ErrorType() {
+	case ErrorNoCert, ErrorCertFile, ErrorReadFile:
+		return validation.WithRemediation(errWithContext, fmt.Sprintf("Verify the IAM role anywhere certificate at %s. %s", certPath, iamRolesCertGuideURL))
+	case ErrorInvalidFormat:
+		return validation.WithRemediation(errWithContext, fmt.Sprintf("Verify the IAM Role certificate format. %s", iamRolesCertGuideURL))
+	case ErrorClockSkewDetected:
+		return validation.WithRemediation(errWithContext, fmt.Sprintf("Verify the IAM Role certificate validity or system time is correct. %s", iamRolesCertGuideURL))
+	case ErrorExpired:
+		return validation.WithRemediation(errWithContext, fmt.Sprintf("Generate a new IAM Roles Anywhere certificate as the current one has expired. %s", iamRolesCertGuideURL))
+	case ErrorParseCA:
+		return validation.WithRemediation(errWithContext, fmt.Sprintf("Ensure the IAM Roles Anywhere certificate is valid. %s", iamRolesCertGuideURL))
+	case ErrorInvalidCA:
+		return validation.WithRemediation(errWithContext, fmt.Sprintf("Please remove the IAM Roles Anywhere certificate file at %s. %s", certPath, iamRolesCertGuideURL))
+	default:
+		return validation.WithRemediation(errWithContext, fmt.Sprintf("Add IAM Roles Anywhere certificate. %s", iamRolesCertGuideURL))
+	}
 }
