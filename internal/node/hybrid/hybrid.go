@@ -19,6 +19,7 @@ import (
 const (
 	nodeIpValidation      = "node-ip-validation"
 	kubeletCertValidation = "kubelet-cert-validation"
+	kubeletVersionSkew    = "kubelet-version-skew-validation"
 )
 
 type HybridNodeProvider struct {
@@ -33,6 +34,7 @@ type HybridNodeProvider struct {
 	// CertPath is the path to the kubelet certificate
 	// If not provided, defaults to kubelet.KubeletCurrentCertPath
 	certPath string
+	kubelet  Kubelet
 }
 
 type NodeProviderOpt func(*HybridNodeProvider)
@@ -44,6 +46,7 @@ func NewHybridNodeProvider(nodeConfig *api.NodeConfig, skipPhases []string, logg
 		skipPhases: skipPhases,
 		network:    &defaultKubeletNetwork{},
 		certPath:   kubelet.KubeletCurrentCertPath,
+		kubelet:    kubelet.New(),
 	}
 	np.withHybridValidators()
 	if err := np.withDaemonManager(); err != nil {
@@ -84,6 +87,13 @@ func WithCertPath(path string) NodeProviderOpt {
 	}
 }
 
+// WithKubelet adds a kubelet struct to the HybridNodeProvider for testing purposes.
+func WithKubelet(kubelet Kubelet) NodeProviderOpt {
+	return func(hnp *HybridNodeProvider) {
+		hnp.kubelet = kubelet
+	}
+}
+
 func (hnp *HybridNodeProvider) GetNodeConfig() *api.NodeConfig {
 	return hnp.nodeConfig
 }
@@ -109,6 +119,14 @@ func (hnp *HybridNodeProvider) Validate() error {
 			}
 
 			return AddKubeletRemediation(hnp.certPath, err)
+		}
+	}
+
+	if !slices.Contains(hnp.skipPhases, kubeletVersionSkew) {
+		if err := hnp.ValidateKubeletVersionSkew(); err != nil {
+			return validation.WithRemediation(err,
+				"Ensure the hybrid node's Kubernetes version follows the version skew policy of the EKS cluster. "+
+					"Update the node's Kubernetes components using 'nodeadm upgrade' or reinstall with a compatible version. https://kubernetes.io/releases/version-skew-policy/#kubelet")
 		}
 	}
 
