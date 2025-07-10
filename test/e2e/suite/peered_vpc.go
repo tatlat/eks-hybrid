@@ -451,13 +451,18 @@ func OSProviderList(credentialProviders []e2e.NodeadmCredentialsProvider) []OSPr
 	return osProviderList
 }
 
-func BottlerocketOSProviderList() []OSProvider {
-	return []OSProvider{
-		{OS: osystem.NewBottleRocket(), Provider: &credentials.SsmProvider{}},
-		{OS: osystem.NewBottleRocket(), Provider: &credentials.IamRolesAnywhereProvider{}},
-		{OS: osystem.NewBottleRocketARM(), Provider: &credentials.SsmProvider{}},
-		{OS: osystem.NewBottleRocketARM(), Provider: &credentials.IamRolesAnywhereProvider{}},
+func BottlerocketOSProviderList(credentialProviders []e2e.NodeadmCredentialsProvider) []OSProvider {
+	osList := []e2e.NodeadmOS{
+		osystem.NewBottleRocket(),
+		osystem.NewBottleRocketARM(),
 	}
+	osProviderList := []OSProvider{}
+	for _, nodeOS := range osList {
+		for _, provider := range credentialProviders {
+			osProviderList = append(osProviderList, OSProvider{OS: nodeOS, Provider: provider})
+		}
+	}
+	return osProviderList
 }
 
 func CredentialProviders() []e2e.NodeadmCredentialsProvider {

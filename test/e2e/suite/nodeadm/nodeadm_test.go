@@ -87,7 +87,7 @@ var _ = Describe("Hybrid Nodes", func() {
 				initEntries = append(initEntries, Entry(fmt.Sprintf("With OS %s and with Credential Provider %s", os.Name(), string(provider.Name())), os, provider, Label(os.Name(), string(provider.Name()), "simpleflow", "init")))
 				upgradeEntries = append(upgradeEntries, Entry(fmt.Sprintf("With OS %s and with Credential Provider %s", os.Name(), string(provider.Name())), os, provider, Label(os.Name(), string(provider.Name()), "upgradeflow")))
 			}
-			for _, osProvider := range suite.BottlerocketOSProviderList() {
+			for _, osProvider := range suite.BottlerocketOSProviderList(credentialProviders) {
 				os := osProvider.OS
 				provider := osProvider.Provider
 				bottlerocketInitEntries = append(bottlerocketInitEntries, Entry(fmt.Sprintf("With OS %s and with Credential Provider %s", os.Name(), string(provider.Name())), os, provider, Label(os.Name(), string(provider.Name()), "simpleflow", "init")))
