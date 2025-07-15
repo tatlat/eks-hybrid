@@ -3,6 +3,7 @@ package peered
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	ec2sdk "github.com/aws/aws-sdk-go-v2/service/ec2"
@@ -65,9 +66,18 @@ func (n *Network) addRoutesForCIDRs(ctx context.Context, instance *PeeredInstanc
 		return fmt.Errorf("expected to find one route table for subnet %s, found %d", n.Cluster.SubnetID, len(resp.RouteTables))
 	}
 
+	var routeTableCIDRs []string
+	routeTable := resp.RouteTables[0]
+	for _, route := range routeTable.Routes {
+		routeTableCIDRs = append(routeTableCIDRs, *route.DestinationCidrBlock)
+	}
 	for _, cidr := range cidrs {
+		if slices.Contains(routeTableCIDRs, cidr) {
+			n.Logger.Info("Route for CIDR already exists in route table, skipping", "cidr", cidr, "routeTable", *routeTable.RouteTableId)
+			continue
+		}
 		n.Logger.Info("Adding route for CIDR", "cidr", cidr, "instanceID", instance.ID)
-		err := ec2.CreateRouteForCIDRToInstance(ctx, n.EC2, *resp.RouteTables[0].RouteTableId, cidr, instance.ID)
+		err := ec2.CreateRouteForCIDRToInstance(ctx, n.EC2, *routeTable.RouteTableId, cidr, instance.ID)
 		if err != nil {
 			return fmt.Errorf("adding route for node pod CIDR %s: %w", cidr, err)
 		}
