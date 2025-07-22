@@ -114,8 +114,13 @@ func PodIdentityRole(ctx context.Context, client *iam.Client, cluster string) (s
 					return "", fmt.Errorf("getting role: %w", err)
 				}
 
+				foundRole, err := isPodIdentityRole(*getRoleOutput.Role.AssumeRolePolicyDocument)
+				if err != nil {
+					return "", fmt.Errorf("failed to check if role %s is pod identity role", *role.RoleName)
+				}
 				// Check if this role has the expected trust relationship for pod identity
-				if isPodIdentityRole(*getRoleOutput.Role.AssumeRolePolicyDocument) {
+				// if err is returned, we can
+				if foundRole {
 					foundRoles = append(foundRoles, *role.Arn)
 				}
 			}
@@ -134,17 +139,17 @@ func PodIdentityRole(ctx context.Context, client *iam.Client, cluster string) (s
 }
 
 // isPodIdentityRole checks if the given policy document is for a pod identity role
-func isPodIdentityRole(policyDoc string) bool {
+func isPodIdentityRole(policyDoc string) (bool, error) {
 	// The policy document is URL encoded, so we need to decode it first
 	decodedDoc, err := url.QueryUnescape(policyDoc)
 	if err != nil {
-		return false
+		return false, err
 	}
 
 	policy := &PolicyDocument{}
 
 	if err := json.Unmarshal([]byte(decodedDoc), &policy); err != nil {
-		return false
+		return false, err
 	}
 
 	// Check if this is a pod identity role by looking for the expected service principal
@@ -157,17 +162,17 @@ func isPodIdentityRole(policyDoc string) bool {
 			if key != "Service" {
 				continue
 			}
-			if !strings.Contains(val, "pods.eks.amazonaws.com") {
+			if val != "pods.eks.amazonaws.com" || !strings.HasSuffix(val, ".pods.eks.aws.internal") {
 				continue
 			}
 
 			for _, action := range statement.Action {
 				if action == "sts:AssumeRole" || action == "sts:TagSession" {
-					return true
+					return true, nil
 				}
 			}
 		}
 	}
 
-	return false
+	return false, nil
 }
