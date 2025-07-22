@@ -111,7 +111,7 @@ func (c NodeCreate) Create(ctx context.Context, spec *NodeSpec) (PeeredInstance,
 		c.Logger.Info(fmt.Sprintf("Instance Root Password: %s", rootPassword))
 	}
 
-	userdata, err := spec.OS.BuildUserData(e2e.UserDataInput{
+	userdataInput := e2e.UserDataInput{
 		EKSEndpoint:       spec.EKSEndpoint,
 		KubernetesVersion: spec.NodeK8sVersion,
 		NodeadmUrls:       c.NodeadmURLs,
@@ -126,7 +126,8 @@ func (c NodeCreate) Create(ctx context.Context, spec *NodeSpec) (PeeredInstance,
 		HostName:            nodeSpec.Name,
 		ClusterName:         c.Cluster.Name,
 		ClusterCert:         c.K8sClientConfig.CAData,
-	})
+	}
+	userdata, err := spec.OS.BuildUserData(ctx, userdataInput)
 	if err != nil {
 		return PeeredInstance{}, fmt.Errorf("expected to successfully build user data: %w", err)
 	}

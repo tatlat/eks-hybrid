@@ -77,7 +77,7 @@ func (r RedHat8) AMIName(ctx context.Context, awsConfig aws.Config, _ string, _ 
 	return findLatestImage(ctx, ec2.NewFromConfig(awsConfig), "RHEL-8*", r.amiArchitecture)
 }
 
-func (r RedHat8) BuildUserData(userDataInput e2e.UserDataInput) ([]byte, error) {
+func (r RedHat8) BuildUserData(_ context.Context, userDataInput e2e.UserDataInput) ([]byte, error) {
 	nodeadmConfigYaml, err := generateNodeadmConfigYaml(userDataInput.NodeadmConfig)
 	if err != nil {
 		return nil, err
@@ -156,7 +156,7 @@ func (r RedHat9) AMIName(ctx context.Context, awsConfig aws.Config, _ string, _ 
 	return findLatestImage(ctx, ec2.NewFromConfig(awsConfig), "RHEL-9*", r.amiArchitecture)
 }
 
-func (r RedHat9) BuildUserData(userDataInput e2e.UserDataInput) ([]byte, error) {
+func (r RedHat9) BuildUserData(_ context.Context, userDataInput e2e.UserDataInput) ([]byte, error) {
 	nodeadmConfigYaml, err := generateNodeadmConfigYaml(userDataInput.NodeadmConfig)
 	if err != nil {
 		return nil, err
