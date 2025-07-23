@@ -404,3 +404,72 @@ function install-previous-containerd-version() {
   yum install -y containerd-${containerd_version}  
 }
 
+function mock::iamra-certificate-path() {
+  if [ "$#" -lt 1 ] || [ "$#" -gt 3 ]; then
+    echo "Usage: mock::iamra-certificate-path PKI_DIR [CERT_FILE] [KEY_FILE]"
+    exit 1
+  fi
+  local PKI_DIR=$1
+  local CERT=${2:-"$PKI_DIR/server.pem"}
+  local KEY=${3:-"$PKI_DIR/server.key"}
+
+  # Create directory if it doesn't exist
+  mkdir -p $PKI_DIR
+
+  # Create empty certificate and key files
+  touch $CERT
+  touch $KEY
+
+  # Generate self-signed certificate and key using OpenSSL
+  openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
+      -keyout $KEY \
+      -out $CERT \
+      -subj "/C=US/ST=Washington/L=Seattle/O=DummyOrg/CN=DummyCN"
+
+  # Set appropriate permissions
+  chmod 644 $CERT
+  chmod 600 $KEY
+
+  if [ ! -f "$CERT" ] || [ ! -f "$KEY" ]; then
+      echo "IAMRA One or both files are missing"
+      exit 1
+  fi
+}
+
+function mock::bind-mount() {
+  if [ "$#" -ne 2 ]; then
+    echo "Usage: mock::bind-mount SOURCE_PATH TARGET_PATH"
+    exit 1
+  fi
+
+  local SOURCE_PATH=$1
+  local TARGET_PATH=$2
+
+  # Create target directory if it doesn't exist
+  mkdir -p "$TARGET_PATH"
+
+  # Create a bind mount
+  if ! mount --bind "$SOURCE_PATH" "$TARGET_PATH"; then
+    echo "Failed to create bind mount from $SOURCE_PATH to $TARGET_PATH"
+    exit 1
+  fi
+
+  echo "Created bind mount: $SOURCE_PATH -> $TARGET_PATH"
+}
+
+function mock::unbind-mount() {
+  if [ "$#" -ne 1 ]; then
+    echo "Usage: mock::unbind-mount TARGET_PATH"
+    exit 1
+  fi
+
+  local TARGET_PATH=$1
+
+  # Unmount the bind mount
+  if ! umount "$TARGET_PATH"; then
+    echo "Failed to unmount $TARGET_PATH"
+    exit 1
+  fi
+
+  echo "Unmounted bind mount: $TARGET_PATH"
+}
