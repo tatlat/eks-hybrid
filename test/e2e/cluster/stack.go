@@ -36,7 +36,7 @@ var setupTemplateBody []byte
 
 const (
 	creationTimeParameterKey = "CreationTime"
-	stackWaitTimeout         = 9 * time.Minute
+	stackWaitTimeout         = 15 * time.Minute
 	stackWaitInterval        = 10 * time.Second
 )
 
@@ -246,7 +246,7 @@ func (s *stack) createOrUpdateStack(ctx context.Context, stackName string, param
 			return fmt.Errorf("waiting for hybrid nodes setup cfn stack: %w", err)
 		}
 	} else if resp.Stacks[0].StackStatus == cfnTypes.StackStatusCreateInProgress || resp.Stacks[0].StackStatus == cfnTypes.StackStatusUpdateInProgress {
-		s.logger.Info("Waiting for hybrid nodes setup stack to be created", "stackName", stackName)
+		s.logger.Info("Found existing stack in progress, waiting for completion", "stackName", stackName, "status", resp.Stacks[0].StackStatus)
 		err = cfn.WaitForStackOperation(ctx, s.cfn, stackName, stackWaitInterval, stackWaitTimeout)
 		if err != nil {
 			return fmt.Errorf("waiting for hybrid nodes setup cfn stack: %w", err)
