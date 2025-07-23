@@ -259,6 +259,9 @@ var _ = Describe("Hybrid Nodes", func() {
 				addonEc2Test.Logger.Info("Checking NVIDIA drivers on pre-created GPU node", "nodeName", standardLinuxGPUNodeName)
 				devicePluginTest := addonEc2Test.NewNvidiaDevicePluginTest(standardLinuxGPUNodeName)
 				Expect(devicePluginTest.WaitForNvidiaDriverReady(ctx)).NotTo(HaveOccurred(), "NVIDIA drivers should be ready")
+				Expect(devicePluginTest.Create(ctx)).To(Succeed(), "nvidia device plugin should have created successfully")
+				Expect(devicePluginTest.Validate(ctx)).To(Succeed(), "nvidia device plugin should have been validated successfully")
+				Expect(devicePluginTest.Delete(ctx)).To(Succeed(), "should clean up nvidia device plugin")
 			}, Label("nvidia-device-plugin"))
 
 			It("runs cert manager tests", func(ctx context.Context) {
