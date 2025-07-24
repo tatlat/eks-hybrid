@@ -17,12 +17,13 @@ import (
 
 // Source defines a single version source for aws provided artifacts
 type Source struct {
-	Eks EksPatchRelease
-	Iam IamRolesAnywhereRelease
+	Eks        EksPatchRelease
+	Iam        IamRolesAnywhereRelease
+	RegionInfo RegionData
 }
 
 // GetLatestSource gets the source for latest version of aws provided artifacts
-func GetLatestSource(ctx context.Context, eksVersion string) (Source, error) {
+func GetLatestSource(ctx context.Context, eksVersion, region string) (Source, error) {
 	manifest, err := getReleaseManifest(ctx)
 	if err != nil {
 		return Source{}, err
@@ -38,9 +39,15 @@ func GetLatestSource(ctx context.Context, eksVersion string) (Source, error) {
 		return Source{}, errors.Wrap(err, "getting iam roles anywhere release")
 	}
 
+	regionCfg, ok := manifest.RegionConfig[region]
+	if !ok {
+		return Source{}, fmt.Errorf("region %s not found in manifest", region)
+	}
+
 	return Source{
-		Eks: eksPatchRelease,
-		Iam: iamRolesAnywhereRelease,
+		Eks:        eksPatchRelease,
+		Iam:        iamRolesAnywhereRelease,
+		RegionInfo: regionCfg,
 	}, nil
 }
 
@@ -129,6 +136,20 @@ func getLatestDateEksPatchRelease(patchReleases []EksPatchRelease) (EksPatchRele
 		}
 	}
 	return latestRelease, nil
+}
+
+func GetRegionConfig(ctx context.Context, region string) (*RegionData, error) {
+	manifest, err := getReleaseManifest(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	regionCfg, ok := manifest.RegionConfig[region]
+	if !ok {
+		return nil, fmt.Errorf("region %s not found in manifest", region)
+	}
+
+	return &regionCfg, nil
 }
 
 // GetKubelet satisfies kubelet.Source.

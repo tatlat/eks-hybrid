@@ -6,10 +6,21 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/acmpca"
 	awspcaclientset "github.com/cert-manager/aws-privateca-issuer/pkg/clientset/v1beta1"
 	certmanagerclientset "github.com/cert-manager/cert-manager/pkg/client/clientset/versioned"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/selection"
 	metricsv1beta1 "k8s.io/metrics/pkg/client/clientset/versioned"
 
 	"github.com/aws/eks-hybrid/test/e2e/addon"
 	"github.com/aws/eks-hybrid/test/e2e/ssm"
+)
+
+const (
+	defaultCertName                   = "test-cert"
+	defaultCertNamespace              = "cert-test"
+	defaultIssuerName                 = "selfsigned-issuer"
+	defaultCertSecretName             = "selfsigned-cert-tls"
+	defaultNodeMonitoringAgentCommand = "echo 'watchdog: BUG: soft lockup - CPU#6 stuck for 23s! [VM Thread:4054]' | sudo tee -a /dev/kmsg"
+	defaultNvidiaDevicePluginCommand  = "nvidia-smi"
 )
 
 // AddonEc2Test is a wrapper around the fields needed for addon tests
@@ -21,13 +32,16 @@ type AddonEc2Test struct {
 // NewNodeMonitoringAgentTest creates a new NodeMonitoringAgentTest
 func (a *AddonEc2Test) NewNodeMonitoringAgentTest() *addon.NodeMonitoringAgentTest {
 	commandRunner := ssm.NewStandardLinuxSSHOnSSMCommandRunner(a.SSMClient, a.JumpboxInstanceId, a.Logger)
+	labelReq, _ := labels.NewRequirement("os.bottlerocket.aws/version", selection.DoesNotExist, []string{})
 	return &addon.NodeMonitoringAgentTest{
 		Cluster:       a.Cluster.Name,
 		K8S:           a.k8sClient,
 		EKSClient:     a.eksClient,
 		K8SConfig:     a.K8sClientConfig,
 		Logger:        a.Logger,
+		Command:       defaultNodeMonitoringAgentCommand,
 		CommandRunner: commandRunner,
+		NodeFilter:    labels.NewSelector().Add(*labelReq),
 	}
 }
 
@@ -93,6 +107,7 @@ func (a *AddonEc2Test) NewNvidiaDevicePluginTest(nodeName string) *addon.NvidiaD
 		EKSClient:     a.eksClient,
 		K8SConfig:     a.K8sClientConfig,
 		Logger:        a.Logger,
+		Command:       defaultNvidiaDevicePluginCommand,
 		CommandRunner: commandRunner,
 		NodeName:      nodeName,
 	}
@@ -136,12 +151,16 @@ func (a *AddonEc2Test) NewCertManagerTest(ctx context.Context) *addon.CertManage
 	}
 
 	return &addon.CertManagerTest{
-		Cluster:    a.Cluster.Name,
-		K8S:        a.k8sClient,
-		EKSClient:  a.eksClient,
-		K8SConfig:  a.K8sClientConfig,
-		Logger:     a.Logger,
-		CertClient: certClient,
-		PCAIssuer:  pcaIssuer,
+		Cluster:        a.Cluster.Name,
+		K8S:            a.k8sClient,
+		EKSClient:      a.eksClient,
+		K8SConfig:      a.K8sClientConfig,
+		Logger:         a.Logger,
+		CertClient:     certClient,
+		PCAIssuer:      pcaIssuer,
+		CertName:       defaultCertName,
+		CertNamespace:  defaultCertNamespace,
+		CertSecretName: defaultCertSecretName,
+		IssuerName:     defaultIssuerName,
 	}
 }

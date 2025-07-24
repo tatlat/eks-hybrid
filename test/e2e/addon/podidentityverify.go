@@ -47,8 +47,9 @@ type PolicyDocument struct {
 type StatementEntry struct {
 	Effect    string
 	Action    []string
-	Resource  []string
-	Principal map[string]string
+	Resource  *string                      `json:"Resource,omitempty"`
+	Principal map[string]string            `json:"Principal,omitempty"`
+	Condition map[string]map[string]string `json:"Condition,omitempty"`
 }
 
 func (v VerifyPodIdentityAddon) Run(ctx context.Context) error {
