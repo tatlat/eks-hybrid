@@ -34,7 +34,7 @@ func NewNTPValidator(logger *zap.Logger) *NTPValidator {
 // Run validates NTP synchronization
 func (v *NTPValidator) Run(ctx context.Context, informer validation.Informer, nodeConfig *api.NodeConfig) error {
 	var err error
-	informer.Starting(ctx, "ntp-sync", "Checking NTP synchronization status")
+	informer.Starting(ctx, "ntp-sync", "Validating NTP synchronization status")
 	defer func() {
 		informer.Done(ctx, "ntp-sync", err)
 	}()
@@ -106,7 +106,7 @@ func (v *NTPValidator) checkChronyd() (bool, error) {
 		}
 	}
 
-	if !hasReference && !leapStatusNormal {
+	if !hasReference || !leapStatusNormal {
 		return false, fmt.Errorf("chronyd not synchronized")
 	}
 
