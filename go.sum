@@ -32,8 +32,8 @@ github.com/aws/aws-sdk-go-v2/internal/ini v1.8.3 h1:bIqFDwgGXXN1Kpp99pDOdKMTTb5d
 github.com/aws/aws-sdk-go-v2/internal/ini v1.8.3/go.mod h1:H5O/EsxDWyU+LP/V8i5sm8cxoZgc2fdNR9bxlOFrQTo=
 github.com/aws/aws-sdk-go-v2/internal/v4a v1.3.36 h1:GMYy2EOWfzdP3wfVAGXBNKY5vK4K8vMET4sYOYltmqs=
 github.com/aws/aws-sdk-go-v2/internal/v4a v1.3.36/go.mod h1:gDhdAV6wL3PmPqBhiPbnlS447GoWs8HTTOYef9/9Inw=
-github.com/aws/aws-sdk-go-v2/service/acmpca v1.40.2 h1:eer4qV5+FUwxPwvRTlUWVC32M6b0Zc9N73sZTW5b26c=
-github.com/aws/aws-sdk-go-v2/service/acmpca v1.40.2/go.mod h1:v0S5xoRSVzO4z09Fyqm6zkpeYU20qRBXwVS+BOejpcE=
+github.com/aws/aws-sdk-go-v2/service/acmpca v1.40.5 h1:wO4AWPJlnLRbLgQnrVKG/HTy9qDCxFVMjPFkqr2IKRA=
+github.com/aws/aws-sdk-go-v2/service/acmpca v1.40.5/go.mod h1:Jhu06Hov5+oM1+zkhDGCZBp8yoVCSiFHSnkSC0KIzDs=
 github.com/aws/aws-sdk-go-v2/service/cloudformation v1.61.0 h1:1nVq2bvAANTPAfipKBOtbP1ebqTpJrOsxNqwb6ybCG8=
 github.com/aws/aws-sdk-go-v2/service/cloudformation v1.61.0/go.mod h1:xU79X14UC0F8sEJCRTWwINzlQ4jacpEFpRESLHRHfoY=
 github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs v1.51.0 h1:e5cbPZYTIY2nUEFieZUfVdINOiCTvChOMPfdLnmiLzs=

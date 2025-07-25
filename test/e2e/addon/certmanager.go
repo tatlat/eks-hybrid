@@ -35,6 +35,7 @@ type CertManagerTest struct {
 	K8SConfig                                           *rest.Config
 	Logger                                              logr.Logger
 	CertClient                                          certmanagerclientset.Interface
+	PCAIssuer                                           *PCAIssuerTest
 	CertName, CertNamespace, CertSecretName, IssuerName string
 }
 
@@ -65,6 +66,10 @@ func (c *CertManagerTest) Create(ctx context.Context) error {
 		return err
 	}
 
+	if err := c.PCAIssuer.Setup(ctx); err != nil {
+		return fmt.Errorf("failed to setup AWS PCA Issuer: %v", err)
+	}
+
 	c.Logger.Info("Cert-manager setup is complete")
 	return nil
 }
@@ -93,6 +98,15 @@ func (c *CertManagerTest) Validate(ctx context.Context) error {
 		return fmt.Errorf("failed to validate certificate: %w", err)
 	}
 
+	// AWS PCA Issuer validation if it's configured
+	c.Logger.Info("Starting AWS PCA Issuer validation")
+
+	if err := c.PCAIssuer.Validate(ctx); err != nil {
+		return fmt.Errorf("AWS PCA Issuer validation failed: %w", err)
+	}
+
+	c.Logger.Info("AWS PCA Issuer validation completed successfully")
+
 	c.Logger.Info("Cert-manager validation completed successfully")
 	return nil
 }
@@ -105,6 +119,10 @@ func (c *CertManagerTest) PrintLogs(ctx context.Context) error {
 		return fmt.Errorf("failed to collect logs for %s: %w", c.addon.Name, err)
 	}
 
+	if err := c.PCAIssuer.PrintLogs(ctx); err != nil {
+		c.Logger.Error(err, "Failed to collect AWS PCA Issuer logs")
+	}
+
 	c.Logger.Info("Logs for cert-manager", "controller", logs)
 	return nil
 }
@@ -113,6 +131,11 @@ func (c *CertManagerTest) PrintLogs(ctx context.Context) error {
 func (c *CertManagerTest) Delete(ctx context.Context) error {
 	// Clean up test resources
 	c.Logger.Info("Cleaning up cert-manager test resources")
+
+	c.Logger.Info("Cleaning up AWS PCA Issuer resources")
+	if err := c.PCAIssuer.Cleanup(ctx); err != nil {
+		c.Logger.Error(err, "Failed to clean up AWS PCA Issuer resources")
+	}
 
 	// Delete certificate
 	err := ik8s.IdempotentDelete(ctx, c.CertClient.CertmanagerV1().Certificates(c.CertNamespace), c.CertName)
