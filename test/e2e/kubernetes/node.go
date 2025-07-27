@@ -9,6 +9,8 @@ import (
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	kRetry "k8s.io/client-go/util/retry"
 	"k8s.io/kubectl/pkg/drain"
@@ -63,10 +65,19 @@ func CheckForNodeWithE2ELabel(ctx context.Context, k8s kubernetes.Interface, nod
 	return getNodeByE2ELabelName(ctx, k8s, nodeName)
 }
 
-func getNodeByE2ELabelName(ctx context.Context, k8s kubernetes.Interface, nodeName string) (*corev1.Node, error) {
+// ListNodesWithLabels lists nodes that match the given label selector using robust retry
+func ListNodesWithLabels(ctx context.Context, k8s kubernetes.Interface, labelSelector string) (*corev1.NodeList, error) {
 	nodes, err := ik8s.ListRetry(ctx, k8s.CoreV1().Nodes(), func(opts *ik8s.ListOptions) {
-		opts.LabelSelector = constants.TestInstanceNameKubernetesLabel + "=" + nodeName
+		opts.LabelSelector = labelSelector
 	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list nodes with selector %s: %w", labelSelector, err)
+	}
+	return nodes, nil
+}
+
+func getNodeByE2ELabelName(ctx context.Context, k8s kubernetes.Interface, nodeName string) (*corev1.Node, error) {
+	nodes, err := ListNodesWithLabels(ctx, k8s, constants.TestInstanceNameKubernetesLabel+"="+nodeName)
 	if err != nil {
 		return nil, fmt.Errorf("listing nodes when looking for node with e2e label %s: %w", nodeName, err)
 	}
@@ -281,4 +292,31 @@ func NetworkUnavailableCondition(node *corev1.Node) *corev1.NodeCondition {
 func NodeNetworkAvailable(node *corev1.Node) bool {
 	condition := NetworkUnavailableCondition(node)
 	return condition != nil && condition.Status == corev1.ConditionFalse
+}
+
+// FindNodeWithLabel finds a node that has the specified label key-value pair
+func FindNodeWithLabel(ctx context.Context, k8s kubernetes.Interface, labelKey, labelValue string, logger logr.Logger) (string, error) {
+	labelSelector := fmt.Sprintf("%s=%s", labelKey, labelValue)
+	nodes, err := ListNodesWithLabels(ctx, k8s, labelSelector)
+	if err != nil {
+		return "", err
+	}
+
+	if len(nodes.Items) == 0 {
+		return "", fmt.Errorf("no nodes found with label %s=%s", labelKey, labelValue)
+	}
+
+	nodeName := nodes.Items[0].Name
+	logger.Info("Found node with label", "labelKey", labelKey, "labelValue", labelValue, "nodeName", nodeName)
+	return nodeName, nil
+}
+
+// PatchNode patches a node with the given patch data
+func PatchNode(ctx context.Context, k8s kubernetes.Interface, nodeName string, patchData []byte, logger logr.Logger) error {
+	_, err := k8s.CoreV1().Nodes().Patch(ctx, nodeName, types.MergePatchType, patchData, metav1.PatchOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to patch node %s: %w", nodeName, err)
+	}
+	logger.Info("Successfully patched node", "node", nodeName)
+	return nil
 }
