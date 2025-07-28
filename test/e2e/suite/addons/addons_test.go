@@ -265,7 +265,8 @@ var _ = Describe("Hybrid Nodes", func() {
 			}, Label("nvidia-device-plugin"))
 
 			It("runs cert manager and AWS PCA issuer tests", func(ctx context.Context) {
-				certManager := addonEc2Test.NewCertManagerTest(ctx)
+				certManager, err := addonEc2Test.NewCertManagerTest(ctx)
+				Expect(err).To(Succeed(), "should have created cert-manager test")
 
 				DeferCleanup(func(ctx context.Context) {
 					Expect(certManager.Delete(ctx)).To(Succeed(), "should cleanup cert manager successfully")
@@ -422,7 +423,8 @@ var _ = Describe("Hybrid Nodes", func() {
 			}, Label("nvidia-device-plugin", "bottlerocket"))
 
 			It("runs cert manager tests on Bottlerocket", func(ctx context.Context) {
-				certManager := addonEc2Test.NewCertManagerTest(ctx)
+				certManager, err := addonEc2Test.NewCertManagerTest(ctx)
+				Expect(err).To(Succeed(), "should have created cert-manager test for bottlerocket")
 				certManager.CertName = "bottlerocket-test-cert"
 				certManager.CertNamespace = "bottlerocket-cert-test"
 				certManager.CertSecretName = "bottlerocket-selfsigned-cert-tls"

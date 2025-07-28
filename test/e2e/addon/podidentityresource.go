@@ -116,7 +116,7 @@ func PodIdentityRole(ctx context.Context, client *iam.Client, cluster string) (s
 
 				foundRole, err := isPodIdentityRole(*getRoleOutput.Role.AssumeRolePolicyDocument)
 				if err != nil {
-					return "", fmt.Errorf("failed to check if role %s is pod identity role", *role.RoleName)
+					return "", fmt.Errorf("failed to check if role %s is pod identity role: %v", *role.RoleName, err)
 				}
 				// Check if this role has the expected trust relationship for pod identity
 				// if err is returned, we can

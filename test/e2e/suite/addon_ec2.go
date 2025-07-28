@@ -114,7 +114,7 @@ func (a *AddonEc2Test) NewNvidiaDevicePluginTest(nodeName string) *addon.NvidiaD
 }
 
 // NewCertManagerTest creates a new CertManagerTest
-func (a *AddonEc2Test) NewCertManagerTest(ctx context.Context) *addon.CertManagerTest {
+func (a *AddonEc2Test) NewCertManagerTest(ctx context.Context) (*addon.CertManagerTest, error) {
 	// Create cert-manager client
 	certClient, err := certmanagerclientset.NewForConfig(a.K8sClientConfig)
 	if err != nil {
@@ -134,6 +134,7 @@ func (a *AddonEc2Test) NewCertManagerTest(ctx context.Context) *addon.CertManage
 	podIdentityRoleArn, err := addon.PodIdentityRole(ctx, a.iamClient, a.Cluster.Name)
 	if err != nil {
 		a.Logger.Error(err, "Failed to get pod identity role ARN")
+		return nil, err
 	}
 
 	// Create PCA Issuer test
@@ -162,5 +163,5 @@ func (a *AddonEc2Test) NewCertManagerTest(ctx context.Context) *addon.CertManage
 		CertNamespace:  defaultCertNamespace,
 		CertSecretName: defaultCertSecretName,
 		IssuerName:     defaultIssuerName,
-	}
+	}, nil
 }
