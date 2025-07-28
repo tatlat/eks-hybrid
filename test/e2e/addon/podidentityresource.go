@@ -16,6 +16,40 @@ import (
 	e2eErrors "github.com/aws/eks-hybrid/test/e2e/errors"
 )
 
+// FlexibleStringSlice handles JSON unmarshaling for fields that can be either a string or []string
+type FlexibleStringSlice []string
+
+// UnmarshalJSON implements custom unmarshaling to handle both string and []string
+func (f *FlexibleStringSlice) UnmarshalJSON(data []byte) error {
+	// Try to unmarshal as a string first
+	var str string
+	if err := json.Unmarshal(data, &str); err == nil {
+		*f = FlexibleStringSlice{str}
+		return nil
+	}
+
+	// If that fails, try to unmarshal as []string
+	var strSlice []string
+	if err := json.Unmarshal(data, &strSlice); err != nil {
+		return err
+	}
+	*f = FlexibleStringSlice(strSlice)
+	return nil
+}
+
+type PolicyDocument struct {
+	Version   string
+	Statement []StatementEntry
+}
+
+type StatementEntry struct {
+	Effect    string
+	Action    FlexibleStringSlice          `json:"Action"`
+	Resource  *string                      `json:"Resource,omitempty"`
+	Principal map[string]string            `json:"Principal,omitempty"`
+	Condition map[string]map[string]string `json:"Condition,omitempty"`
+}
+
 var ErrPodIdentityBucketNotFound = errors.New("pod identity bucket not found")
 
 // PodIdentityBucket returns the pod identity bucket for the given cluster.
@@ -116,7 +150,7 @@ func PodIdentityRole(ctx context.Context, client *iam.Client, cluster string) (s
 
 				foundRole, err := isPodIdentityRole(*getRoleOutput.Role.AssumeRolePolicyDocument)
 				if err != nil {
-					return "", fmt.Errorf("failed to check if role %s is pod identity role", *role.RoleName)
+					return "", fmt.Errorf("failed to check if role %s is pod identity role: %w", *role.RoleName, err)
 				}
 				// Check if this role has the expected trust relationship for pod identity
 				// if err is returned, we can
