@@ -196,7 +196,7 @@ func isPodIdentityRole(policyDoc string) (bool, error) {
 			if key != "Service" {
 				continue
 			}
-			if val != "pods.eks.amazonaws.com" || !strings.HasSuffix(val, ".pods.eks.aws.internal") {
+			if val != "pods.eks.amazonaws.com" && !strings.HasSuffix(val, ".pods.eks.aws.internal") {
 				continue
 			}
 
