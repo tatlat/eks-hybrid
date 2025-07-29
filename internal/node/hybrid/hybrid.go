@@ -136,7 +136,7 @@ func (hnp *HybridNodeProvider) Validate(ctx context.Context) error {
 
 	if !slices.Contains(hnp.skipPhases, ntpSyncValidation) {
 		hnp.logger.Info("Validating NTP synchronization...")
-		ntpValidator := system.NewNTPValidator(hnp.logger)
+		ntpValidator := system.NewNTPValidator()
 		if err := ntpValidator.Validate(); err != nil {
 			return err
 		}
