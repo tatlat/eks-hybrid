@@ -40,22 +40,19 @@ func (v *ConnectionValidator) Run(ctx context.Context, informer validation.Infor
 func (v *ConnectionValidator) CheckConnection(ctx context.Context, node *api.NodeConfig) error {
 	endpoint, err := url.ParseRequestURI(node.Spec.Cluster.APIServerEndpoint)
 	if err != nil {
-		err = validation.WithRemediation(err, "Ensure the Kubernetes API server endpoint provided is correct.")
-		return err
+		return validation.WithRemediation(err, "Ensure the Kubernetes API server endpoint provided is correct.")
 	}
 
 	err = validateEndpointResolution(ctx, endpoint.Hostname())
 	if err != nil {
-		err = validation.WithRemediation(err, "Ensure DNS server settings and network connectivity are correct, and verify the hostname is reachable")
-		return err
+		return validation.WithRemediation(err, "Ensure DNS server settings and network connectivity are correct, and verify the hostname is reachable")
 	}
 
 	err = retry.NetworkRequest(ctx, func(ctx context.Context) error {
 		return network.CheckConnectionToHost(ctx, *endpoint)
 	})
 	if err != nil {
-		err = validation.WithRemediation(err, "Ensure your network configuration allows the node to access the Kubernetes API endpoint.")
-		return err
+		return validation.WithRemediation(err, "Ensure your network configuration allows the node to access the Kubernetes API endpoint.")
 	}
 
 	return nil
