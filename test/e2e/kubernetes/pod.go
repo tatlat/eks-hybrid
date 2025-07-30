@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -30,12 +31,32 @@ func GetNginxPodName(name string) string {
 	return "nginx-" + name
 }
 
-func CreateNginxPodInNode(ctx context.Context, k8s kubernetes.Interface, nodeName, namespace, region string, logger logr.Logger) error {
-	podName := GetNginxPodName(nodeName)
+func CreateNginxPodInNode(ctx context.Context, k8s kubernetes.Interface, nodeName, namespace, region string, logger logr.Logger, options ...interface{}) error {
+	var podName string
+	var labels map[string]string
+
+	// Parse optional parameters
+	for _, option := range options {
+		switch v := option.(type) {
+		case string:
+			if v != "" {
+				podName = v
+			}
+		case map[string]string:
+			labels = v
+		}
+	}
+
+	// Use default pod name if not provided
+	if podName == "" {
+		podName = GetNginxPodName(nodeName)
+	}
+
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      podName,
 			Namespace: namespace,
+			Labels:    labels,
 		},
 		Spec: corev1.PodSpec{
 			Containers: []corev1.Container{
@@ -60,7 +81,6 @@ func CreateNginxPodInNode(ctx context.Context, k8s kubernetes.Interface, nodeNam
 					},
 				},
 			},
-			// schedule the pod on the specific node using nodeSelector
 			NodeSelector: map[string]string{
 				"kubernetes.io/hostname": nodeName,
 			},
@@ -256,10 +276,80 @@ func execPod(ctx context.Context, config *restclient.Config, k8s kubernetes.Inte
 	return stdoutBuf.String(), stderrBuf.String(), err
 }
 
+// TestPodToPodConnectivity tests direct pod-to-pod connectivity using HTTP
+func TestPodToPodConnectivity(ctx context.Context, config *restclient.Config, k8s kubernetes.Interface, clientPodName, targetPodName, namespace string, logger logr.Logger) error {
+	targetPod, err := k8s.CoreV1().Pods(namespace).Get(ctx, targetPodName, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("getting target pod %s: %w", targetPodName, err)
+	}
+
+	if targetPod.Status.PodIP == "" {
+		return fmt.Errorf("target pod %s should have IP", targetPodName)
+	}
+
+	targetIP := targetPod.Status.PodIP
+	logger.Info("Testing pod-to-pod connectivity", "from", clientPodName, "to", targetPodName, "ip", targetIP)
+
+	cmd := []string{"curl", "-s", "-o", "/dev/null", "-w", "%{http_code}", fmt.Sprintf("http://%s:80", targetIP), "--connect-timeout", "10", "--max-time", "30"}
+
+	_, err = ik8s.GetAndWait(ctx, 2*time.Minute, k8s.CoreV1().Pods(namespace), clientPodName, func(pod *corev1.Pod) bool {
+		if pod.Status.Phase != corev1.PodRunning {
+			return false
+		}
+
+		result, _, execErr := execPod(ctx, config, k8s, clientPodName, namespace, cmd...)
+		if execErr != nil {
+			logger.Info("Pod connectivity test failed", "error", execErr.Error())
+			return false
+		}
+
+		return strings.Contains(result, "200")
+	})
+	if err != nil {
+		return fmt.Errorf("connectivity from %s to %s failed: %w", clientPodName, targetPodName, err)
+	}
+
+	logger.Info("Pod-to-pod connectivity successful", "from", clientPodName, "to", targetPodName)
+	return nil
+}
+
 func WaitForDaemonSetPodToBeRunning(ctx context.Context, k8s kubernetes.Interface, namespace, daemonSetName, nodeName string, logger logr.Logger) error {
 	listOptions := metav1.ListOptions{
 		LabelSelector: fmt.Sprintf("%s=%s", "app.kubernetes.io/name", daemonSetName),
 		FieldSelector: fmt.Sprintf("%s=%s", "spec.nodeName", nodeName),
 	}
 	return WaitForPodsToBeRunning(ctx, k8s, listOptions, namespace, logger)
+}
+
+// ListPodsWithLabels lists pods in a namespace that match the given label selector
+func ListPodsWithLabels(ctx context.Context, k8s kubernetes.Interface, namespace, labelSelector string) (*corev1.PodList, error) {
+	pods, err := k8s.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{
+		LabelSelector: labelSelector,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list pods with selector %s: %w", labelSelector, err)
+	}
+	return pods, nil
+}
+
+// DeletePodsWithLabels deletes all pods in a namespace that match the given label selector
+func DeletePodsWithLabels(ctx context.Context, k8s kubernetes.Interface, namespace, labelSelector string, logger logr.Logger) error {
+	pods, err := ListPodsWithLabels(ctx, k8s, namespace, labelSelector)
+	if err != nil {
+		return fmt.Errorf("failed to list pods for deletion: %w", err)
+	}
+
+	for _, pod := range pods.Items {
+		// Force delete pods to prevent resource accumulation issues
+		gracePeriodSeconds := int64(0)
+		deleteOptions := metav1.DeleteOptions{
+			GracePeriodSeconds: &gracePeriodSeconds,
+		}
+		if err := k8s.CoreV1().Pods(namespace).Delete(ctx, pod.Name, deleteOptions); err != nil {
+			logger.Info("Pod cleanup: resource not found or already deleted", "name", pod.Name)
+		} else {
+			logger.Info("Force deleted pod", "name", pod.Name)
+		}
+	}
+	return nil
 }

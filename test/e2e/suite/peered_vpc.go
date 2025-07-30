@@ -12,7 +12,9 @@ import (
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/cloudformation"
 	ec2v2 "github.com/aws/aws-sdk-go-v2/service/ec2"
+	ec2v2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/aws/aws-sdk-go-v2/service/eks"
+	ekstypes "github.com/aws/aws-sdk-go-v2/service/eks/types"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
 	s3v2 "github.com/aws/aws-sdk-go-v2/service/s3"
 	ssmv2 "github.com/aws/aws-sdk-go-v2/service/ssm"
@@ -56,11 +58,11 @@ type SuiteConfiguration struct {
 type PeeredVPCTest struct {
 	aws             aws.Config
 	eksEndpoint     string
-	eksClient       *eks.Client
-	ec2Client       *ec2v2.Client
+	EKSClient       *eks.Client
+	EC2Client       *ec2v2.Client
 	SSMClient       *ssmv2.Client
 	cfnClient       *cloudformation.Client
-	k8sClient       peeredtypes.K8s
+	K8sClient       peeredtypes.K8s
 	K8sClientConfig *rest.Config
 	s3Client        *s3v2.Client
 	iamClient       *iam.Client
@@ -116,8 +118,8 @@ func BuildPeeredVPCTestForSuite(ctx context.Context, suite *SuiteConfiguration) 
 	}
 
 	test.aws = aws
-	test.eksClient = e2e.NewEKSClient(aws, suite.TestConfig.Endpoint)
-	test.ec2Client = ec2v2.NewFromConfig(aws)
+	test.EKSClient = e2e.NewEKSClient(aws, suite.TestConfig.Endpoint)
+	test.EC2Client = ec2v2.NewFromConfig(aws)
 	test.SSMClient = ssmv2.NewFromConfig(aws)
 	test.s3Client = s3v2.NewFromConfig(aws)
 	test.cfnClient = cloudformation.NewFromConfig(aws)
@@ -146,12 +148,12 @@ func BuildPeeredVPCTestForSuite(ctx context.Context, suite *SuiteConfiguration) 
 		return nil, err
 	}
 
-	test.k8sClient = peeredtypes.K8s{
+	test.K8sClient = peeredtypes.K8s{
 		Interface: k8s,
 		Dynamic:   dynamicK8s,
 	}
 
-	test.Cluster, err = peered.GetHybridCluster(ctx, test.eksClient, test.ec2Client, suite.TestConfig.ClusterName)
+	test.Cluster, err = peered.GetHybridCluster(ctx, test.EKSClient, test.EC2Client, suite.TestConfig.ClusterName)
 	if err != nil {
 		return nil, err
 	}
@@ -180,7 +182,7 @@ func (t *PeeredVPCTest) NewPeeredNode(logger logr.Logger) *peered.Node {
 	return &peered.Node{
 		NodeCreate: peered.NodeCreate{
 			AWS:                 t.aws,
-			EC2:                 t.ec2Client,
+			EC2:                 t.EC2Client,
 			SSM:                 t.SSMClient,
 			K8sClientConfig:     t.K8sClientConfig,
 			Logger:              logger,
@@ -191,10 +193,10 @@ func (t *PeeredVPCTest) NewPeeredNode(logger logr.Logger) *peered.Node {
 			RemoteCommandRunner: remoteCommandRunner,
 		},
 		NodeCleanup: peered.NodeCleanup{
-			EC2:        t.ec2Client,
+			EC2:        t.EC2Client,
 			SSM:        t.SSMClient,
 			S3:         t.s3Client,
-			K8s:        t.k8sClient,
+			K8s:        t.K8sClient,
 			Logger:     logger,
 			SkipDelete: t.SkipCleanup,
 			Cluster:    t.Cluster,
@@ -208,16 +210,16 @@ func (t *PeeredVPCTest) NewPeeredNode(logger logr.Logger) *peered.Node {
 
 func (t *PeeredVPCTest) NewPeeredNetwork(logger logr.Logger) *peered.Network {
 	return &peered.Network{
-		EC2:     t.ec2Client,
+		EC2:     t.EC2Client,
 		Logger:  logger,
-		K8s:     t.k8sClient,
+		K8s:     t.K8sClient,
 		Cluster: t.Cluster,
 	}
 }
 
 func (t *PeeredVPCTest) NewCleanNode(provider e2e.NodeadmCredentialsProvider, infraCleaner nodeadm.NodeInfrastructureCleaner, nodeName, nodeIP string) *nodeadm.CleanNode {
 	return &nodeadm.CleanNode{
-		K8s:                   t.k8sClient,
+		K8s:                   t.K8sClient,
 		RemoteCommandRunner:   ssm.NewStandardLinuxSSHOnSSMCommandRunner(t.SSMClient, t.JumpboxInstanceId, t.Logger),
 		Verifier:              provider,
 		Logger:                t.Logger,
@@ -229,7 +231,7 @@ func (t *PeeredVPCTest) NewCleanNode(provider e2e.NodeadmCredentialsProvider, in
 
 func (t *PeeredVPCTest) NewUpgradeNode(nodeName, nodeIP string) *nodeadm.UpgradeNode {
 	return &nodeadm.UpgradeNode{
-		K8s:                 t.k8sClient,
+		K8s:                 t.K8sClient,
 		RemoteCommandRunner: ssm.NewStandardLinuxSSHOnSSMCommandRunner(t.SSMClient, t.JumpboxInstanceId, t.Logger),
 		Logger:              t.Logger,
 		NodeName:            nodeName,
@@ -252,8 +254,8 @@ func (t *PeeredVPCTest) NewVerifyPodIdentityAddon(nodeName string) *addon.Verify
 		Cluster:             t.Cluster.Name,
 		NodeName:            nodeName,
 		PodIdentityS3Bucket: t.podIdentityS3Bucket,
-		K8S:                 t.k8sClient,
-		EKSClient:           t.eksClient,
+		K8S:                 t.K8sClient,
+		EKSClient:           t.EKSClient,
 		IAMClient:           t.iamClient,
 		S3Client:            t.s3Client,
 		Logger:              t.Logger,
@@ -276,7 +278,7 @@ func (t *PeeredVPCTest) NewTestNode(ctx context.Context, instanceName, nodeName,
 	node := &testNode{
 		ArtifactsPath:   t.ArtifactsPath,
 		ClusterName:     t.Cluster.Name,
-		EC2Client:       t.ec2Client,
+		EC2Client:       t.EC2Client,
 		EKSEndpoint:     t.eksEndpoint,
 		FailHandler:     t.handleFailure,
 		InstanceName:    instanceName,
@@ -285,7 +287,7 @@ func (t *PeeredVPCTest) NewTestNode(ctx context.Context, instanceName, nodeName,
 		LoggerControl:   t.loggerControl,
 		LogsBucket:      t.logsBucket,
 		NodeName:        nodeName,
-		K8sClient:       t.k8sClient,
+		K8sClient:       t.K8sClient,
 		K8sClientConfig: t.K8sClientConfig,
 		K8sVersion:      k8sVersion,
 		OS:              os,
@@ -545,4 +547,102 @@ func CreateNodes(ctx context.Context, test *PeeredVPCTest, nodesToCreate []NodeC
 		}(entry)
 	}
 	wg.Wait()
+}
+
+// CreateManagedNodeGroups creates EKS managed node groups for mixed mode testing
+func (t *PeeredVPCTest) CreateManagedNodeGroups(ctx context.Context) error {
+	nodeGroupName := "mixed-mode-cloud-nodes"
+
+	t.Logger.Info("Creating EKS managed node group for mixed mode testing")
+
+	// Use only public subnets - they have both internet access and hybrid routes
+	subnets, err := t.EC2Client.DescribeSubnets(ctx, &ec2v2.DescribeSubnetsInput{
+		SubnetIds: t.Cluster.SubnetIds,
+		Filters: []ec2v2types.Filter{{
+			Name: aws.String("map-public-ip-on-launch"), Values: []string{"true"},
+		}},
+	})
+	if err != nil {
+		return fmt.Errorf("finding public subnets: %w", err)
+	}
+
+	var validSubnets []string
+	for _, subnet := range subnets.Subnets {
+		validSubnets = append(validSubnets, *subnet.SubnetId)
+	}
+
+	if len(validSubnets) == 0 {
+		return fmt.Errorf("no public subnets found for managed node groups")
+	}
+
+	input := &eks.CreateNodegroupInput{
+		ClusterName:   aws.String(t.Cluster.Name),
+		NodegroupName: aws.String(nodeGroupName),
+		Subnets:       validSubnets,
+		NodeRole:      aws.String(t.StackOut.ManagedNodeRoleArn),
+		InstanceTypes: []string{"m5.large"},
+		AmiType:       ekstypes.AMITypesAl2023X8664Standard,
+		ScalingConfig: &ekstypes.NodegroupScalingConfig{
+			DesiredSize: aws.Int32(2),
+			MaxSize:     aws.Int32(5),
+			MinSize:     aws.Int32(1),
+		},
+		Tags: map[string]string{
+			constants.TestClusterTagKey: t.Cluster.Name,
+			"Name":                      nodeGroupName,
+		},
+	}
+
+	_, err = t.EKSClient.CreateNodegroup(ctx, input)
+	if err != nil {
+		return fmt.Errorf("creating managed node group: %w", err)
+	}
+
+	return t.waitForNodegroupActive(ctx, nodeGroupName)
+}
+
+// waitForNodegroupActive waits for the specified nodegroup to become active
+func (t *PeeredVPCTest) waitForNodegroupActive(ctx context.Context, nodeGroupName string) error {
+	t.Logger.Info("Waiting for managed node group to become active...", "nodegroup", nodeGroupName)
+	waiter := eks.NewNodegroupActiveWaiter(t.EKSClient)
+	err := waiter.Wait(ctx, &eks.DescribeNodegroupInput{
+		ClusterName:   aws.String(t.Cluster.Name),
+		NodegroupName: aws.String(nodeGroupName),
+	}, 15*time.Minute)
+	if err != nil {
+		return fmt.Errorf("waiting for managed node group to be active: %w", err)
+	}
+
+	t.Logger.Info("Managed node group is now active", "nodegroup", nodeGroupName)
+
+	// Register automatic cleanup only once
+	DeferCleanup(func(ctx context.Context) {
+		if !t.SkipCleanup {
+			t.Logger.Info("Deleting EKS managed node group", "nodegroup", nodeGroupName)
+			_, err := t.EKSClient.DeleteNodegroup(ctx, &eks.DeleteNodegroupInput{
+				ClusterName:   aws.String(t.Cluster.Name),
+				NodegroupName: aws.String(nodeGroupName),
+			})
+			if err != nil {
+				t.Logger.Error(err, "Failed to delete managed node group")
+				return
+			}
+
+			t.Logger.Info("Waiting for managed node group to be deleted...", "nodegroup", nodeGroupName)
+			deleteWaiter := eks.NewNodegroupDeletedWaiter(t.EKSClient)
+			err = deleteWaiter.Wait(ctx, &eks.DescribeNodegroupInput{
+				ClusterName:   aws.String(t.Cluster.Name),
+				NodegroupName: aws.String(nodeGroupName),
+			}, 10*time.Minute)
+			if err != nil {
+				t.Logger.Error(err, "Failed to wait for managed node group deletion")
+				return
+			}
+			t.Logger.Info("Managed node group deleted successfully")
+		} else {
+			t.Logger.Info("Skipping cleanup of managed node group")
+		}
+	}, NodeTimeout(10*time.Minute))
+
+	return nil
 }

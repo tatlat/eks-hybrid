@@ -108,6 +108,10 @@ func (c *Sweeper) Run(ctx context.Context, input SweeperInput) error {
 			FailureMessage: "cleaning up credential stacks",
 		},
 		{
+			Cleanup:        c.cleanupManagedNodeGroups,
+			FailureMessage: "cleaning up managed node groups",
+		},
+		{
 			Cleanup:        c.cleanupEKSClusters,
 			FailureMessage: "cleaning up EKS clusters",
 		},
@@ -411,6 +415,26 @@ func (c *Sweeper) cleanupIAMInstanceProfiles(ctx context.Context, filterInput Fi
 		}
 	}
 
+	return nil
+}
+
+func (c *Sweeper) cleanupManagedNodeGroups(ctx context.Context, filterInput FilterInput) error {
+	nodeGroupCleaner := NewManagedNodeGroupCleanup(c.eks, c.logger)
+	nodeGroups, err := nodeGroupCleaner.ListManagedNodeGroups(ctx, filterInput)
+	if err != nil {
+		return fmt.Errorf("listing managed node groups: %w", err)
+	}
+
+	c.logger.Info("Deleting managed node groups", "nodeGroups", nodeGroups)
+	if filterInput.DryRun {
+		return nil
+	}
+
+	for _, nodeGroup := range nodeGroups {
+		if err := nodeGroupCleaner.DeleteManagedNodeGroup(ctx, nodeGroup.ClusterName, nodeGroup.NodeGroupName); err != nil {
+			return fmt.Errorf("deleting managed node group %s in cluster %s: %w", nodeGroup.NodeGroupName, nodeGroup.ClusterName, err)
+		}
+	}
 	return nil
 }
 

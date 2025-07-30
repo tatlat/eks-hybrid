@@ -35,8 +35,8 @@ func (a *AddonEc2Test) NewNodeMonitoringAgentTest() *addon.NodeMonitoringAgentTe
 	labelReq, _ := labels.NewRequirement("os.bottlerocket.aws/version", selection.DoesNotExist, []string{})
 	return &addon.NodeMonitoringAgentTest{
 		Cluster:       a.Cluster.Name,
-		K8S:           a.k8sClient,
-		EKSClient:     a.eksClient,
+		K8S:           a.K8sClient,
+		EKSClient:     a.EKSClient,
 		K8SConfig:     a.K8sClientConfig,
 		Logger:        a.Logger,
 		Command:       defaultNodeMonitoringAgentCommand,
@@ -51,8 +51,8 @@ func (a *AddonEc2Test) NewVerifyPodIdentityAddon(nodeName string) *addon.VerifyP
 		Cluster:             a.Cluster.Name,
 		NodeName:            nodeName,
 		PodIdentityS3Bucket: a.podIdentityS3Bucket,
-		K8S:                 a.k8sClient,
-		EKSClient:           a.eksClient,
+		K8S:                 a.K8sClient,
+		EKSClient:           a.EKSClient,
 		IAMClient:           a.iamClient,
 		S3Client:            a.s3Client,
 		Logger:              a.Logger,
@@ -65,8 +65,8 @@ func (a *AddonEc2Test) NewVerifyPodIdentityAddon(nodeName string) *addon.VerifyP
 func (a *AddonEc2Test) NewKubeStateMetricsTest() *addon.KubeStateMetricsTest {
 	return &addon.KubeStateMetricsTest{
 		Cluster:   a.Cluster.Name,
-		K8S:       a.k8sClient,
-		EKSClient: a.eksClient,
+		K8S:       a.K8sClient,
+		EKSClient: a.EKSClient,
 		K8SConfig: a.K8sClientConfig,
 		Logger:    a.Logger,
 	}
@@ -80,8 +80,8 @@ func (a *AddonEc2Test) NewMetricsServerTest() *addon.MetricsServerTest {
 	}
 	return &addon.MetricsServerTest{
 		Cluster:       a.Cluster.Name,
-		K8S:           a.k8sClient,
-		EKSClient:     a.eksClient,
+		K8S:           a.K8sClient,
+		EKSClient:     a.EKSClient,
 		Logger:        a.Logger,
 		MetricsClient: metricsClient,
 	}
@@ -91,8 +91,8 @@ func (a *AddonEc2Test) NewMetricsServerTest() *addon.MetricsServerTest {
 func (a *AddonEc2Test) NewPrometheusNodeExporterTest() *addon.PrometheusNodeExporterTest {
 	return &addon.PrometheusNodeExporterTest{
 		Cluster:   a.Cluster.Name,
-		K8S:       a.k8sClient,
-		EKSClient: a.eksClient,
+		K8S:       a.K8sClient,
+		EKSClient: a.EKSClient,
 		K8SConfig: a.K8sClientConfig,
 		Logger:    a.Logger,
 	}
@@ -103,8 +103,8 @@ func (a *AddonEc2Test) NewNvidiaDevicePluginTest(nodeName string) *addon.NvidiaD
 	commandRunner := ssm.NewStandardLinuxSSHOnSSMCommandRunner(a.SSMClient, a.JumpboxInstanceId, a.Logger)
 	return &addon.NvidiaDevicePluginTest{
 		Cluster:       a.Cluster.Name,
-		K8S:           a.k8sClient,
-		EKSClient:     a.eksClient,
+		K8S:           a.K8sClient,
+		EKSClient:     a.EKSClient,
 		K8SConfig:     a.K8sClientConfig,
 		Logger:        a.Logger,
 		Command:       defaultNvidiaDevicePluginCommand,
@@ -141,8 +141,8 @@ func (a *AddonEc2Test) NewCertManagerTest(ctx context.Context) (*addon.CertManag
 	pcaIssuer := &addon.PCAIssuerTest{
 		Cluster:            a.Cluster.Name,
 		Namespace:          "cert-test",
-		K8S:                a.k8sClient,
-		EKSClient:          a.eksClient,
+		K8S:                a.K8sClient,
+		EKSClient:          a.EKSClient,
 		CertClient:         certClient,
 		K8sPcaClient:       k8sPcaClient,
 		PCAClient:          pcaClient,
@@ -153,8 +153,8 @@ func (a *AddonEc2Test) NewCertManagerTest(ctx context.Context) (*addon.CertManag
 
 	return &addon.CertManagerTest{
 		Cluster:        a.Cluster.Name,
-		K8S:            a.k8sClient,
-		EKSClient:      a.eksClient,
+		K8S:            a.K8sClient,
+		EKSClient:      a.EKSClient,
 		K8SConfig:      a.K8sClientConfig,
 		Logger:         a.Logger,
 		CertClient:     certClient,
