@@ -9,10 +9,10 @@ import (
 	"time"
 
 	"go.uber.org/zap"
-	"golang.org/x/net/http/httpproxy"
 
 	"github.com/aws/eks-hybrid/internal/api"
 	"github.com/aws/eks-hybrid/internal/daemon"
+	"github.com/aws/eks-hybrid/internal/network"
 	"github.com/aws/eks-hybrid/internal/util"
 	"github.com/aws/eks-hybrid/internal/util/file"
 )
@@ -112,7 +112,7 @@ func (s *SigningHelperDaemon) Name() string {
 
 // GenerateUpdateSystemdService generates the systemd service config.
 func GenerateUpdateSystemdService(node *api.NodeConfig) ([]byte, error) {
-	data := map[string]string{
+	data := map[string]any{
 		"SharedCredentialsFilePath": EksHybridAwsCredentialsPath,
 		"SigningHelperBinPath":      SigningHelperBinPath,
 		"TrustAnchorARN":            node.Spec.Hybrid.IAMRolesAnywhere.TrustAnchorARN,
@@ -122,12 +122,9 @@ func GenerateUpdateSystemdService(node *api.NodeConfig) ([]byte, error) {
 		"NodeName":                  node.Spec.Hybrid.IAMRolesAnywhere.NodeName,
 		"CertificatePath":           node.Spec.Hybrid.IAMRolesAnywhere.CertificatePath,
 		"PrivateKeyPath":            node.Spec.Hybrid.IAMRolesAnywhere.PrivateKeyPath,
+		"ProxyEnabled":              network.IsProxyEnabled(),
 	}
 
-	proxyEnv := httpproxy.FromEnvironment()
-	if proxyEnv.HTTPProxy != "" || proxyEnv.HTTPSProxy != "" {
-		data["ProxyEnabled"] = "true"
-	}
 	var buf bytes.Buffer
 	if err := signingHelperServiceTemplate.Execute(&buf, data); err != nil {
 		return nil, fmt.Errorf("executing aws_signing_helper_update service template: %w", err)

@@ -9,7 +9,7 @@ import (
 	"path"
 	"text/template"
 
-	"golang.org/x/net/http/httpproxy"
+	"github.com/aws/eks-hybrid/internal/network"
 )
 
 const (
@@ -66,10 +66,7 @@ func WriteAWSConfig(cfg AWSConfig) error {
 		cfg.ConfigPath = DefaultAWSConfigPath
 	}
 
-	proxyEnv := httpproxy.FromEnvironment()
-	if proxyEnv.HTTPProxy != "" || proxyEnv.HTTPSProxy != "" {
-		cfg.ProxyEnabled = true
-	}
+	cfg.ProxyEnabled = network.IsProxyEnabled()
 
 	if err := validateAWSConfig(cfg); err != nil {
 		return err

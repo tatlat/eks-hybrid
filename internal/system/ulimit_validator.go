@@ -23,7 +23,7 @@ func NewUlimitValidator() *UlimitValidator {
 }
 
 // Run validates the ulimit configuration
-func (v *UlimitValidator) Run(ctx context.Context, informer validation.Informer, nodeConfig *api.NodeConfig) error {
+func (v *UlimitValidator) Run(ctx context.Context, informer validation.Informer, _ *api.NodeConfig) error {
 	var err error
 	informer.Starting(ctx, "ulimit", "Validating ulimit configuration")
 	defer func() {

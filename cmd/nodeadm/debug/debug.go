@@ -100,6 +100,7 @@ func (c *debug) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		validation.New("swap", system.NewSwapValidator().Run),
 		validation.New("ulimit", system.NewUlimitValidator().Run),
 		validation.New("aws-auth", sts.NewAuthenticationValidator(awsConfig).Run),
+		validation.New("proxy-config", network.NewProxyValidator().Run),
 		runner.UntilError(
 			validation.New("k8s-endpoint-network", kubernetes.NewAccessValidator(clusterProvider).Run),
 			validation.New("k8s-authentication", apiServerValidator.MakeAuthenticatedRequest),
