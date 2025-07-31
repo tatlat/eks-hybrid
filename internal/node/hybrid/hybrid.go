@@ -25,6 +25,7 @@ const (
 	ntpSyncValidation           = "ntp-sync-validation"
 	awsCredentialsValidation    = "aws-credentials-validation"
 	apiServerEndpointResolution = "api-server-endpoint-resolution-validation"
+	proxyValidation             = "proxy-validation"
 )
 
 type HybridNodeProvider struct {
@@ -147,6 +148,14 @@ func (hnp *HybridNodeProvider) Validate(ctx context.Context) error {
 		hnp.logger.Info("Validating API Server endpoint connection...")
 		connectionValidator := kubernetes.NewConnectionValidator()
 		if err := connectionValidator.CheckConnection(ctx, hnp.nodeConfig); err != nil {
+			return err
+		}
+	}
+
+	if !slices.Contains(hnp.skipPhases, proxyValidation) {
+		hnp.logger.Info("Validating proxy configuration...")
+		proxyValidator := network.NewProxyValidator()
+		if err := proxyValidator.Validate(hnp.nodeConfig); err != nil {
 			return err
 		}
 	}

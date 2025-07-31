@@ -50,7 +50,7 @@ func NewNTPValidator() *NTPValidator {
 }
 
 // Run validates NTP synchronization
-func (v *NTPValidator) Run(ctx context.Context, informer validation.Informer, nodeConfig *api.NodeConfig) error {
+func (v *NTPValidator) Run(ctx context.Context, informer validation.Informer, _ *api.NodeConfig) error {
 	var err error
 	informer.Starting(ctx, "ntp-sync", "Validating NTP synchronization status")
 	defer func() {
