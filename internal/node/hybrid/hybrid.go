@@ -24,6 +24,7 @@ const (
 	ntpSyncValidation           = "ntp-sync-validation"
 	apiServerEndpointResolution = "api-server-endpoint-resolution-validation"
 	proxyValidation             = "proxy-validation"
+	nodeInActiveValidation      = "node-inactive-validation"
 )
 
 type HybridNodeProvider struct {
@@ -95,6 +96,13 @@ func WithCertPath(path string) NodeProviderOpt {
 func WithKubelet(kubelet Kubelet) NodeProviderOpt {
 	return func(hnp *HybridNodeProvider) {
 		hnp.kubelet = kubelet
+	}
+}
+
+// WithDaemonManager adds a DaemonManager to the HybridNodeProvider for testing purposes.
+func WithDaemonManager(dm daemon.DaemonManager) NodeProviderOpt {
+	return func(hnp *HybridNodeProvider) {
+		hnp.daemonManager = dm
 	}
 }
 
