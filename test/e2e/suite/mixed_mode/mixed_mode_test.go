@@ -27,9 +27,18 @@ import (
 	"github.com/aws/eks-hybrid/test/e2e/suite"
 )
 
+// SharedTestData holds all data that needs to be shared between Ginkgo processes
+type SharedTestData struct {
+	SuiteConfig          suite.SuiteConfiguration `yaml:"suiteConfig"`
+	MixedModeLabels      map[string]string        `yaml:"mixedModeLabels"`
+	HybridNodeName       string                   `yaml:"hybridNodeName"`
+	ManagedNodeGroupName string                   `yaml:"managedNodeGroupName"`
+	TestRunId            string                   `yaml:"testRunId"`
+}
+
 var (
-	filePath    string
-	suiteConfig *suite.SuiteConfiguration
+	filePath       string
+	sharedTestData SharedTestData
 
 	// Namespace constants
 	testNamespace = "default"
@@ -53,10 +62,6 @@ var (
 	// Node label constants (derived from selectors)
 	cloudNodeLabelKey, cloudNodeLabelValue   = getFirstKeyValue(cloudNodeSelector)
 	hybridNodeLabelKey, hybridNodeLabelValue = getFirstKeyValue(hybridNodeSelector)
-
-	// Unique identifiers for this test run (set during suite setup)
-	uniqueHybridNodeName string
-	mixedModeLabels      map[string]string
 )
 
 // getFirstKeyValue extracts the first key-value pair from a map
@@ -89,18 +94,22 @@ var _ = SynchronizedBeforeSuite(
 		// Generate unique identifiers for this test run
 		timestamp := time.Now().Format("20060102-150405")
 		version := strings.ReplaceAll(test.Cluster.KubernetesVersion, ".", "")
-		uniqueHybridNodeName = fmt.Sprintf("mixed-mode-hybrid-k8s%s-%s", version, timestamp)
-		uniqueTestId := fmt.Sprintf("k8s%s-%s", version, timestamp)
-		mixedModeLabels = map[string]string{
+		testRunId := fmt.Sprintf("k8s%s-%s", version, timestamp)
+		hybridNodeName := fmt.Sprintf("mixed-mode-hybrid-%s", testRunId)
+		managedNodeGroupName := fmt.Sprintf("mixed-mode-cloud-%s", testRunId)
+
+		// Create labels with generated test run ID
+		mixedModeLabels := map[string]string{
 			"test-suite": "mixed-mode",
-			"test-run":   uniqueTestId,
+			"test-run":   testRunId,
 		}
-		test.Logger.Info("Generated unique identifiers", "nodeName", uniqueHybridNodeName, "testId", uniqueTestId)
+
+		test.Logger.Info("Generated unique identifiers", "testRunId", testRunId, "hybridNodeName", hybridNodeName, "managedNodeGroupName", managedNodeGroupName)
 
 		hybridNode := suite.NodeCreate{
-			InstanceName: uniqueHybridNodeName,
+			InstanceName: hybridNodeName,
 			InstanceSize: e2e.Large,
-			NodeName:     uniqueHybridNodeName,
+			NodeName:     hybridNodeName,
 			OS:           randomOSProvider.OS,
 			Provider:     randomOSProvider.Provider,
 			ComputeType:  e2e.CPUInstance,
@@ -110,12 +119,23 @@ var _ = SynchronizedBeforeSuite(
 		Expect(test.CreateManagedNodeGroups(ctx)).To(Succeed(), "managed node group should be created successfully")
 
 		// Ensure mixed mode connectivity by adding required security group rules
-		err := ensureMixedModeConnectivity(ctx, test)
+		err := ensureMixedModeConnectivity(ctx, test, hybridNodeName)
 		Expect(err).NotTo(HaveOccurred(), "Mixed mode connectivity rules should be added successfully")
 
-		suiteJson, err := yaml.Marshal(suiteConfig)
-		Expect(err).NotTo(HaveOccurred(), "suite config should be marshalled successfully")
-		return suiteJson
+		// Package all shared data for distribution to test processes
+		sharedData := SharedTestData{
+			SuiteConfig:          suiteConfig,
+			MixedModeLabels:      mixedModeLabels,
+			HybridNodeName:       hybridNodeName,
+			ManagedNodeGroupName: managedNodeGroupName,
+			TestRunId:            testRunId,
+		}
+
+		test.Logger.Info("Sharing test data with all processes", "labels", mixedModeLabels, "hybridNodeName", hybridNodeName)
+
+		sharedJson, err := yaml.Marshal(sharedData)
+		Expect(err).NotTo(HaveOccurred(), "shared data should be marshalled successfully")
+		return sharedJson
 	},
 	// This function runs on all processes
 	func(ctx context.Context, data []byte) {
@@ -123,7 +143,10 @@ var _ = SynchronizedBeforeSuite(
 		randomSleep := rand.Intn(10)
 		err := smithyTime.SleepWithContext(ctx, time.Duration(randomSleep)*time.Second)
 		Expect(err).NotTo(HaveOccurred(), "failed to sleep")
-		suiteConfig = suite.BeforeSuiteCredentialUnmarshal(ctx, data)
+
+		// Unmarshal the shared data
+		err = yaml.Unmarshal(data, &sharedTestData)
+		Expect(err).NotTo(HaveOccurred(), "shared data should be unmarshalled successfully")
 	},
 )
 
@@ -132,16 +155,16 @@ var _ = Describe("Mixed Mode Testing", func() {
 		var test *suite.PeeredVPCTest
 
 		BeforeEach(func(ctx context.Context) {
-			test = suite.BeforeVPCTest(ctx, suiteConfig)
+			test = suite.BeforeVPCTest(ctx, &sharedTestData.SuiteConfig)
 
 			// Comprehensive cleanup before each test
 			test.Logger.Info("Running comprehensive cleanup to ensure clean state")
-			cleanupTestResources(ctx, test, mixedModeLabels)
+			cleanupTestResources(ctx, test, sharedTestData.MixedModeLabels)
 		})
 
 		AfterEach(func(ctx context.Context) {
 			test.Logger.Info("Running comprehensive cleanup after test")
-			cleanupTestResources(ctx, test, mixedModeLabels)
+			cleanupTestResources(ctx, test, sharedTestData.MixedModeLabels)
 		})
 
 		Context("Pod-to-Pod Communication", func() {
@@ -149,14 +172,14 @@ var _ = Describe("Mixed Mode Testing", func() {
 				// Find cloud node and create nginx pod
 				cloudNodeName, _ := kubernetes.FindNodeWithLabel(ctx, test.K8sClient.Interface, cloudNodeLabelKey, cloudNodeLabelValue, test.Logger)
 
-				err := kubernetes.CreateNginxPodInNode(ctx, test.K8sClient.Interface, cloudNodeName, testNamespace, test.Cluster.Region, test.Logger, "nginx-cloud", mixedModeLabels)
+				err := kubernetes.CreateNginxPodInNode(ctx, test.K8sClient.Interface, cloudNodeName, testNamespace, test.Cluster.Region, test.Logger, "nginx-cloud", sharedTestData.MixedModeLabels)
 				Expect(err).NotTo(HaveOccurred(), "creating cloud pod")
 				test.Logger.Info("Cloud pod created and ready", "name", "nginx-cloud")
 
 				// Find hybrid node and create client nginx pod
 				hybridNodeName, _ := kubernetes.FindNodeWithLabel(ctx, test.K8sClient.Interface, hybridNodeLabelKey, hybridNodeLabelValue, test.Logger)
 
-				err = kubernetes.CreateNginxPodInNode(ctx, test.K8sClient.Interface, hybridNodeName, testNamespace, test.Cluster.Region, test.Logger, "test-client-hybrid", mixedModeLabels)
+				err = kubernetes.CreateNginxPodInNode(ctx, test.K8sClient.Interface, hybridNodeName, testNamespace, test.Cluster.Region, test.Logger, "test-client-hybrid", sharedTestData.MixedModeLabels)
 				Expect(err).NotTo(HaveOccurred(), "creating client pod")
 				test.Logger.Info("Client pod created and ready", "name", "test-client-hybrid")
 
@@ -171,14 +194,14 @@ var _ = Describe("Mixed Mode Testing", func() {
 				// Find hybrid node and create nginx pod
 				hybridNodeName, _ := kubernetes.FindNodeWithLabel(ctx, test.K8sClient.Interface, hybridNodeLabelKey, hybridNodeLabelValue, test.Logger)
 
-				err := kubernetes.CreateNginxPodInNode(ctx, test.K8sClient.Interface, hybridNodeName, testNamespace, test.Cluster.Region, test.Logger, "nginx-hybrid-reverse", mixedModeLabels)
+				err := kubernetes.CreateNginxPodInNode(ctx, test.K8sClient.Interface, hybridNodeName, testNamespace, test.Cluster.Region, test.Logger, "nginx-hybrid-reverse", sharedTestData.MixedModeLabels)
 				Expect(err).NotTo(HaveOccurred(), "creating hybrid pod")
 				test.Logger.Info("Hybrid pod created and ready", "name", "nginx-hybrid-reverse")
 
 				// Find cloud node and create client nginx pod
 				cloudNodeName, _ := kubernetes.FindNodeWithLabel(ctx, test.K8sClient.Interface, cloudNodeLabelKey, cloudNodeLabelValue, test.Logger)
 
-				err = kubernetes.CreateNginxPodInNode(ctx, test.K8sClient.Interface, cloudNodeName, testNamespace, test.Cluster.Region, test.Logger, "test-client-cloud", mixedModeLabels)
+				err = kubernetes.CreateNginxPodInNode(ctx, test.K8sClient.Interface, cloudNodeName, testNamespace, test.Cluster.Region, test.Logger, "test-client-cloud", sharedTestData.MixedModeLabels)
 				Expect(err).NotTo(HaveOccurred(), "creating client pod")
 				test.Logger.Info("Cloud client pod created and ready", "name", "test-client-cloud")
 
@@ -192,17 +215,17 @@ var _ = Describe("Mixed Mode Testing", func() {
 		Context("Cross-VPC Service Discovery", func() {
 			It("should enable cross-VPC service discovery from hybrid to cloud services", func(ctx context.Context) {
 				// Create deployment
-				_, err := kubernetes.CreateDeployment(ctx, test.K8sClient.Interface, "nginx-service-cloud", testNamespace, test.Cluster.Region, cloudNodeSelector, httpPort, 1, test.Logger, mixedModeLabels)
+				_, err := kubernetes.CreateDeployment(ctx, test.K8sClient.Interface, "nginx-service-cloud", testNamespace, test.Cluster.Region, cloudNodeSelector, httpPort, 1, test.Logger, sharedTestData.MixedModeLabels)
 				Expect(err).NotTo(HaveOccurred(), "creating deployment")
 
 				// Create service (port 80 to target port 80)
-				service, err := kubernetes.CreateService(ctx, test.K8sClient.Interface, "nginx-service-cloud", testNamespace, map[string]string{"app": "nginx-service-cloud"}, httpPort, httpPort, test.Logger, mixedModeLabels)
+				service, err := kubernetes.CreateService(ctx, test.K8sClient.Interface, "nginx-service-cloud", testNamespace, map[string]string{"app": "nginx-service-cloud"}, httpPort, httpPort, test.Logger, sharedTestData.MixedModeLabels)
 				Expect(err).NotTo(HaveOccurred(), "creating service")
 
 				// Find hybrid node and create client nginx pod
 				hybridNodeName, _ := kubernetes.FindNodeWithLabel(ctx, test.K8sClient.Interface, hybridNodeLabelKey, hybridNodeLabelValue, test.Logger)
 
-				err = kubernetes.CreateNginxPodInNode(ctx, test.K8sClient.Interface, hybridNodeName, testNamespace, test.Cluster.Region, test.Logger, "test-client-hybrid-service", mixedModeLabels)
+				err = kubernetes.CreateNginxPodInNode(ctx, test.K8sClient.Interface, hybridNodeName, testNamespace, test.Cluster.Region, test.Logger, "test-client-hybrid-service", sharedTestData.MixedModeLabels)
 				Expect(err).NotTo(HaveOccurred(), "creating client pod")
 				test.Logger.Info("Client pod created and ready", "name", "test-client-hybrid-service")
 
@@ -223,16 +246,16 @@ var _ = Describe("Mixed Mode Testing", func() {
 			It("should enable cross-VPC service discovery from cloud to hybrid services", func(ctx context.Context) {
 				test.Logger.Info("Testing bidirectional service discovery (cloud → hybrid service)")
 
-				_, err := kubernetes.CreateDeployment(ctx, test.K8sClient.Interface, "nginx-service-hybrid", testNamespace, test.Cluster.Region, hybridNodeSelector, httpPort, 1, test.Logger, mixedModeLabels)
+				_, err := kubernetes.CreateDeployment(ctx, test.K8sClient.Interface, "nginx-service-hybrid", testNamespace, test.Cluster.Region, hybridNodeSelector, httpPort, 1, test.Logger, sharedTestData.MixedModeLabels)
 				Expect(err).NotTo(HaveOccurred(), "creating deployment")
 
-				service, err := kubernetes.CreateService(ctx, test.K8sClient.Interface, "nginx-service-hybrid", testNamespace, map[string]string{"app": "nginx-service-hybrid"}, httpPort, httpPort, test.Logger, mixedModeLabels)
+				service, err := kubernetes.CreateService(ctx, test.K8sClient.Interface, "nginx-service-hybrid", testNamespace, map[string]string{"app": "nginx-service-hybrid"}, httpPort, httpPort, test.Logger, sharedTestData.MixedModeLabels)
 				Expect(err).NotTo(HaveOccurred(), "creating service")
 
 				// Find cloud node and create client nginx pod
 				cloudNodeName, _ := kubernetes.FindNodeWithLabel(ctx, test.K8sClient.Interface, cloudNodeLabelKey, cloudNodeLabelValue, test.Logger)
 
-				err = kubernetes.CreateNginxPodInNode(ctx, test.K8sClient.Interface, cloudNodeName, testNamespace, test.Cluster.Region, test.Logger, "test-client-cloud-bidirectional", mixedModeLabels)
+				err = kubernetes.CreateNginxPodInNode(ctx, test.K8sClient.Interface, cloudNodeName, testNamespace, test.Cluster.Region, test.Logger, "test-client-cloud-bidirectional", sharedTestData.MixedModeLabels)
 				Expect(err).NotTo(HaveOccurred(), "creating client pod")
 				test.Logger.Info("Client pod created and ready", "name", "test-client-cloud-bidirectional")
 
@@ -284,8 +307,8 @@ func cleanupTestResources(ctx context.Context, test *suite.PeeredVPCTest, labels
 }
 
 // ensureMixedModeConnectivity adds required security group rules for mixed mode testing
-func ensureMixedModeConnectivity(ctx context.Context, test *suite.PeeredVPCTest) error {
-	clusterSG, hybridSG, err := getSecurityGroupsForMixedMode(ctx, test)
+func ensureMixedModeConnectivity(ctx context.Context, test *suite.PeeredVPCTest, hybridNodeName string) error {
+	clusterSG, hybridSG, err := getSecurityGroupsForMixedMode(ctx, test, hybridNodeName)
 	if err != nil {
 		return fmt.Errorf("failed to get security groups: %w", err)
 	}
@@ -345,7 +368,7 @@ func ensureMixedModeConnectivity(ctx context.Context, test *suite.PeeredVPCTest)
 }
 
 // getSecurityGroupsForMixedMode returns both cluster and hybrid node security groups
-func getSecurityGroupsForMixedMode(ctx context.Context, test *suite.PeeredVPCTest) (*string, *string, error) {
+func getSecurityGroupsForMixedMode(ctx context.Context, test *suite.PeeredVPCTest, hybridNodeName string) (*string, *string, error) {
 	clusterName := test.Cluster.Name
 	cluster, err := test.EKSClient.DescribeCluster(ctx, &eks.DescribeClusterInput{
 		Name: &clusterName,
@@ -361,7 +384,7 @@ func getSecurityGroupsForMixedMode(ctx context.Context, test *suite.PeeredVPCTes
 
 	test.Logger.Info("Found EKS cluster security group", "sgId", *clusterSG)
 
-	hybridSG, err := findHybridNodeSecurityGroup(ctx, test)
+	hybridSG, err := findHybridNodeSecurityGroup(ctx, test, hybridNodeName)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to find hybrid node security group: %w", err)
 	}
@@ -371,10 +394,9 @@ func getSecurityGroupsForMixedMode(ctx context.Context, test *suite.PeeredVPCTes
 }
 
 // findHybridNodeSecurityGroup finds the security group of the hybrid node
-func findHybridNodeSecurityGroup(ctx context.Context, test *suite.PeeredVPCTest) (string, error) {
-	// Use the unique hybrid node name that was set during suite setup
-	if uniqueHybridNodeName == "" {
-		return "", fmt.Errorf("uniqueHybridNodeName is not set - this should have been set during suite setup")
+func findHybridNodeSecurityGroup(ctx context.Context, test *suite.PeeredVPCTest, hybridNodeName string) (string, error) {
+	if hybridNodeName == "" {
+		return "", fmt.Errorf("hybridNodeName parameter is empty")
 	}
 
 	// Find hybrid node instance by the unique name tag
@@ -382,7 +404,7 @@ func findHybridNodeSecurityGroup(ctx context.Context, test *suite.PeeredVPCTest)
 		Filters: []ec2v2types.Filter{
 			{
 				Name:   &[]string{"tag:Name"}[0],
-				Values: []string{uniqueHybridNodeName},
+				Values: []string{hybridNodeName},
 			},
 			{
 				Name:   &[]string{"instance-state-name"}[0],
@@ -395,7 +417,7 @@ func findHybridNodeSecurityGroup(ctx context.Context, test *suite.PeeredVPCTest)
 	}
 
 	if len(instances.Reservations) == 0 || len(instances.Reservations[0].Instances) == 0 {
-		return "", fmt.Errorf("no hybrid node instance found with name '%s'", uniqueHybridNodeName)
+		return "", fmt.Errorf("no hybrid node instance found with name '%s'", hybridNodeName)
 	}
 
 	instance := instances.Reservations[0].Instances[0]
@@ -403,7 +425,7 @@ func findHybridNodeSecurityGroup(ctx context.Context, test *suite.PeeredVPCTest)
 		return "", fmt.Errorf("no security groups found for hybrid node instance %s", *instance.InstanceId)
 	}
 
-	test.Logger.Info("Found hybrid node instance", "name", uniqueHybridNodeName, "instanceId", *instance.InstanceId)
+	test.Logger.Info("Found hybrid node instance", "name", hybridNodeName, "instanceId", *instance.InstanceId)
 	return *instance.SecurityGroups[0].GroupId, nil
 }
 
