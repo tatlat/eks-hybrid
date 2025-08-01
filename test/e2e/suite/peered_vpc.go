@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -551,9 +552,11 @@ func CreateNodes(ctx context.Context, test *PeeredVPCTest, nodesToCreate []NodeC
 
 // CreateManagedNodeGroups creates EKS managed node groups for mixed mode testing
 func (t *PeeredVPCTest) CreateManagedNodeGroups(ctx context.Context) error {
-	nodeGroupName := "mixed-mode-cloud-nodes"
+	version := strings.ReplaceAll(t.Cluster.KubernetesVersion, ".", "")
+	timestamp := time.Now().Format("20060102-150405") // YYYYMMDD-HHMMSS
+	nodeGroupName := fmt.Sprintf("mixed-mode-cloud-nodes-k8s%s-%s", version, timestamp)
 
-	t.Logger.Info("Creating EKS managed node group for mixed mode testing")
+	t.Logger.Info("Creating EKS managed node group for mixed mode testing", "nodegroup", nodeGroupName)
 
 	// Use only public subnets - they have both internet access and hybrid routes
 	subnets, err := t.EC2Client.DescribeSubnets(ctx, &ec2v2.DescribeSubnetsInput{
