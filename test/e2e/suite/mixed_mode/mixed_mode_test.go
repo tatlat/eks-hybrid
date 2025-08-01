@@ -34,11 +34,6 @@ var (
 	// Namespace constants
 	testNamespace = "default"
 
-	// Labels for mixed mode test resources
-	mixedModeLabels = map[string]string{
-		"test-suite": "mixed-mode",
-	}
-
 	// Network CIDR constants (match defaults from create.go)
 	cloudVPCCIDR  = "10.20.0.0/16"
 	hybridVPCCIDR = "10.80.0.0/16"
@@ -58,6 +53,10 @@ var (
 	// Node label constants (derived from selectors)
 	cloudNodeLabelKey, cloudNodeLabelValue   = getFirstKeyValue(cloudNodeSelector)
 	hybridNodeLabelKey, hybridNodeLabelValue = getFirstKeyValue(hybridNodeSelector)
+
+	// Unique identifiers for this test run (set during suite setup)
+	uniqueHybridNodeName string
+	mixedModeLabels      map[string]string
 )
 
 // getFirstKeyValue extracts the first key-value pair from a map
@@ -87,10 +86,21 @@ var _ = SynchronizedBeforeSuite(
 		osProviderList := suite.OSProviderList(credentialProviders)
 		randomOSProvider := osProviderList[rand.Intn(len(osProviderList))]
 
+		// Generate unique identifiers for this test run
+		timestamp := time.Now().Format("20060102-150405")
+		version := strings.ReplaceAll(test.Cluster.KubernetesVersion, ".", "")
+		uniqueHybridNodeName = fmt.Sprintf("mixed-mode-hybrid-k8s%s-%s", version, timestamp)
+		uniqueTestId := fmt.Sprintf("k8s%s-%s", version, timestamp)
+		mixedModeLabels = map[string]string{
+			"test-suite": "mixed-mode",
+			"test-run":   uniqueTestId,
+		}
+		test.Logger.Info("Generated unique identifiers", "nodeName", uniqueHybridNodeName, "testId", uniqueTestId)
+
 		hybridNode := suite.NodeCreate{
-			InstanceName: "mixed-mode-hybrid",
+			InstanceName: uniqueHybridNodeName,
 			InstanceSize: e2e.Large,
-			NodeName:     "mixed-mode-hybrid",
+			NodeName:     uniqueHybridNodeName,
 			OS:           randomOSProvider.OS,
 			Provider:     randomOSProvider.Provider,
 			ComputeType:  e2e.CPUInstance,
@@ -362,12 +372,17 @@ func getSecurityGroupsForMixedMode(ctx context.Context, test *suite.PeeredVPCTes
 
 // findHybridNodeSecurityGroup finds the security group of the hybrid node
 func findHybridNodeSecurityGroup(ctx context.Context, test *suite.PeeredVPCTest) (string, error) {
-	// Find hybrid node instance by name tag (created with InstanceName: "mixed-mode-hybrid")
+	// Use the unique hybrid node name that was set during suite setup
+	if uniqueHybridNodeName == "" {
+		return "", fmt.Errorf("uniqueHybridNodeName is not set - this should have been set during suite setup")
+	}
+
+	// Find hybrid node instance by the unique name tag
 	instances, err := test.EC2Client.DescribeInstances(ctx, &ec2v2.DescribeInstancesInput{
 		Filters: []ec2v2types.Filter{
 			{
 				Name:   &[]string{"tag:Name"}[0],
-				Values: []string{"mixed-mode-hybrid"},
+				Values: []string{uniqueHybridNodeName},
 			},
 			{
 				Name:   &[]string{"instance-state-name"}[0],
@@ -380,7 +395,7 @@ func findHybridNodeSecurityGroup(ctx context.Context, test *suite.PeeredVPCTest)
 	}
 
 	if len(instances.Reservations) == 0 || len(instances.Reservations[0].Instances) == 0 {
-		return "", fmt.Errorf("no hybrid node instance found with name 'mixed-mode-hybrid'")
+		return "", fmt.Errorf("no hybrid node instance found with name '%s'", uniqueHybridNodeName)
 	}
 
 	instance := instances.Reservations[0].Instances[0]
@@ -388,6 +403,7 @@ func findHybridNodeSecurityGroup(ctx context.Context, test *suite.PeeredVPCTest)
 		return "", fmt.Errorf("no security groups found for hybrid node instance %s", *instance.InstanceId)
 	}
 
+	test.Logger.Info("Found hybrid node instance", "name", uniqueHybridNodeName, "instanceId", *instance.InstanceId)
 	return *instance.SecurityGroups[0].GroupId, nil
 }
 
