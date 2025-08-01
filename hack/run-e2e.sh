@@ -30,6 +30,7 @@ NODEADM_ARM_URL="${6?Please specify the nodeadm arm url}"
 LOGS_BUCKET="${7-?Please specify the bucket for logs}"
 ARTIFACTS_FOLDER="${8-?Please specify the folder for artifacts}"
 
+PARALLEL_TEST_PROCESSES=64
 
 CONFIG_DIR="$REPO_ROOT/e2e-config"
 ARCH="$([ "x86_64" = "$(uname -m)" ] && echo amd64 || echo arm64)"
@@ -76,6 +77,6 @@ build::common::echo_and_run $BIN_DIR/e2e-test run-e2e \
   --nodeadm-arm-url=$NODEADM_ARM_URL \
   --logs-bucket=$LOGS_BUCKET \
   --artifacts-dir=$ARTIFACTS_FOLDER \
-  --procs=64 \
+  --procs=$PARALLEL_TEST_PROCESSES \
   --skip-cleanup=false \
   --no-color
