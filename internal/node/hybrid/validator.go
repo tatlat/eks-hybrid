@@ -16,6 +16,7 @@ const (
 	ssmActivationIDPattern   = `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`
 	ssmActivationCodePattern = `^.{20,250}$`
 	iamRolesCertGuideURL     = "To generate a new IAM Roles Anywhere (IAM-RA) certificate, see the steps in the documentation: https://docs.aws.amazon.com/eks/latest/userguide/hybrid-nodes-creds.html#hybrid-nodes-role"
+	hostnameOverrideFlag     = "hostname-override"
 )
 
 func extractFlagValue(args []string, flag string) string {

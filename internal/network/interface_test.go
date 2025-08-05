@@ -17,22 +17,18 @@ import (
 func TestNewNetworkInterfaceValidator(t *testing.T) {
 	g := NewWithT(t)
 
-	awsConfig := aws.Config{Region: "us-west-2"}
-	validator := NewNetworkInterfaceValidator(awsConfig)
+	validator := NewNetworkInterfaceValidator()
 
-	g.Expect(validator.awsConfig).To(Equal(awsConfig))
 	g.Expect(validator.network).NotTo(BeNil())
 }
 
 func TestNewNetworkInterfaceValidatorWithOptions(t *testing.T) {
 	g := NewWithT(t)
 
-	awsConfig := aws.Config{Region: "us-west-2"}
 	mockNet := &mockNetwork{}
 
-	validator := NewNetworkInterfaceValidator(awsConfig, WithNetwork(mockNet))
+	validator := NewNetworkInterfaceValidator(WithNetwork(mockNet))
 
-	g.Expect(validator.awsConfig).To(Equal(awsConfig))
 	g.Expect(validator.network).To(Equal(mockNet))
 }
 
@@ -247,7 +243,6 @@ func TestNetworkInterfaceValidator_Run(t *testing.T) {
 
 			// Create validator with mock network
 			validator := NewNetworkInterfaceValidator(
-				aws.Config{Region: "us-west-2"},
 				WithNetwork(tt.mockNetwork),
 			)
 
@@ -317,7 +312,6 @@ func TestNetworkInterfaceValidator_RunIntegration(t *testing.T) {
 	}
 
 	validator := NewNetworkInterfaceValidator(
-		aws.Config{Region: "us-west-2"},
 		WithNetwork(mockNet),
 	)
 
@@ -327,7 +321,7 @@ func TestNetworkInterfaceValidator_RunIntegration(t *testing.T) {
 	// This will fail because we don't have real AWS credentials, but we can verify
 	// the method exists and has the right signature
 	err := validator.Run(ctx, informer, nodeConfig)
-	g.Expect(err).To(HaveOccurred()) // Expected to fail due to no real AWS setup
+	g.Expect(err).NotTo(HaveOccurred()) // Expected to fail due to no real AWS setup
 
 	// Verify that the informer was called
 	g.Expect(informer.startingCalled).To(BeTrue())
@@ -382,15 +376,13 @@ func TestValidationHelperFunctions(t *testing.T) {
 	g := NewWithT(t)
 
 	// Test that we can create a validator and it has the expected structure
-	awsConfig := aws.Config{Region: "us-west-2"}
-	validator := NewNetworkInterfaceValidator(awsConfig)
+	validator := NewNetworkInterfaceValidator()
 
-	g.Expect(validator.awsConfig).To(Equal(awsConfig))
 	g.Expect(validator.network).NotTo(BeNil())
 
 	// Test WithNetwork option
 	mockNet := &mockNetwork{}
-	validatorWithMock := NewNetworkInterfaceValidator(awsConfig, WithNetwork(mockNet))
+	validatorWithMock := NewNetworkInterfaceValidator(WithNetwork(mockNet))
 	g.Expect(validatorWithMock.network).To(Equal(mockNet))
 }
 
@@ -681,7 +673,6 @@ func TestMTUValidationIntegrationWithNetworkValidator(t *testing.T) {
 	g.Expect(err.Error()).To(ContainSubstring("no active network interface found with IP"))
 
 	// Test 3: Verify network interface validator can be created with MTU validation
-	awsConfig := aws.Config{Region: "us-west-2"}
-	validator := NewNetworkInterfaceValidator(awsConfig)
+	validator := NewNetworkInterfaceValidator()
 	g.Expect(validator.network).NotTo(BeNil())
 }
