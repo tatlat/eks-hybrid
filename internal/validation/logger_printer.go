@@ -41,6 +41,7 @@ func (p *LoggerPrinter) Starting(ctx context.Context, name, message string) {
 
 // Done logs the result of a validation using the zap logger.
 // For successful validations, it logs at Info level.
+// For warnings, it logs at Warn level.
 // For failed validations, it logs at Error level and includes remediation if available.
 func (p *LoggerPrinter) Done(ctx context.Context, name string, err error) {
 	if err == nil {
@@ -53,8 +54,30 @@ func (p *LoggerPrinter) Done(ctx context.Context, name string, err error) {
 	// Handle multiple errors if present
 	errs := Unwrap(err)
 	for _, e := range errs {
-		p.logErrorWithRemediation(name, e)
+		if IsWarning(e) {
+			p.logWarningWithRemediation(name, e)
+		} else {
+			p.logErrorWithRemediation(name, e)
+		}
 	}
+}
+
+// logWarningWithRemediation logs an individual warning and its remediation if available.
+func (p *LoggerPrinter) logWarningWithRemediation(validationName string, err error) {
+	// Prepare log fields
+	fields := []zap.Field{
+		zap.String("validation", validationName),
+		zap.String("error", err.Error()),
+	}
+
+	// Add remediation to the same log entry if available
+	if IsRemediable(err) {
+		remediation := Remediation(err)
+		fields = append(fields, zap.String("remediation", remediation))
+	}
+
+	// Log the validation failure as a warning
+	p.logger.Warn("Validation failed", fields...)
 }
 
 // logErrorWithRemediation logs an individual error and its remediation if available.

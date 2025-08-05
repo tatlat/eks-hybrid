@@ -76,8 +76,8 @@ func (r *Runner[O]) Register(validations ...Validation[O]) {
 }
 
 // Sequentially runs all validations one after the other and waits until they all finish,
-// aggregating the errors if present. obj must not be modified. If it is, this
-// indicates a programming error and the method will panic.
+// aggregating the errors if present. Warnings are logged but don't cause failure.
+// obj must not be modified. If it is, this indicates a programming error and the method will panic.
 func (r *Runner[O]) Sequentially(ctx context.Context, obj O) error {
 	copyObj := obj.DeepCopy()
 	var errs []error
@@ -85,7 +85,13 @@ func (r *Runner[O]) Sequentially(ctx context.Context, obj O) error {
 	for _, validation := range r.validations {
 		err := validation.Validate(ctx, r.informer, copyObj)
 		if err != nil {
-			errs = append(errs, Unwrap(err)...)
+			unwrappedErrs := Unwrap(err)
+			for _, e := range unwrappedErrs {
+				// Only add non-warning errors to the error list
+				if !IsWarning(e) {
+					errs = append(errs, e)
+				}
+			}
 		}
 	}
 

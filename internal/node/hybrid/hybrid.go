@@ -138,6 +138,7 @@ func (hnp *HybridNodeProvider) Validate(ctx context.Context) error {
 		validation.New(kubeletVersionSkew, hnp.ValidateKubeletVersionSkew),
 		validation.New(apiServerEndpointResolution, kubernetes.ValidateAPIServerEndpointResolution),
 		validation.New(proxyValidation, network.NewProxyValidator().Run),
+		validation.New(nodeInActiveValidation, hnp.ValidateNodeIsInactive),
 	)
 
 	// Run all validations sequentially

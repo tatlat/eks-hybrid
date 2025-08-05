@@ -67,7 +67,7 @@ func TestHybridNodeProvider_ValidateNodeIsInactive(t *testing.T) {
 			name:                "warning - kubelet daemon running",
 			kubeletDaemonStatus: daemon.DaemonStatusRunning,
 			expectWarning:       true,
-			expectedLogMsg:      "kubelet service is still active",
+			expectedLogMsg:      "kubelet service is still active and may be connected to a previous cluster",
 		},
 		{
 			name:                "warning - daemon manager error",
@@ -95,7 +95,13 @@ func TestHybridNodeProvider_ValidateNodeIsInactive(t *testing.T) {
 			// Create provider with observed logger
 			hnp, err := hybrid.NewHybridNodeProvider(
 				&api.NodeConfig{},
-				[]string{"node-ip-validation", "kubelet-cert-validation", "api-server-endpoint-resolution-validation"},
+				[]string{
+					"node-ip-validation",
+					"kubelet-version-skew-validation",
+					"kubelet-cert-validation",
+					"api-server-endpoint-resolution-validation",
+					"proxy-validation",
+				},
 				observedLogger,
 				hybrid.WithDaemonManager(mockDaemon),
 			)
