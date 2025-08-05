@@ -11,8 +11,10 @@ import (
 
 type KubeletCertificateValidator struct {
 	// CertPath is the full path to the kubelet certificate
-	certPath        string
-	clusterProvider ClusterProvider
+	certPath string
+	cluster  *api.ClusterDetails
+	// ignoreDateAndNoCertErrors controls whether to ignore date validation and no-cert errors
+	ignoreDateAndNoCertErrors bool
 }
 
 func WithCertPath(certPath string) func(*KubeletCertificateValidator) {
@@ -21,10 +23,16 @@ func WithCertPath(certPath string) func(*KubeletCertificateValidator) {
 	}
 }
 
-func NewKubeletCertificateValidator(clusterProvider ClusterProvider, opts ...func(*KubeletCertificateValidator)) KubeletCertificateValidator {
+func WithIgnoreDateAndNoCertErrors(ignore bool) func(*KubeletCertificateValidator) {
+	return func(v *KubeletCertificateValidator) {
+		v.ignoreDateAndNoCertErrors = ignore
+	}
+}
+
+func NewKubeletCertificateValidator(cluster *api.ClusterDetails, opts ...func(*KubeletCertificateValidator)) KubeletCertificateValidator {
 	v := &KubeletCertificateValidator{
-		clusterProvider: clusterProvider,
-		certPath:        kubelet.KubeletCurrentCertPath,
+		cluster:  cluster,
+		certPath: kubelet.KubeletCurrentCertPath,
 	}
 	for _, opt := range opts {
 		opt(v)
@@ -32,22 +40,22 @@ func NewKubeletCertificateValidator(clusterProvider ClusterProvider, opts ...fun
 	return *v
 }
 
-func (v KubeletCertificateValidator) Run(ctx context.Context, informer validation.Informer, node *api.NodeConfig) error {
-	cluster, err := v.clusterProvider.ReadClusterDetails(ctx, node)
-	if err != nil {
-		// Only if reading the EKS fail is when we "start" a validation and signal it as failed.
-		// Otherwise, there is no need to surface we are reading from the EKS API.
-		informer.Starting(ctx, "kubernetes-endpoint-access", "Validating access to Kubernetes API endpoint")
-		informer.Done(ctx, "kubernetes-endpoint-access", err)
-		return err
-	}
-
+// Run validates the kubelet certificate against the cluster CA
+// This function conforms to the validation framework signature
+func (v KubeletCertificateValidator) Run(ctx context.Context, informer validation.Informer, _ *api.NodeConfig) error {
+	var err error
 	name := "kubernetes-kubelet-certificate"
 	informer.Starting(ctx, name, "Validating kubelet server certificate")
 	defer func() {
 		informer.Done(ctx, name, err)
 	}()
-	if err = certificate.Validate(v.certPath, cluster.CertificateAuthority); err != nil {
+	if err = certificate.Validate(v.certPath, v.cluster.CertificateAuthority); err != nil {
+		if v.ignoreDateAndNoCertErrors && (certificate.IsDateValidationError(err) || certificate.IsNoCertError(err)) {
+			// set error to nil for the informer to collect so that this validation does not error in the case
+			// of a no-op handled error
+			err = nil
+			return err
+		}
 		err = certificate.AddKubeletRemediation(v.certPath, err)
 		return err
 	}

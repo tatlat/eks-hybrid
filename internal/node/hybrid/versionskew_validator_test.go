@@ -109,12 +109,16 @@ func TestHybridNodeProvider_ValidateKubeletVersionSkew(t *testing.T) {
 			ctx := context.Background()
 
 			mockKubelet := newMockKubelet(tt.kubeletVersion, tt.kubeletError)
+			mockAWSConfig := &aws.Config{
+				Region: "us-west-2",
+			}
 			hnp, err := hybrid.NewHybridNodeProvider(
 				&api.NodeConfig{},
 				[]string{"node-ip-validation", "kubelet-cert-validation", "api-server-endpoint-resolution-validation", "proxy-validation"},
 				zap.NewNop(),
 				hybrid.WithCluster(tt.cluster),
 				hybrid.WithKubelet(mockKubelet),
+				hybrid.WithAWSConfig(mockAWSConfig),
 			)
 			g.Expect(err).To(Succeed())
 

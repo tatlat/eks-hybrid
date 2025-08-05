@@ -11,6 +11,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/aws/eks-hybrid/internal/api"
+	"github.com/aws/eks-hybrid/internal/aws/eks"
 	"github.com/aws/eks-hybrid/internal/aws/sts"
 	"github.com/aws/eks-hybrid/internal/cli"
 	"github.com/aws/eks-hybrid/internal/configprovider"
@@ -94,6 +95,23 @@ func (c *debug) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	runner := validation.NewRunner[*api.NodeConfig](printer)
 	apiServerValidator := node.NewAPIServerValidator(kubelet.New())
 	clusterProvider := kubernetes.NewClusterProvider(awsConfig)
+	clusterDetail, err := clusterProvider.ReadClusterDetails(ctx, nodeConfig)
+	if err != nil {
+		// Only if reading the EKS fail is when we "start" a validation and signal it as failed.
+		// Otherwise, there is no need to surface we are reading from the EKS API.
+		printer.Starting(ctx, "kubernetes-endpoint-access", "Validating access to Kubernetes API endpoint")
+		printer.Done(ctx, "kubernetes-endpoint-access", err)
+		return err
+	}
+	cluster, err := eks.ReadCluster(ctx, awsConfig, nodeConfig)
+	if err != nil {
+		// Only if reading the EKS fail is when we "start" a validation and signal it as failed.
+		// Otherwise, there is no need to surface we are reading from the EKS API.
+		printer.Starting(ctx, "kubernetes-endpoint-access", "Validating access to Kubernetes API endpoint")
+		printer.Done(ctx, "kubernetes-endpoint-access", err)
+		return err
+	}
+
 	runner.Register(creds.Validations(awsConfig, nodeConfig)...)
 	runner.Register(
 		validation.New("ntp-sync", system.NewNTPValidator().Run),
@@ -102,13 +120,13 @@ func (c *debug) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		validation.New("aws-auth", sts.NewAuthenticationValidator(awsConfig).Run),
 		validation.New("proxy-config", network.NewProxyValidator().Run),
 		runner.UntilError(
-			validation.New("k8s-endpoint-network", kubernetes.NewAccessValidator(clusterProvider).Run),
+			validation.New("k8s-endpoint-network", kubernetes.NewAccessValidator(clusterDetail).Run),
 			validation.New("k8s-authentication", apiServerValidator.MakeAuthenticatedRequest),
 			validation.New("k8s-identity", apiServerValidator.CheckIdentity),
 			validation.New("k8s-vpc-network", apiServerValidator.CheckVPCEndpointAccess),
 		),
-		validation.New("k8s-certificate", kubernetes.NewKubeletCertificateValidator(clusterProvider).Run),
-		validation.New("network-interface", network.NewNetworkInterfaceValidator(awsConfig).Run),
+		validation.New("k8s-certificate", kubernetes.NewKubeletCertificateValidator(clusterDetail).Run),
+		validation.New("network-interface", network.NewNetworkInterfaceValidator(network.WithCluster(cluster)).Run),
 	)
 
 	if err := runner.Sequentially(ctx, nodeConfig); err != nil {
