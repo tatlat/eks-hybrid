@@ -50,7 +50,7 @@ func (v NetworkInterfaceValidator) Run(ctx context.Context, informer validation.
 
 	// Use provided cluster if available, otherwise read from EKS API
 	if v.cluster == nil {
-		informer.Starting(ctx, name, "Skipping network interface validation")
+		informer.Starting(ctx, name, "Skipping network interface validation due to node IAM role missing EKS DescribeCluster permission")
 		informer.Done(ctx, name, err)
 		return nil
 	}

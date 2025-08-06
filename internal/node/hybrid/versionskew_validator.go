@@ -28,7 +28,7 @@ const (
 func (hnp *HybridNodeProvider) ValidateKubeletVersionSkew(ctx context.Context, informer validation.Informer, nodeConfig *api.NodeConfig) error {
 	var err error
 	if hnp.cluster == nil {
-		informer.Starting(ctx, kubeletVersionSkew, "Skipping kubelet version skew validation")
+		informer.Starting(ctx, kubeletVersionSkew, "Skipping kubelet version skew validation due to node IAM role missing EKS DescribeCluster permission")
 		informer.Done(ctx, kubeletVersionSkew, err)
 		return nil
 	}
