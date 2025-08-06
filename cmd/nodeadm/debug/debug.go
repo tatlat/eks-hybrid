@@ -95,23 +95,8 @@ func (c *debug) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	runner := validation.NewRunner[*api.NodeConfig](printer)
 	apiServerValidator := node.NewAPIServerValidator(kubelet.New())
 	clusterProvider := kubernetes.NewClusterProvider(awsConfig)
-	clusterDetail, err := clusterProvider.ReadClusterDetails(ctx, nodeConfig)
-	if err != nil {
-		// Only if reading the EKS fail is when we "start" a validation and signal it as failed.
-		// Otherwise, there is no need to surface we are reading from the EKS API.
-		printer.Starting(ctx, "kubernetes-endpoint-access", "Validating access to Kubernetes API endpoint")
-		printer.Done(ctx, "kubernetes-endpoint-access", err)
-		return err
-	}
-	cluster, err := eks.ReadCluster(ctx, awsConfig, nodeConfig)
-	if err != nil {
-		// Only if reading the EKS fail is when we "start" a validation and signal it as failed.
-		// Otherwise, there is no need to surface we are reading from the EKS API.
-		printer.Starting(ctx, "kubernetes-endpoint-access", "Validating access to Kubernetes API endpoint")
-		printer.Done(ctx, "kubernetes-endpoint-access", err)
-		return err
-	}
 
+	// Register validations that do not require cluster details first
 	runner.Register(creds.Validations(awsConfig, nodeConfig)...)
 	runner.Register(
 		validation.New("ntp-sync", system.NewNTPValidator().Run),
@@ -119,6 +104,20 @@ func (c *debug) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		validation.New("ulimit", system.NewUlimitValidator().Run),
 		validation.New("aws-auth", sts.NewAuthenticationValidator(awsConfig).Run),
 		validation.New("proxy-config", network.NewProxyValidator().Run),
+	)
+
+	clusterDetail, err := clusterProvider.ReadClusterDetails(ctx, nodeConfig)
+	if err != nil {
+		// Only if reading the EKS fail is when we "start" a validation and signal it as failed.
+		// Otherwise, there is no need to surface we are reading from the EKS API.
+		err = validation.WithRemediation(err, "Ensure the Kubernetes API server endpoint is provided or "+
+			"the node has access and permissions to call EKS DescribeCluster API.")
+		printer.Starting(ctx, "cluster-details-retrieval", "Retrieving cluster details")
+		printer.Done(ctx, "cluster-details-retrieval", err)
+		return err
+	}
+
+	runner.Register(
 		runner.UntilError(
 			validation.New("k8s-endpoint-network", kubernetes.NewAccessValidator(clusterDetail).Run),
 			validation.New("k8s-authentication", apiServerValidator.MakeAuthenticatedRequest),
@@ -126,8 +125,10 @@ func (c *debug) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 			validation.New("k8s-vpc-network", apiServerValidator.CheckVPCEndpointAccess),
 		),
 		validation.New("k8s-certificate", kubernetes.NewKubeletCertificateValidator(clusterDetail).Run),
-		validation.New("network-interface", network.NewNetworkInterfaceValidator(network.WithCluster(cluster)).Run),
 	)
+
+	cluster, _ := eks.ReadCluster(ctx, awsConfig, nodeConfig)
+	runner.Register(validation.New("network-interface", network.NewNetworkInterfaceValidator(network.WithCluster(cluster)).Run))
 
 	if err := runner.Sequentially(ctx, nodeConfig); err != nil {
 		fmt.Println("")
