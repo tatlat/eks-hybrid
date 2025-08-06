@@ -1,6 +1,8 @@
 package validation
 
-import "errors"
+import (
+	"errors"
+)
 
 // Remediable is an error that provides a possible remediation.
 type Remediable interface {
@@ -49,4 +51,48 @@ func Remediation(err error) string {
 	}
 
 	return fixable.Remediation()
+}
+
+// Warning represents a validation warning that doesn't prevent execution
+type Warning interface {
+	IsWarning() bool
+	Error() string
+}
+
+// warningError implements Warning around a generic error.
+type warningError struct {
+	error
+	remediation string
+}
+
+// IsWarning returns true to indicate this is a warning.
+func (e *warningError) IsWarning() bool {
+	return true
+}
+
+// Remediation returns a possible solution to the warning.
+func (e *warningError) Remediation() string {
+	return e.remediation
+}
+
+// NewWarning returns a new Warning error.
+func NewWarning(err, remediation string) error {
+	return &warningError{
+		error:       errors.New(err),
+		remediation: remediation,
+	}
+}
+
+// WithWarning makes an error a Warning.
+func WithWarning(err error, remediation string) error {
+	return &warningError{
+		error:       err,
+		remediation: remediation,
+	}
+}
+
+// IsWarning checks if an error is a warning.
+func IsWarning(err error) bool {
+	_, ok := err.(Warning)
+	return ok
 }

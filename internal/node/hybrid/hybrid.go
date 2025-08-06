@@ -24,6 +24,7 @@ const (
 	ntpSyncValidation           = "ntp-sync-validation"
 	apiServerEndpointResolution = "api-server-endpoint-resolution-validation"
 	proxyValidation             = "proxy-validation"
+	nodeInActiveValidation      = "node-inactive-validation"
 )
 
 type HybridNodeProvider struct {
@@ -98,6 +99,13 @@ func WithKubelet(kubelet Kubelet) NodeProviderOpt {
 	}
 }
 
+// WithDaemonManager adds a DaemonManager to the HybridNodeProvider for testing purposes.
+func WithDaemonManager(dm daemon.DaemonManager) NodeProviderOpt {
+	return func(hnp *HybridNodeProvider) {
+		hnp.daemonManager = dm
+	}
+}
+
 func (hnp *HybridNodeProvider) GetNodeConfig() *api.NodeConfig {
 	return hnp.nodeConfig
 }
@@ -130,6 +138,7 @@ func (hnp *HybridNodeProvider) Validate(ctx context.Context) error {
 		validation.New(kubeletVersionSkew, hnp.ValidateKubeletVersionSkew),
 		validation.New(apiServerEndpointResolution, kubernetes.ValidateAPIServerEndpointResolution),
 		validation.New(proxyValidation, network.NewProxyValidator().Run),
+		validation.New(nodeInActiveValidation, hnp.ValidateNodeIsInactive),
 	)
 
 	// Run all validations sequentially

@@ -114,7 +114,13 @@ func TestHybridNodeProvider_ValidateKubeletVersionSkew(t *testing.T) {
 			}
 			hnp, err := hybrid.NewHybridNodeProvider(
 				&api.NodeConfig{},
-				[]string{"node-ip-validation", "kubelet-cert-validation", "api-server-endpoint-resolution-validation", "proxy-validation"},
+				[]string{
+					"node-ip-validation",
+					"kubelet-cert-validation",
+					"api-server-endpoint-resolution-validation",
+					"proxy-validation",
+					"node-inactive-validation",
+				},
 				zap.NewNop(),
 				hybrid.WithCluster(tt.cluster),
 				hybrid.WithKubelet(mockKubelet),
