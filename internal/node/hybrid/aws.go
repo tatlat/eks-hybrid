@@ -16,6 +16,7 @@ import (
 	"github.com/aws/eks-hybrid/internal/iamrolesanywhere"
 	"github.com/aws/eks-hybrid/internal/kubelet"
 	"github.com/aws/eks-hybrid/internal/ssm"
+	"github.com/aws/eks-hybrid/internal/util/file"
 )
 
 func (hnp *HybridNodeProvider) ConfigureAws(ctx context.Context) error {
@@ -140,7 +141,12 @@ func LoadAWSConfigForRolesAnywhere(ctx context.Context, nodeConfig *api.NodeConf
 // aws_config file, which either be a creds file created by ssm or if using iam-ra, will
 // exec the aws_signing_helper
 func BuildKubeClient() (kubernetes.Interface, error) {
-	return kubelet.GetKubeClientFromKubeConfig(kubelet.WithAwsEnvironmentVariables(map[string]string{
-		"AWS_SHARED_CREDENTIALS_FILE": iamrolesanywhere.EksHybridAwsCredentialsPath,
-	}))
+	envVars := make(map[string]string)
+
+	// Check if credentials file exists before setting the environment variable
+	if file.Exists(iamrolesanywhere.EksHybridAwsCredentialsPath) {
+		envVars["AWS_SHARED_CREDENTIALS_FILE"] = iamrolesanywhere.EksHybridAwsCredentialsPath
+	}
+
+	return kubelet.GetKubeClientFromKubeConfig(kubelet.WithAwsEnvironmentVariables(envVars))
 }
