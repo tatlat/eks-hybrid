@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"go.uber.org/zap"
-	"golang.org/x/mod/semver"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	config "k8s.io/kubelet/config/v1"
 
@@ -41,7 +40,7 @@ func (k *kubelet) writeImageCredentialProviderConfig() error {
 		return err
 	}
 
-	config, err := generateImageCredentialProviderConfig(k.nodeConfig, ecrCredentialProviderBinPath, k.credentialProviderAwsConfig)
+	credentialProviderConfig, err := generateImageCredentialProviderConfig(k.nodeConfig, ecrCredentialProviderBinPath, k.credentialProviderAwsConfig)
 	if err != nil {
 		return err
 	}
@@ -49,20 +48,12 @@ func (k *kubelet) writeImageCredentialProviderConfig() error {
 	k.flags["image-credential-provider-bin-dir"] = path.Dir(ecrCredentialProviderBinPath)
 	k.flags["image-credential-provider-config"] = imageCredentialProviderConfigPath
 
-	return util.WriteFileWithDir(imageCredentialProviderConfigPath, config, imageCredentialProviderPerm)
+	return util.WriteFileWithDir(imageCredentialProviderConfigPath, credentialProviderConfig, imageCredentialProviderPerm)
 }
 
 func generateImageCredentialProviderConfig(cfg *api.NodeConfig, ecrCredentialProviderBinPath string, kubeletCredentialProviderAwsConfig CredentialProviderAwsConfig) ([]byte, error) {
-	kubeletVersion, err := GetKubeletVersion()
-	if err != nil {
-		return nil, err
-	}
 	configApiVersion := "kubelet.config.k8s.io/v1"
 	providerApiVersion := "credentialprovider.kubelet.k8s.io/v1"
-	if semver.Compare(kubeletVersion, "v1.27.0") < 0 {
-		configApiVersion = "kubelet.config.k8s.io/v1alpha1"
-		providerApiVersion = "credentialprovider.kubelet.k8s.io/v1alpha1"
-	}
 
 	env := []config.ExecEnvVar{}
 	if cfg.IsIAMRolesAnywhere() {

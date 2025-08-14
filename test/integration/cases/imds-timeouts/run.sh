@@ -5,9 +5,10 @@ set -o nounset
 set -o pipefail
 
 source /helpers.sh
+source /test-constants.sh
 
 wait::dbus-ready
-mock::kubelet 1.29.0
+mock::kubelet ${CURRENT_VERSION}.0
 
 # configure without launching the imds mock service
 IMDS_MOCK_ONLY_CONFIGURE=true mock::aws

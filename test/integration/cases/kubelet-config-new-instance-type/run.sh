@@ -9,6 +9,7 @@ source /helpers.sh
 config_path=/tmp/aemm-default-config.json
 cat /etc/aemm-default-config.json | jq '.metadata.values."instance-type" = "mock-type.large" | .dynamic.values."instance-identity-document".instanceType = "mock-type.large"' | tee ${config_path}
 mock::aws ${config_path}
+# TODO: bump kubelet version and switch expected output to include drop-in merge when 1.28 is deprecated
 mock::kubelet 1.28.0
 wait::dbus-ready
 

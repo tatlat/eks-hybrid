@@ -5,9 +5,10 @@ set -o nounset
 set -o pipefail
 
 source /helpers.sh
+source /test-constants.sh
 
 mock::aws
-mock::kubelet 1.30.0
+mock::kubelet ${CURRENT_VERSION}.0
 wait::dbus-ready
 
 # Setup IAM certificate
@@ -42,7 +43,7 @@ assert::allowed-by-firewalld "30000-32767" "tcp"
 exit_code=0
 systemctl stop firewalld
 STDERR=$(nodeadm init --skip run,install-validation,aws-auth-validation,k8s-authentication-validation --config-source file://config.yaml 2>&1) || exit_code=$?
-if [ $exit_code -ne 0]; then
+if [ $exit_code -ne 0 ]; then
   echo "nodeadm init should not fail with firewall-cmd installed but firewalld service not running"
   exit 1
 fi
