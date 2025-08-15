@@ -7,6 +7,7 @@ set -o pipefail
 source /helpers.sh
 
 mock::aws
+# TODO: bump kubelet version and switch expected output to include drop-in merge when 1.28 is deprecated
 mock::kubelet 1.28.0
 wait::dbus-ready
 

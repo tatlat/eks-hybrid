@@ -5,10 +5,11 @@ set -o nounset
 set -o pipefail
 
 source /helpers.sh
+source /test-constants.sh
 
 mock::aws
 wait::dbus-ready
-mock::kubelet 1.29.0
+mock::kubelet ${CURRENT_VERSION}.0
 
 mock::setup-local-disks
 

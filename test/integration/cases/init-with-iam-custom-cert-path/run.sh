@@ -60,7 +60,7 @@ VALIDATION_CERT="$PKI_DIR/my-server_cert_validation.crt"
 cp $CERT $VALIDATION_CERT
 cp $KEY $VALIDATION_KEY
 sed -i '2s/$/A/' "$VALIDATION_CERT"
-if nodeadm init --skip run,node-ip-validation,aws-auth-validatio,k8s-authentication-validation --config-source file://config-certificate-validation.yaml; then
+if nodeadm init --skip run,node-ip-validation,aws-auth-validation,k8s-authentication-validation --config-source file://config-certificate-validation.yaml; then
     echo "nodeadm init should have failed with iam-roles-anywhere certificate with corrupted file but succeeded unexpectedly"
     exit 1
 fi
