@@ -1,4 +1,4 @@
-FROM public.ecr.aws/eks-distro-build-tooling/golang:1.24 AS nodeadm-build
+FROM public.ecr.aws/eks-distro-build-tooling/golang:1.25 AS nodeadm-build
 WORKDIR /go/src/github.com/aws/eks-hybrid
 ARG GOPROXY
 RUN go env -w GOPROXY=${GOPROXY}
