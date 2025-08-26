@@ -82,6 +82,19 @@ func (s *Command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 
 	targetInstance := instances.Reservations[0].Instances[0]
 
+	isBottleRocket, err := isBottleRocket(ctx, ec2Client, *targetInstance.ImageId)
+	if err != nil {
+		return fmt.Errorf("validating if instance OS is BottleRoceket: %w", err)
+	}
+	var sshCommandFormat string
+	if isBottleRocket {
+		sshCommandFormat = "{\"command\":[\"sudo ssh ec2-user@%s\"]}"
+	} else {
+		sshCommandFormat = "{\"command\":[\"sudo ssh %s\"]}"
+	}
+
+	sshCommand := fmt.Sprintf(sshCommandFormat, *targetInstance.PrivateIpAddress)
+
 	var clusterName string
 	for _, tag := range targetInstance.Tags {
 		if *tag.Key == constants.TestClusterTagKey {
@@ -106,7 +119,7 @@ func (s *Command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		"--document",
 		"AWS-StartInteractiveCommand",
 		"--parameters",
-		fmt.Sprintf("{\"command\":[\"sudo ssh ec2-user@%s\"]}", *targetInstance.PrivateIpAddress),
+		sshCommand,
 		"--target",
 		*jumpbox.InstanceId,
 	)
@@ -139,4 +152,24 @@ func (s *Command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	}
 
 	return nil
+}
+
+func isBottleRocket(ctx context.Context, ec2Client *ec2.Client, imageId string) (bool, error) {
+	images, err := ec2Client.DescribeImages(ctx, &ec2.DescribeImagesInput{
+		ImageIds: []string{imageId},
+	})
+	if err != nil {
+		return false, fmt.Errorf("describing image %s: %w", imageId, err)
+	}
+
+	if len(images.Images) == 0 {
+		return false, fmt.Errorf("no image found with ID %s", imageId)
+	}
+
+	imageName := images.Images[0].Name
+	if imageName == nil {
+		return false, fmt.Errorf("image %s has no name", imageId)
+	}
+
+	return strings.Contains(*imageName, "bottlerocket"), nil
 }
