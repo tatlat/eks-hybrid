@@ -2,6 +2,7 @@ package kubernetes
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -9,6 +10,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 
 	ik8s "github.com/aws/eks-hybrid/internal/kubernetes"
@@ -207,5 +209,51 @@ func ConfigureCoreDNSAntiAffinity(ctx context.Context, k8s kubernetes.Interface,
 	}
 
 	logger.Info("Configured CoreDNS deployment with preferred anti-affinity rules")
+	return nil
+}
+
+// RemoveDeploymentAntiAffinity removes node affinity rules from a deployment that would prevent pods from being scheduled on hybrid nodes.
+// This is useful to test EKS add-on before anti-affinity rule for hybrid nodes is removed.
+// Once anti-affinity rule is removed, then caller no longer needs to call this method.
+func RemoveDeploymentAntiAffinity(ctx context.Context, k8s kubernetes.Interface, name, namespace string, logger logr.Logger) error {
+	logger.Info("Removing node affinity rules to allow scheduling on hybrid nodes", "deployment", name, "namespace", namespace)
+
+	// Get the current deployment to check if it has affinity rules
+	deployment, err := k8s.AppsV1().Deployments(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("getting deployment %s in namespace %s: %w", name, namespace, err)
+	}
+
+	if deployment.Spec.Template.Spec.Affinity == nil {
+		logger.Info("Deployment has no affinity rules, nothing to remove", "deployment", name)
+		return nil
+	}
+
+	if deployment.Spec.Template.Spec.Affinity.NodeAffinity == nil {
+		logger.Info("Deployment has no node affinity rules", "deployment", name)
+		return nil
+	}
+
+	// Create a JSON patch to remove the nodeAffinity field
+	// For now we remove all nodeAffinity rules, which should be okay for our e2e tests
+	patchJSON := []map[string]interface{}{
+		{
+			"op":   "remove",
+			"path": "/spec/template/spec/affinity/nodeAffinity",
+		},
+	}
+
+	patchBytes, err := json.Marshal(patchJSON)
+	if err != nil {
+		return fmt.Errorf("marshaling deployment patch: %w", err)
+	}
+
+	// Apply the JSON patch
+	_, err = k8s.AppsV1().Deployments(namespace).Patch(ctx, name, types.JSONPatchType, patchBytes, metav1.PatchOptions{})
+	if err != nil {
+		return fmt.Errorf("patching deployment %s to remove node affinity rules: %w", name, err)
+	}
+
+	logger.Info("Successfully removed node affinity rules from deployment", "deployment", name)
 	return nil
 }
