@@ -483,6 +483,24 @@ var _ = Describe("Hybrid Nodes", func() {
 					// )
 				})
 			}, Label("s3-mountpoint-csi-driver"))
+
+			Context("runs external-dns tests", func() {
+				It("uses all OS", func(ctx context.Context) {
+					externalDNSTest := addonEc2Test.NewExternalDNSTest()
+
+					DeferCleanup(func(ctx context.Context) {
+						Expect(externalDNSTest.Delete(ctx)).To(Succeed(), "should cleanup external-dns successfully")
+					})
+
+					Expect(externalDNSTest.Create(ctx)).To(
+						Succeed(), "external-dns should have been created successfully",
+					)
+
+					// Expect(externalDNSTest.Validate(ctx)).To(
+					// Succeed(), "external-dns should have been validated successfully",
+					// )
+				})
+			}, Label("external-dns"))
 		})
 	})
 })

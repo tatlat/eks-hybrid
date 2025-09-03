@@ -176,3 +176,14 @@ func (a *AddonEc2Test) NewCertManagerTest(ctx context.Context) (*addon.CertManag
 		IssuerName:     defaultIssuerName,
 	}, nil
 }
+
+// NewExternalDNSTest creates a new ExternalDNSTest
+func (a *AddonEc2Test) NewExternalDNSTest() *addon.ExternalDNSTest {
+	return &addon.ExternalDNSTest{
+		Cluster:   a.Cluster.Name,
+		K8S:       a.K8sClient,
+		EKSClient: a.EKSClient,
+		K8SConfig: a.K8sClientConfig,
+		Logger:    a.Logger.WithName("ExternalDNSTest"),
+	}
+}
