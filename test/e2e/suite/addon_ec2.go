@@ -113,6 +113,17 @@ func (a *AddonEc2Test) NewNvidiaDevicePluginTest(nodeName string) *addon.NvidiaD
 	}
 }
 
+// NewS3MountpointCSIDriverTest creates a new S3MountpointCSIDriverTest
+func (a *AddonEc2Test) NewS3MountpointCSIDriverTest() *addon.S3MountpointCSIDriverTest {
+	return &addon.S3MountpointCSIDriverTest{
+		Cluster:   a.Cluster.Name,
+		K8S:       a.K8sClient,
+		EKSClient: a.EKSClient,
+		K8SConfig: a.K8sClientConfig,
+		Logger:    a.Logger.WithName("S3MountpointCSIDriverTest"),
+	}
+}
+
 // NewCertManagerTest creates a new CertManagerTest
 func (a *AddonEc2Test) NewCertManagerTest(ctx context.Context) (*addon.CertManagerTest, error) {
 	// Create cert-manager client

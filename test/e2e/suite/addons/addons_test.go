@@ -465,6 +465,24 @@ var _ = Describe("Hybrid Nodes", func() {
 					)
 				}, Label("bottlerocket"))
 			}, Label("cert-manager"))
+
+			Context("runs S3 mountpoint CSI driver tests", func() {
+				It("uses all OS", func(ctx context.Context) {
+					s3MountpointTest := addonEc2Test.NewS3MountpointCSIDriverTest()
+
+					DeferCleanup(func(ctx context.Context) {
+						Expect(s3MountpointTest.Delete(ctx)).To(Succeed(), "should cleanup S3 mountpoint CSI driver successfully")
+					})
+
+					Expect(s3MountpointTest.Create(ctx)).To(
+						Succeed(), "S3 mountpoint CSI driver should have been created successfully",
+					)
+
+					// Expect(s3MountpointTest.Validate(ctx)).To(
+					// Succeed(), "S3 mountpoint CSI driver should have been validated successfully",
+					// )
+				})
+			}, Label("s3-mountpoint-csi-driver"))
 		})
 	})
 })
