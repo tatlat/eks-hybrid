@@ -114,14 +114,21 @@ func (a *AddonEc2Test) NewNvidiaDevicePluginTest(nodeName string) *addon.NvidiaD
 }
 
 // NewS3MountpointCSIDriverTest creates a new S3MountpointCSIDriverTest
-func (a *AddonEc2Test) NewS3MountpointCSIDriverTest() *addon.S3MountpointCSIDriverTest {
-	return &addon.S3MountpointCSIDriverTest{
-		Cluster:   a.Cluster.Name,
-		K8S:       a.K8sClient,
-		EKSClient: a.EKSClient,
-		K8SConfig: a.K8sClientConfig,
-		Logger:    a.Logger.WithName("S3MountpointCSIDriverTest"),
+func (a *AddonEc2Test) NewS3MountpointCSIDriverTest(ctx context.Context) (*addon.S3MountpointCSIDriverTest, error) {
+	podIdentityRoleArn, err := addon.PodIdentityRole(ctx, a.IAMClient, a.Cluster.Name)
+	if err != nil {
+		a.Logger.Error(err, "Failed to get pod identity role ARN")
+		return nil, err
 	}
+
+	return &addon.S3MountpointCSIDriverTest{
+		Cluster:            a.Cluster.Name,
+		K8S:                a.K8sClient,
+		EKSClient:          a.EKSClient,
+		K8SConfig:          a.K8sClientConfig,
+		Logger:             a.Logger.WithName("S3MountpointCSIDriverTest"),
+		PodIdentityRoleArn: podIdentityRoleArn,
+	}, nil
 }
 
 // NewCertManagerTest creates a new CertManagerTest
