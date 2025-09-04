@@ -468,7 +468,8 @@ var _ = Describe("Hybrid Nodes", func() {
 
 			Context("runs S3 mountpoint CSI driver tests", func() {
 				It("uses all OS", func(ctx context.Context) {
-					s3MountpointTest := addonEc2Test.NewS3MountpointCSIDriverTest()
+					s3MountpointTest, err := addonEc2Test.NewS3MountpointCSIDriverTest(ctx)
+					Expect(err).To(Succeed(), "should have created s3 mountpoint test")
 
 					DeferCleanup(func(ctx context.Context) {
 						Expect(s3MountpointTest.Delete(ctx)).To(Succeed(), "should cleanup S3 mountpoint CSI driver successfully")
