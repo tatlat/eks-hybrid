@@ -1,13 +1,13 @@
 import * as cdk from 'aws-cdk-lib';
 import * as iam from 'aws-cdk-lib/aws-iam';
 
-export function createNodeadmTestsCreationCleanupPolicy(
+export function createNodeadmTestsCreationCleanupPolicies(
   stack: cdk.Stack,
   testClusterTagKey: string,
   testClusterPrefix: string,
   binaryBucketArn: string,
   podIdentityS3BucketPrefix: string,
-) {
+): iam.ManagedPolicy[] {
   const requestTagCondition = {
     StringLike: {
       [`aws:RequestTag/${testClusterTagKey}`]: `${testClusterPrefix}-*`,
@@ -18,13 +18,11 @@ export function createNodeadmTestsCreationCleanupPolicy(
       [`aws:ResourceTag/${testClusterTagKey}`]: `${testClusterPrefix}-*`,
     },
   };
-  return new iam.Policy(stack, 'nodeadm-e2e-tests-runner-policy', {
+
+  // IAM Policy - Roles and Instance Profiles
+  const iamPolicy = new iam.ManagedPolicy(stack, 'nodeadm-e2e-iam-policy', {
+    managedPolicyName: 'nodeadm-e2e-iam-policy',
     statements: [
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: ['cloudformation:CreateChangeSet', 'cloudformation:ExecuteChangeSet'],
-        resources: ['arn:aws:cloudformation:*:aws:transform/LanguageExtensions'],
-      }),
       new iam.PolicyStatement({
         actions: [
           'iam:AttachRolePolicy',
@@ -76,10 +74,15 @@ export function createNodeadmTestsCreationCleanupPolicy(
         effect: iam.Effect.ALLOW,
         conditions: requestTagCondition,
       }),
+    ],
+  });
+
+  // EC2 Policy - VPC and Networking
+  const ec2Policy = new iam.ManagedPolicy(stack, 'nodeadm-e2e-ec2-policy', {
+    managedPolicyName: 'nodeadm-e2e-ec2-policy',
+    statements: [
       new iam.PolicyStatement({
         actions: [
-          'cloudformation:ListStacks',
-          'cloudformation:DescribeStacks',
           'ec2:AcceptVpcPeeringConnection',
           'ec2:AssociateRouteTable',
           'ec2:AssociateTransitGatewayRouteTable',
@@ -135,20 +138,6 @@ export function createNodeadmTestsCreationCleanupPolicy(
           'ec2:RevokeSecurityGroupIngress',
           'ec2:RunInstances',
           'ec2:SearchTransitGatewayRoutes',
-          'logs:DescribeLogGroups',
-          'rolesanywhere:ListTrustAnchors',
-          'rolesanywhere:ListProfiles',
-          'ssm:DeleteActivation',
-          'ssm:DeleteParameter',
-          'ssm:DescribeActivations',
-          'ssm:DescribeInstanceInformation',
-          'ssm:DescribeInstanceInformation',
-          'ssm:DescribeParameters',
-          'ssm:GetParameters',
-          'ssm:ListTagsForResource',
-          'ssm:PutParameter',
-          's3:ListAllMyBuckets',
-          'tag:GetResources',
         ],
         resources: ['*'],
         effect: iam.Effect.ALLOW,
@@ -176,6 +165,66 @@ export function createNodeadmTestsCreationCleanupPolicy(
         resources: ['*'],
         effect: iam.Effect.ALLOW,
         conditions: resourceTagCondition,
+      }),
+    ],
+  });
+
+  // CloudFormation Policy
+  const cloudFormationPolicy = new iam.ManagedPolicy(stack, 'nodeadm-e2e-cloudformation-policy', {
+    managedPolicyName: 'nodeadm-e2e-cloudformation-policy',
+    statements: [
+      new iam.PolicyStatement({
+        actions: [
+          'cloudformation:ListStacks',
+          'cloudformation:DescribeStacks',
+          'cloudformation:CreateChangeSet',
+          'cloudformation:ExecuteChangeSet',
+        ],
+        resources: ['*'],
+        effect: iam.Effect.ALLOW,
+      }),
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'cloudformation:DescribeStackEvents',
+          'cloudformation:DescribeStackResource',
+          'cloudformation:UpdateStack',
+          'cloudformation:DescribeChangeSet',
+        ],
+        resources: [`arn:aws:cloudformation:${stack.region}:${stack.account}:stack/*`],
+      }),
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['cloudformation:CreateStack'],
+        resources: [`arn:aws:cloudformation:${stack.region}:${stack.account}:stack/*`],
+        conditions: requestTagCondition,
+      }),
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['cloudformation:DeleteStack'],
+        resources: [`arn:aws:cloudformation:${stack.region}:${stack.account}:stack/*`],
+        conditions: resourceTagCondition,
+      }),
+    ],
+  });
+
+  // SSM Policy
+  const ssmPolicy = new iam.ManagedPolicy(stack, 'nodeadm-e2e-ssm-policy', {
+    managedPolicyName: 'nodeadm-e2e-ssm-policy',
+    statements: [
+      new iam.PolicyStatement({
+        actions: [
+          'ssm:DeleteActivation',
+          'ssm:DeleteParameter',
+          'ssm:DescribeActivations',
+          'ssm:DescribeInstanceInformation',
+          'ssm:DescribeParameters',
+          'ssm:GetParameters',
+          'ssm:ListTagsForResource',
+          'ssm:PutParameter',
+        ],
+        resources: ['*'],
+        effect: iam.Effect.ALLOW,
       }),
       new iam.PolicyStatement({
         actions: ['ssm:SendCommand'],
@@ -211,28 +260,13 @@ export function createNodeadmTestsCreationCleanupPolicy(
         ],
         effect: iam.Effect.ALLOW,
       }),
-      new iam.PolicyStatement({
-        actions: ['secretsmanager:GetSecretValue'],
-        resources: [`arn:aws:secretsmanager:${stack.region}:${stack.account}:secret:*`],
-      }),
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: ['s3:GetObject', 's3:ListBucket'],
-        resources: [binaryBucketArn, `${binaryBucketArn}/*`],
-      }),
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: [
-          's3:CreateBucket',
-          's3:DeleteBucket',
-          's3:PutBucketTagging',
-          's3:GetBucketTagging',
-          's3:ListBucket',
-          's3:PutObject*',
-          's3:DeleteObject',
-        ],
-        resources: [`arn:aws:s3:::${podIdentityS3BucketPrefix}*`],
-      }),
+    ],
+  });
+
+  // EKS Policy
+  const eksPolicy = new iam.ManagedPolicy(stack, 'nodeadm-e2e-eks-policy', {
+    managedPolicyName: 'nodeadm-e2e-eks-policy',
+    statements: [
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
         actions: ['eks:CreateAccessEntry', 'eks:DescribeCluster', 'eks:ListClusters', 'eks:TagResource'],
@@ -260,7 +294,13 @@ export function createNodeadmTestsCreationCleanupPolicy(
       }),
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
-        actions: ['eks:CreateAddon', 'eks:CreatePodIdentityAssociation'],
+        actions: [
+          'eks:CreateAddon',
+          'eks:CreatePodIdentityAssociation',
+          'eks:DeletePodIdentityAssociation',
+          'eks:ListPodIdentityAssociations',
+          'eks:DescribePodIdentityAssociation',
+        ],
         resources: [`arn:aws:eks:${stack.region}:${stack.account}:cluster/*`],
       }),
       new iam.PolicyStatement({
@@ -268,30 +308,52 @@ export function createNodeadmTestsCreationCleanupPolicy(
         actions: ['eks:DeleteAddon', 'eks:DescribeAddon'],
         resources: [`arn:aws:eks:${stack.region}:${stack.account}:addon/*`],
       }),
+    ],
+  });
+
+  // S3 and Secrets Policy
+  const s3SecretsPolicy = new iam.ManagedPolicy(stack, 'nodeadm-e2e-s3-secrets-policy', {
+    managedPolicyName: 'nodeadm-e2e-s3-secrets-policy',
+    statements: [
+      new iam.PolicyStatement({
+        actions: ['s3:ListAllMyBuckets'],
+        resources: ['*'],
+        effect: iam.Effect.ALLOW,
+      }),
+      new iam.PolicyStatement({
+        actions: ['secretsmanager:GetSecretValue'],
+        resources: [`arn:aws:secretsmanager:${stack.region}:${stack.account}:secret:*`],
+      }),
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['s3:GetObject', 's3:ListBucket'],
+        resources: [binaryBucketArn, `${binaryBucketArn}/*`],
+      }),
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
         actions: [
-          'cloudformation:DescribeStackEvents',
-          'cloudformation:DescribeStacks',
-          'cloudformation:DescribeStackResource',
-          'cloudformation:UpdateStack',
-          'cloudformation:CreateChangeSet',
-          'cloudformation:ExecuteChangeSet',
-          'cloudformation:DescribeChangeSet',
+          's3:CreateBucket',
+          's3:DeleteBucket',
+          's3:PutBucketTagging',
+          's3:GetBucketTagging',
+          's3:GetObject',
+          's3:ListBucket',
+          's3:PutObject*',
+          's3:DeleteObject',
         ],
-        resources: [`arn:aws:cloudformation:${stack.region}:${stack.account}:stack/*`],
+        resources: [`arn:aws:s3:::${podIdentityS3BucketPrefix}*`],
       }),
+    ],
+  });
+
+  // Roles Anywhere and Logs Policy
+  const rolesAnywhereLogsPolicy = new iam.ManagedPolicy(stack, 'nodeadm-e2e-rolesanywhere-logs-policy', {
+    managedPolicyName: 'nodeadm-e2e-rolesanywhere-logs-policy',
+    statements: [
       new iam.PolicyStatement({
+        actions: ['rolesanywhere:ListTrustAnchors', 'rolesanywhere:ListProfiles'],
+        resources: ['*'],
         effect: iam.Effect.ALLOW,
-        actions: ['cloudformation:CreateStack'],
-        resources: [`arn:aws:cloudformation:${stack.region}:${stack.account}:stack/*`],
-        conditions: requestTagCondition,
-      }),
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: ['cloudformation:DeleteStack'],
-        resources: [`arn:aws:cloudformation:${stack.region}:${stack.account}:stack/*`],
-        conditions: resourceTagCondition,
       }),
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
@@ -331,6 +393,11 @@ export function createNodeadmTestsCreationCleanupPolicy(
         conditions: requestTagCondition,
       }),
       new iam.PolicyStatement({
+        actions: ['logs:DescribeLogGroups'],
+        resources: ['*'],
+        effect: iam.Effect.ALLOW,
+      }),
+      new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
         actions: ['logs:TagResource'],
         resources: [`arn:aws:logs:${stack.region}:${stack.account}:log-group:/aws/eks/*`],
@@ -347,6 +414,25 @@ export function createNodeadmTestsCreationCleanupPolicy(
         resources: [`arn:aws:logs:${stack.region}:${stack.account}:log-group:/aws/eks/*`],
         conditions: resourceTagCondition,
       }),
+    ],
+  });
+
+  // Tagging Policy
+  const taggingPolicy = new iam.ManagedPolicy(stack, 'nodeadm-e2e-tagging-policy', {
+    managedPolicyName: 'nodeadm-e2e-tagging-policy',
+    statements: [
+      new iam.PolicyStatement({
+        actions: ['tag:GetResources'],
+        resources: ['*'],
+        effect: iam.Effect.ALLOW,
+      }),
+    ],
+  });
+
+  // PCA policy
+  const pcaPolicy = new iam.ManagedPolicy(stack, 'nodeadm-e2e-pca-policy', {
+    managedPolicyName: 'nodeadm-e2e-pca-policy',
+    statements: [
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
         actions: ['acm-pca:*'],
@@ -354,4 +440,33 @@ export function createNodeadmTestsCreationCleanupPolicy(
       }),
     ],
   });
+
+  return [
+    iamPolicy,
+    ec2Policy,
+    cloudFormationPolicy,
+    ssmPolicy,
+    eksPolicy,
+    s3SecretsPolicy,
+    rolesAnywhereLogsPolicy,
+    taggingPolicy,
+    pcaPolicy
+  ];
+}
+
+// Backward compatibility function
+export function createNodeadmTestsCreationCleanupPolicy(
+  stack: cdk.Stack,
+  testClusterTagKey: string,
+  testClusterPrefix: string,
+  binaryBucketArn: string,
+  podIdentityS3BucketPrefix: string,
+): iam.ManagedPolicy[] {
+  return createNodeadmTestsCreationCleanupPolicies(
+    stack,
+    testClusterTagKey,
+    testClusterPrefix,
+    binaryBucketArn,
+    podIdentityS3BucketPrefix,
+  );
 }
