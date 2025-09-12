@@ -420,34 +420,20 @@ export function createNodeadmTestsCreationCleanupPolicies(
     ],
   });
 
-  // Tagging Policy
-  const taggingPolicy = new iam.ManagedPolicy(stack, 'nodeadm-e2e-tagging-policy', {
-    managedPolicyName: 'nodeadm-e2e-tagging-policy',
+  // Misc Policy - it can have only 10 managed policies per role thus this policy holds all remaing permissions
+  const miscPolicy = new iam.ManagedPolicy(stack, 'nodeadm-e2e-misc-policy', {
+    managedPolicyName: 'nodeadm-e2e-misc-policy',
     statements: [
       new iam.PolicyStatement({
         actions: ['tag:GetResources'],
         resources: ['*'],
         effect: iam.Effect.ALLOW,
       }),
-    ],
-  });
-
-  // PCA policy
-  const pcaPolicy = new iam.ManagedPolicy(stack, 'nodeadm-e2e-pca-policy', {
-    managedPolicyName: 'nodeadm-e2e-pca-policy',
-    statements: [
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
         actions: ['acm-pca:*'],
         resources: [`arn:aws:acm-pca:${stack.region}:${stack.account}:certificate-authority/*`],
       }),
-    ],
-  });
-
-  // Route53 policy
-  const route53Policy = new iam.ManagedPolicy(stack, 'nodeadm-e2e-route53-policy', {
-    managedPolicyName: 'nodeadm-e2e-route53-policy',
-    statements: [
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
         actions: [
@@ -474,9 +460,7 @@ export function createNodeadmTestsCreationCleanupPolicies(
     eksPolicy,
     s3SecretsPolicy,
     rolesAnywhereLogsPolicy,
-    taggingPolicy,
-    pcaPolicy,
-    route53Policy,
+    miscPolicy, // Do not create new policy as it can have at most 10 managed policies per role
   ];
 }
 
