@@ -102,7 +102,7 @@ func (e *ExternalDNSTest) Validate(ctx context.Context) error {
 
 	replacer := strings.NewReplacer(
 		"{{TEST_SERVICE}}", externalDNSTestService,
-		"{{NAMESPACE}}", namespace,
+		"{{NAMESPACE}}", defaultNamespace,
 		"{{HOSTED_ZONE_NAME}}", hostedZoneName,
 	)
 	replacedTestServiceYAML := replacer.Replace(testServiceYAML)
@@ -119,7 +119,7 @@ func (e *ExternalDNSTest) Validate(ctx context.Context) error {
 	}
 
 	// Wait for deployment to be ready
-	if err := kubernetes.DeploymentWaitForReplicas(ctx, externalDNSWaitTimeout, e.K8S, namespace, externalDNSTestService); err != nil {
+	if err := kubernetes.DeploymentWaitForReplicas(ctx, externalDNSWaitTimeout, e.K8S, defaultNamespace, externalDNSTestService); err != nil {
 		return fmt.Errorf("service deployment not ready: %w", err)
 	}
 
