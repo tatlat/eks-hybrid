@@ -111,7 +111,7 @@ func (s *S3MountpointCSIDriverTest) Validate(ctx context.Context) error {
 		FieldSelector: "metadata.name=" + s3TestPod,
 	}
 
-	if err := kubernetes.WaitForPodsToBeRunning(ctx, s.K8S, podListOptions, namespace, s.Logger); err != nil {
+	if err := kubernetes.WaitForPodsToBeRunning(ctx, s.K8S, podListOptions, defaultNamespace, s.Logger); err != nil {
 		return fmt.Errorf("failed to wait for test pod to be running: %w", err)
 	}
 

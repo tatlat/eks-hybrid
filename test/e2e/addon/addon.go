@@ -25,6 +25,7 @@ type Addon struct {
 const (
 	addonPollInterval = 10 * time.Second
 	addonPollTimeout  = 5 * time.Minute
+	defaultNamespace  = "default"
 )
 
 func (a Addon) Create(ctx context.Context, client *eks.Client, logger logr.Logger) error {
