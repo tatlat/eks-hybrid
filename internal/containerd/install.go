@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	"golang.org/x/mod/semver"
 
 	"github.com/aws/eks-hybrid/internal/artifact"
 	"github.com/aws/eks-hybrid/internal/daemon"
@@ -17,9 +18,6 @@ import (
 )
 
 const (
-	// pin containerd to major version 1.x
-	ContainerdVersion = "1.*"
-
 	containerdPackageName = "containerd"
 	runcPackageName       = "runc"
 )
@@ -29,7 +27,7 @@ type Source interface {
 	GetContainerd(version string) artifact.Package
 }
 
-func Install(ctx context.Context, artifactsTracker *tracker.Tracker, source Source, containerdSource tracker.ContainerdSourceName) error {
+func Install(ctx context.Context, artifactsTracker *tracker.Tracker, source Source, containerdSource tracker.ContainerdSourceName, kubernetesVersion string) error {
 	// if containerd/run are already installed, we skip the installation and set the source to none
 	// which exclude it from being upgrading during upgrade and removed during uninstall
 	// this has the (potentially negative) side effect of the user not knowing that we have chosen none on
@@ -41,7 +39,8 @@ func Install(ctx context.Context, artifactsTracker *tracker.Tracker, source Sour
 		artifactsTracker.Artifacts.Containerd = tracker.ContainerdSourceNone
 		return nil
 	}
-	containerd := source.GetContainerd(ContainerdVersion)
+	containerdVersionConstraint := determineContainerdVersionConstraint(kubernetesVersion)
+	containerd := source.GetContainerd(containerdVersionConstraint)
 	// Sometimes install fails due to conflicts with other processes
 	// updating packages, specially when automating at machine startup.
 	// We assume errors are transient and just retry for a bit.
@@ -54,7 +53,8 @@ func Install(ctx context.Context, artifactsTracker *tracker.Tracker, source Sour
 
 func Uninstall(ctx context.Context, source Source) error {
 	if isContainerdInstalled() {
-		containerd := source.GetContainerd(ContainerdVersion)
+		// Use no version constraint to uninstall any version (1.x or 2.x)
+		containerd := source.GetContainerd("")
 		if err := cmd.Retry(ctx, containerd.UninstallCmd, 5*time.Second); err != nil {
 			return errors.Wrap(err, "uninstalling containerd")
 		}
@@ -66,8 +66,10 @@ func Uninstall(ctx context.Context, source Source) error {
 	return nil
 }
 
-func Upgrade(ctx context.Context, source Source) error {
-	containerd := source.GetContainerd(ContainerdVersion)
+func Upgrade(ctx context.Context, source Source, kubernetesVersion string) error {
+	// Upgrade containerd to latest version including major version upgrade (1.x -> 2.x) if available
+	containerdVersionConstraint := determineContainerdVersionConstraint(kubernetesVersion)
+	containerd := source.GetContainerd(containerdVersionConstraint)
 	if err := cmd.Retry(ctx, containerd.UpgradeCmd, 5*time.Second); err != nil {
 		return errors.Wrap(err, "upgrading containerd")
 	}
@@ -116,4 +118,13 @@ func areContainerdAndRuncInstalled() bool {
 	_, containerdNotFoundErr := exec.LookPath(containerdPackageName)
 	_, runcNotFoundErr := exec.LookPath(runcPackageName)
 	return containerdNotFoundErr == nil && runcNotFoundErr == nil
+}
+
+func determineContainerdVersionConstraint(kubernetesVersion string) string {
+	containerdVersionConstraint := "1.*"
+	// Enable newest containerd version available in package manager (including 2.x) for K8s versions >= 1.30
+	if semver.Compare("v"+kubernetesVersion, "v1.30.0") >= 0 {
+		containerdVersionConstraint = ""
+	}
+	return containerdVersionConstraint
 }

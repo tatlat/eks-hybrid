@@ -63,8 +63,14 @@ func (i *Installer) Run(ctx context.Context) error {
 
 func (i *Installer) installDistroPackages(ctx context.Context) error {
 	i.Logger.Info("Installing containerd...")
-	if err := containerd.Install(ctx, i.Tracker, i.PackageManager, i.ContainerdSource); err != nil {
+	if err := containerd.Install(ctx, i.Tracker, i.PackageManager, i.ContainerdSource, i.AwsSource.Eks.Version); err != nil {
 		return err
+	}
+	if containerdVersion, err := containerd.GetContainerdVersion(); err == nil {
+		i.Logger.Info("Containerd installation completed",
+			zap.String("containerdVersion", containerdVersion))
+	} else {
+		i.Logger.Warn("Could not determine installed containerd version", zap.Error(err))
 	}
 
 	i.Logger.Info("Installing iptables...")

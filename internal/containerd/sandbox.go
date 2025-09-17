@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os/exec"
 	"regexp"
+	"strconv"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -15,7 +16,14 @@ import (
 	"github.com/aws/eks-hybrid/internal/util"
 )
 
-var containerdSandboxImageRegex = regexp.MustCompile(`sandbox_image = "(.*)"`)
+var (
+	// Config version detection
+	containerdConfigVersionRegex = regexp.MustCompile(`version = (\d+)`)
+
+	// Containerd config version-specific sandbox image patterns
+	containerdSandboxImageV2Regex = regexp.MustCompile(`sandbox_image = ['"]([^'"]*)['"]`)
+	containerdSandboxImageV3Regex = regexp.MustCompile(`sandbox = ['"]([^'"]*)['"]`)
+)
 
 func cacheSandboxImage(awsConfig *aws.Config) error {
 	zap.L().Info("Looking up current sandbox image in containerd config...")
@@ -25,9 +33,27 @@ func cacheSandboxImage(awsConfig *aws.Config) error {
 	if err != nil {
 		return err
 	}
-	matches := containerdSandboxImageRegex.FindSubmatch(dump)
+
+	// Parse config version to choose appropriate regex
+	configVersion, err := parseConfigVersion(dump)
+	if err != nil {
+		return fmt.Errorf("failed to parse containerd config version: %w", err)
+	}
+
+	// Choose appropriate regex based on config version
+	var sandboxRegex *regexp.Regexp
+	switch configVersion {
+	case 2:
+		sandboxRegex = containerdSandboxImageV2Regex
+	case 3:
+		sandboxRegex = containerdSandboxImageV3Regex
+	default:
+		return fmt.Errorf("unsupported containerd config version: %d", configVersion)
+	}
+
+	matches := sandboxRegex.FindSubmatch(dump)
 	if matches == nil {
-		return fmt.Errorf("sandbox image could not be found in containerd config")
+		return fmt.Errorf("sandbox image could not be found in containerd config (version %d format)", configVersion)
 	}
 	sandboxImage := string(matches[1])
 	zap.L().Info("Found sandbox image", zap.String("image", sandboxImage))
@@ -54,4 +80,20 @@ func cacheSandboxImage(awsConfig *aws.Config) error {
 		zap.L().Info("Finished pulling sandbox image", zap.String("image-ref", imageRef))
 		return nil
 	})
+}
+
+// parseConfigVersion extracts the config version from containerd config dump output
+func parseConfigVersion(dump []byte) (int, error) {
+	matches := containerdConfigVersionRegex.FindSubmatch(dump)
+	if matches == nil {
+		return 0, fmt.Errorf("config version not found in containerd config dump")
+	}
+
+	versionStr := string(matches[1])
+	version, err := strconv.Atoi(versionStr)
+	if err != nil {
+		return 0, fmt.Errorf("failed to parse config version '%s': %w", versionStr, err)
+	}
+
+	return version, nil
 }
