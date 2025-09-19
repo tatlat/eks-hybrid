@@ -208,7 +208,7 @@ func (pm *DistroPackageManager) appendPackageVersion(packageName, version string
 	}
 }
 
-func (pm *DistroPackageManager) getContainerdPackageNameWithVersion(version string) string {
+func (pm *DistroPackageManager) getContainerdPackageNameWithVersionConstraint(version string) string {
 	containerdPkgName := containerdDistroPkgName
 	if pm.dockerRepo != "" {
 		containerdPkgName = containerdDockerPkgName
@@ -227,8 +227,8 @@ func (pm *DistroPackageManager) refreshMetadataCacheCommand(ctx context.Context)
 
 // GetContainerd gets the Package
 // Satisfies the containerd source interface
-func (pm *DistroPackageManager) GetContainerd(version string) artifact.Package {
-	packageName := pm.getContainerdPackageNameWithVersion(version)
+func (pm *DistroPackageManager) GetContainerd(versionConstraint string) artifact.Package {
+	packageName := pm.getContainerdPackageNameWithVersionConstraint(versionConstraint)
 	return artifact.NewPackageSource(
 		artifact.NewCmd(pm.manager, pm.installVerb, packageName, "-y"),
 		artifact.NewCmd(pm.manager, pm.deleteVerb, packageName, "-y"),
