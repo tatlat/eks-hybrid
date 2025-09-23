@@ -633,6 +633,7 @@ Resources:
               - sts:TagSession
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AWSPrivateCAConnectorForKubernetesPolicy
+        - arn:aws:iam::aws:policy/AmazonFSxFullAccess
       Policies:
         - PolicyName: pod-identity-association-role-policy
           PolicyDocument:

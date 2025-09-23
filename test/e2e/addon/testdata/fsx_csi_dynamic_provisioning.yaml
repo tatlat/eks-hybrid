@@ -1,0 +1,48 @@
+---
+# FSX CSI Driver Dynamic Provisioning Test
+# Based on: https://github.com/kubernetes-sigs/aws-fsx-csi-driver/tree/master/examples/kubernetes/dynamic_provisioning/specs
+
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: fsx-sc
+spec:
+  provisioner: fsx.csi.aws.com
+  parameters:
+    subnetId: {{SUBNET_ID}}
+    securityGroupIds: {{SECURITY_GROUP_ID}}
+    deploymentType: PERSISTENT_2
+    storageType: SSD
+    perUnitStorageThroughput: "125"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: fsx-claim
+  namespace: {{NAMESPACE}}
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: fsx-sc
+  resources:
+    requests:
+      storage: 1200Gi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{FSX_TEST_POD}}
+  namespace: {{NAMESPACE}}
+spec:
+  containers:
+  - name: app
+    image: amazonlinux:2
+    command: ["/bin/sh"]
+    args: ["-c", "while true; do echo '{{FSX_TEST_STRING}}' >> /data/out.txt; sleep 5; done"]
+    volumeMounts:
+    - name: persistent-storage
+      mountPath: /data
+  volumes:
+  - name: persistent-storage
+    persistentVolumeClaim:
+      claimName: fsx-claim
