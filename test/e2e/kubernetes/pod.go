@@ -110,10 +110,15 @@ func CreatePod(ctx context.Context, k8s kubernetes.Interface, pod *corev1.Pod, l
 	return nil
 }
 
-// WaitForPodsToBeRunning waits until a pod is in running phase and all containers are ready.
-// It will return an error if any of the pods have already exited.
+// WaitForPodsToBeRunning waits until a pod is in running phase and all containers are ready with default timeout.
 func WaitForPodsToBeRunning(ctx context.Context, k8s kubernetes.Interface, listOptions metav1.ListOptions, namespace string, logger logr.Logger) error {
-	pods, err := ik8s.ListAndWait(ctx, nodePodWaitTimeout, k8s.CoreV1().Pods(namespace), func(pods *corev1.PodList) bool {
+	return WaitForPodsToBeRunningWithTimeout(ctx, k8s, listOptions, namespace, logger, nodePodWaitTimeout)
+}
+
+// WaitForPodsToBeRunningWithTimeout waits until a pod is in running phase and all containers are ready.
+// It will return an error if any of the pods have already exited.
+func WaitForPodsToBeRunningWithTimeout(ctx context.Context, k8s kubernetes.Interface, listOptions metav1.ListOptions, namespace string, logger logr.Logger, timeout time.Duration) error {
+	pods, err := ik8s.ListAndWait(ctx, timeout, k8s.CoreV1().Pods(namespace), func(pods *corev1.PodList) bool {
 		if len(pods.Items) == 0 {
 			// keep polling
 			return false
