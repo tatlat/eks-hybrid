@@ -223,3 +223,23 @@ func (a *AddonEc2Test) NewExternalDNSTest(ctx context.Context) (*addon.ExternalD
 		PodIdentityRoleArn: podIdentityRoleArn,
 	}, nil
 }
+
+// NewFsxCSIDriverTest creates a new FsxCSIDriverTest
+func (a *AddonEc2Test) NewFsxCSIDriverTest(ctx context.Context) (*addon.FsxCSIDriverTest, error) {
+	podIdentityRoleArn, err := addon.PodIdentityRole(ctx, a.IAMClient, a.Cluster.Name)
+	if err != nil {
+		a.Logger.Error(err, "Failed to get pod identity role ARN")
+		return nil, err
+	}
+
+	return &addon.FsxCSIDriverTest{
+		Cluster:            a.Cluster.Name,
+		K8S:                a.K8sClient,
+		EKSClient:          a.EKSClient,
+		K8SConfig:          a.K8sClientConfig,
+		Logger:             a.Logger.WithName("FsxCSIDriverTest"),
+		PodIdentityRoleArn: podIdentityRoleArn,
+		SubnetID:           a.Cluster.SubnetID,
+		SecurityGroupID:    a.Cluster.SecurityGroupID,
+	}, nil
+}
