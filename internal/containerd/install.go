@@ -66,9 +66,29 @@ func Uninstall(ctx context.Context, source Source) error {
 	return nil
 }
 
-func Upgrade(ctx context.Context, source Source, kubernetesVersion string) error {
-	// Upgrade containerd to latest version including major version upgrade (1.x -> 2.x) if available
-	containerdVersionConstraint := determineContainerdVersionConstraint(kubernetesVersion)
+func Upgrade(ctx context.Context, source Source, kubernetesVersion string, skipContainerdMajorVersionUpgrade bool) error {
+	var containerdVersionConstraint string
+
+	if skipContainerdMajorVersionUpgrade {
+		containerdMajorVersion, err := GetContainerdMajorVersion()
+		if err != nil {
+			return err
+		}
+
+		// pins containerd upgrade version to current installed major version
+		switch containerdMajorVersion {
+		case 1:
+			containerdVersionConstraint = "1.*"
+		case 2:
+			containerdVersionConstraint = "2.0.*"
+		default:
+			return fmt.Errorf("unsupported containerd major version: %d", containerdMajorVersion)
+		}
+	} else {
+		// Upgrade containerd to latest compatible version including major version upgrade (1.x -> 2.x) if available
+		containerdVersionConstraint = determineContainerdVersionConstraint(kubernetesVersion)
+	}
+
 	containerd := source.GetContainerd(containerdVersionConstraint)
 	if err := cmd.Retry(ctx, containerd.UpgradeCmd, 5*time.Second); err != nil {
 		return errors.Wrap(err, "upgrading containerd")

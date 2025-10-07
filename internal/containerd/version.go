@@ -4,9 +4,21 @@ import (
 	"fmt"
 	"os/exec"
 	"regexp"
+	"strconv"
+	"strings"
 
 	"go.uber.org/zap"
 )
+
+func GetContainerdMajorVersion() (int, error) {
+	containerdVersion, err := GetContainerdVersion()
+	if err != nil {
+		return -1, err
+	}
+
+	parts := strings.Split(containerdVersion, ".")
+	return strconv.Atoi(parts[0])
+}
 
 func GetContainerdVersion() (string, error) {
 	rawVersion, err := GetContainerdVersionRaw()
