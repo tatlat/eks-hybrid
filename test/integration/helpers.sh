@@ -473,3 +473,23 @@ function mock::unbind-mount() {
 
   echo "Unmounted bind mount: $TARGET_PATH"
 }
+
+function install-containerd-version() {
+  local VERSION=$1
+  yum remove -y containerd || true
+  yum install -y containerd-$VERSION
+  assert::path-exists /usr/bin/containerd
+}
+
+function get-containerd-major-version() {
+  containerd --version | cut -d' ' -f3 | cut -d'v' -f2 | cut -d'.' -f1
+}
+
+function assert-containerd-major-version() {
+  local EXPECTED=$1
+  local ACTUAL=$(get-containerd-major-version)
+  if [ "$ACTUAL" != "$EXPECTED" ]; then
+    echo "ERROR: Expected containerd $EXPECTED.x but got $ACTUAL.x"
+    exit 1
+  fi
+}

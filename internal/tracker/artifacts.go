@@ -97,7 +97,7 @@ func GetInstalledArtifacts() (*Tracker, error) {
 		return nil, errors.Wrap(err, "invalid yaml data in tracker")
 	}
 	// containerd will be non-empty if containerd is being managed by nodeadm
-	// otherwise it *may* be empty, which we want want to ensure is treated as "none"
+	// otherwise it *may* be empty, which we want to ensure is treated as "none"
 	containerdSource, err := ContainerdSource(string(artifacts.Artifacts.Containerd))
 	if err != nil {
 		return nil, err

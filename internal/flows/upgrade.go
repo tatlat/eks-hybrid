@@ -3,6 +3,7 @@ package flows
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
@@ -24,6 +25,8 @@ import (
 	"github.com/aws/eks-hybrid/internal/ssm"
 	"github.com/aws/eks-hybrid/internal/tracker"
 )
+
+const containerdMajorVersionUpgrade = "containerd-major-version-upgrade"
 
 type Upgrader struct {
 	NodeProvider       nodeprovider.NodeProvider
@@ -69,8 +72,14 @@ func (u *Upgrader) upgradeDistroPackages(ctx context.Context) error {
 		return err
 	}
 	if u.Artifacts.Containerd != tracker.ContainerdSourceNone {
-		u.Logger.Info("Upgrading containerd...")
-		if err := containerd.Upgrade(ctx, u.PackageManager, u.AwsSource.Eks.Version); err != nil {
+		skipContainerdMajorVersionUpgrade := slices.Contains(u.SkipPhases, containerdMajorVersionUpgrade)
+		if skipContainerdMajorVersionUpgrade {
+			u.Logger.Info("Upgrading containerd with major version constraint...")
+		} else {
+			u.Logger.Info("Upgrading containerd...")
+		}
+		err := containerd.Upgrade(ctx, u.PackageManager, u.AwsSource.Eks.Version, skipContainerdMajorVersionUpgrade)
+		if err != nil {
 			return err
 		}
 	}
