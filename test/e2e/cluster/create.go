@@ -153,14 +153,7 @@ func (c *Create) Run(ctx context.Context, test TestResources) error {
 	}
 
 	if !skipPodIdentityTest() {
-		version := podIdentityAgentVersion()
-		var podIdentityAddon addon.PodIdentityAddon
-		if version != "" {
-			c.logger.Info("Creating pod identity addon with specified version", "version", version)
-			podIdentityAddon = addon.NewPodIdentityAddonWithVersion(hybridCluster.Name, stackOut.podIdentity.roleArn, version)
-		} else {
-			podIdentityAddon = addon.NewPodIdentityAddon(hybridCluster.Name, stackOut.podIdentity.roleArn)
-		}
+		podIdentityAddon := addon.NewPodIdentityAddon(hybridCluster.Name, stackOut.podIdentity.roleArn)
 
 		err = podIdentityAddon.Create(ctx, c.logger, c.eks, k8sClient)
 		if err != nil {
@@ -265,10 +258,6 @@ func SetTestResourcesDefaults(testResources TestResources) TestResources {
 
 func skipPodIdentityTest() bool {
 	return os.Getenv("SKIP_POD_IDENTITY_TEST") == "true"
-}
-
-func podIdentityAgentVersion() string {
-	return os.Getenv("POD_IDENTITY_AGENT_VERSION")
 }
 
 func (c *Create) tagClusterLogGroup(ctx context.Context, clusterName string) error {

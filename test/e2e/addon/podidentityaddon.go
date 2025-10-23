@@ -29,15 +29,10 @@ const (
 )
 
 func NewPodIdentityAddon(cluster, roleArn string) PodIdentityAddon {
-	return NewPodIdentityAddonWithVersion(cluster, roleArn, "")
-}
-
-func NewPodIdentityAddonWithVersion(cluster, roleArn, version string) PodIdentityAddon {
 	return PodIdentityAddon{
 		Addon: Addon{
 			Cluster:       cluster,
 			Name:          podIdentityAgent,
-			Version:       "v1.3.8-eksbuild.2",
 			Configuration: "{\"daemonsets\":{\"hybrid\":{\"create\": true},\"hybrid-bottlerocket\":{\"create\": true}}}",
 		},
 		roleArn: roleArn,
