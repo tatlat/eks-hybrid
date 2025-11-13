@@ -42,6 +42,7 @@ type ExternalDNSTest struct {
 	K8SConfig          *rest.Config
 	Logger             logr.Logger
 	PodIdentityRoleArn string
+	Region             string
 
 	hostedZoneId   *string
 	hostedZoneName *string
@@ -104,6 +105,8 @@ func (e *ExternalDNSTest) Validate(ctx context.Context) error {
 		"{{TEST_SERVICE}}", externalDNSTestService,
 		"{{NAMESPACE}}", defaultNamespace,
 		"{{HOSTED_ZONE_NAME}}", hostedZoneName,
+		"{{ECR_ACCOUNT_ID}}", constants.EcrAccountId,
+		"{{REGION}}", e.Region,
 	)
 	replacedTestServiceYAML := replacer.Replace(testServiceYAML)
 

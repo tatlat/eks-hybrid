@@ -42,6 +42,7 @@ type SecretsStoreCSIDriverTest struct {
 	K8SConfig            *rest.Config
 	Logger               logr.Logger
 	PodIdentityRoleArn   string
+	Region               string
 
 	secretName  string
 	secretValue string
@@ -97,6 +98,8 @@ func (s *SecretsStoreCSIDriverTest) Validate(ctx context.Context) error {
 		"{{SECRETS_STORE_TEST_POD}}", secretsStoreTestPod,
 		"{{SECRET_NAME}}", s.secretName,
 		"{{SERVICE_ACCOUNT_NAME}}", secretsStoreTestPodServiceAccount,
+		"{{ECR_ACCOUNT_ID}}", constants.EcrAccountId,
+		"{{REGION}}", s.Region,
 	)
 
 	replacedYaml := replacer.Replace(secretsStoreStaticProvisioningYaml)

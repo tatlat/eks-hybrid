@@ -65,7 +65,7 @@ func CreateDeployment(
 					Containers: []corev1.Container{
 						{
 							Name:    name,
-							Image:   fmt.Sprintf("%s.dkr.ecr.%s.amazonaws.com/ecr-public/nginx/nginx:latest", constants.EcrAccounId, region),
+							Image:   fmt.Sprintf("%s.dkr.ecr.%s.amazonaws.com/ecr-public/nginx/nginx:latest", constants.EcrAccountId, region),
 							Command: containerCommand,
 							Ports: []corev1.ContainerPort{
 								{ContainerPort: actualTargetPort, Protocol: corev1.ProtocolTCP},

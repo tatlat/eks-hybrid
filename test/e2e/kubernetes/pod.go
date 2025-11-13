@@ -62,7 +62,7 @@ func CreateNginxPodInNode(ctx context.Context, k8s kubernetes.Interface, nodeNam
 			Containers: []corev1.Container{
 				{
 					Name:  "nginx",
-					Image: fmt.Sprintf("%s.dkr.ecr.%s.amazonaws.com/ecr-public/nginx/nginx:latest", constants.EcrAccounId, region),
+					Image: fmt.Sprintf("%s.dkr.ecr.%s.amazonaws.com/ecr-public/nginx/nginx:latest", constants.EcrAccountId, region),
 					Ports: []corev1.ContainerPort{
 						{
 							ContainerPort: 80,
