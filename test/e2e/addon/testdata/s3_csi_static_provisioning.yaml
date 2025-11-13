@@ -47,7 +47,7 @@ metadata:
 spec:
   containers:
     - name: app
-      image: ubuntu
+      image: public.ecr.aws/ubuntu/ubuntu:24.04
       command: ["/bin/sh"]
       args: ["-c", "echo '{{S3_TEST_MSG}}' >> /data/$(date -u).txt; tail -f /dev/null"]
       volumeMounts:

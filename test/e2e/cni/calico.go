@@ -45,7 +45,7 @@ func (c Calico) Deploy(ctx context.Context) error {
 	}
 	values := map[string]string{
 		"PodCIDR":           c.podCIDR,
-		"ContainerRegistry": constants.EcrAccounId + ".dkr.ecr." + c.region + ".amazonaws.com/quay.io",
+		"ContainerRegistry": constants.EcrAccountId + ".dkr.ecr." + c.region + ".amazonaws.com/quay.io",
 	}
 	installation := &bytes.Buffer{}
 	err = tmpl.Execute(installation, values)

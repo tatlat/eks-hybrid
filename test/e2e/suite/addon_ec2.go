@@ -149,6 +149,7 @@ func (a *AddonEc2Test) NewSecretsStoreCSIDriverTest(ctx context.Context) (*addon
 		K8SConfig:            a.K8sClientConfig,
 		Logger:               a.Logger.WithName("SecretsStoreCSIDriverTest"),
 		PodIdentityRoleArn:   podIdentityRoleArn,
+		Region:               a.Cluster.Region,
 	}, nil
 }
 
@@ -221,6 +222,7 @@ func (a *AddonEc2Test) NewExternalDNSTest(ctx context.Context) (*addon.ExternalD
 		K8SConfig:          a.K8sClientConfig,
 		Logger:             a.Logger.WithName("ExternalDNSTest"),
 		PodIdentityRoleArn: podIdentityRoleArn,
+		Region:             a.Cluster.Region,
 	}, nil
 }
 

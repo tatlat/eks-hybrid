@@ -7,7 +7,7 @@ const (
 	TestClusterTagKey               = "Nodeadm-E2E-Tests-Cluster"
 	OSArchTagKey                    = "OS-Arch"
 	TestRolePathPrefix              = "/NodeadmE2E/"
-	EcrAccounId                     = "381492195191"
+	EcrAccountId                    = "381492195191"
 	LogCollectorBundleFileName      = "bundle.tar.gz"
 	JumpboxLogBundleFileName        = "jumpbox-bundle.tar.gz"
 	TestCredentialsStackNamePrefix  = "EKSHybridCI"
