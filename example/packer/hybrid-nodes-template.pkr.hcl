@@ -202,7 +202,7 @@ locals {
   qemu_format = var.format
   iso_url = var.iso_url
   iso_checksum = var.iso_checksum
-  nodeadm_link = "https://hybrid-assets.eks.amazonaws.com/latest/bin/linux/${var.nodeadm_arch}64/nodeadm"
+  nodeadm_link = "https://hybrid-assets.eks.amazonaws.com/releases/latest/bin/linux/${var.nodeadm_arch}64/nodeadm"
 }
 
 ######################
