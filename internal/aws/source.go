@@ -29,9 +29,29 @@ func GetLatestSource(ctx context.Context, eksVersion, region string) (Source, er
 		return Source{}, err
 	}
 
+	return getSourceFromManifest(eksVersion, region, manifest)
+}
+
+// GetLatestSourceFromManifest gets the source for latest version from a local manifest file
+func GetLatestSourceFromManifest(ctx context.Context, eksVersion, region, manifestPath string) (Source, error) {
+	manifest, err := getReleaseManifestFromFile(manifestPath)
+	if err != nil {
+		return Source{}, err
+	}
+
+	return getSourceFromManifest(eksVersion, region, manifest)
+}
+
+// getSourceFromManifest is a common function to create Source from a manifest
+func getSourceFromManifest(eksVersion, region string, manifest *Manifest) (Source, error) {
 	eksPatchRelease, err := getLatestEksSource(eksVersion, manifest)
 	if err != nil {
 		return Source{}, errors.Wrap(err, "getting latest eks release")
+	}
+
+	// Validate that the requested Kubernetes version matches the manifest version
+	if err := validateKubernetesVersionMatch(eksVersion, eksPatchRelease.Version); err != nil {
+		return Source{}, err
 	}
 
 	iamRolesAnywhereRelease, err := getLatestIamRolesAnywhereSource(manifest)
@@ -221,4 +241,44 @@ func getSource(ctx context.Context, artifactName string, availableArtifacts []Ar
 		}
 	}
 	return nil, fmt.Errorf("could not find artifact for %s arch and %s os", runtime.GOARCH, runtime.GOOS)
+}
+
+// validateKubernetesVersionMatch validates that the requested Kubernetes version is compatible with the manifest version
+func validateKubernetesVersionMatch(requestedVersion, manifestVersion string) error {
+	if requestedVersion == "" || manifestVersion == "" {
+		return fmt.Errorf("version cannot be empty")
+	}
+
+	// Ensure both versions are valid semver
+	if !semver.IsValid("v" + requestedVersion) {
+		return fmt.Errorf("invalid requested version: %s", requestedVersion)
+	}
+	if !semver.IsValid("v" + manifestVersion) {
+		return fmt.Errorf("invalid manifest version: %s", manifestVersion)
+	}
+
+	// Extract major.minor from both versions for comparison
+	requestedMajorMinor := semver.MajorMinor("v" + requestedVersion)
+	manifestMajorMinor := semver.MajorMinor("v" + manifestVersion)
+
+	// Remove 'v' prefix for cleaner comparison
+	requestedMajorMinor = strings.ReplaceAll(requestedMajorMinor, "v", "")
+	manifestMajorMinor = strings.ReplaceAll(manifestMajorMinor, "v", "")
+
+	// Check if major.minor versions match
+	if requestedMajorMinor != manifestMajorMinor {
+		return fmt.Errorf("Kubernetes version mismatch: requested %s (major.minor: %s) but manifest contains %s (major.minor: %s)",
+			requestedVersion, requestedMajorMinor, manifestVersion, manifestMajorMinor)
+	}
+
+	// If the requested version includes a specific patch version, validate it matches
+	if strings.Contains(requestedVersion, ".") && strings.Count(requestedVersion, ".") == 2 {
+		// This is a full major.minor.patch version
+		if requestedVersion != manifestVersion {
+			return fmt.Errorf("Kubernetes patch version mismatch: requested %s but manifest contains %s",
+				requestedVersion, manifestVersion)
+		}
+	}
+
+	return nil
 }

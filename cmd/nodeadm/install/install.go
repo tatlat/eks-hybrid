@@ -2,6 +2,7 @@ package install
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/integrii/flaggy"
@@ -25,6 +26,9 @@ const installHelpText = `Examples:
   # Install Kubernetes version 1.31 with AWS IAM Roles Anywhere as the credential provider and Docker as the containerd source
   nodeadm install 1.31 --credential-provider iam-ra --containerd-source docker
 
+  # Install from a private installation using a custom manifest (for air-gapped environments)
+  nodeadm install 1.31 --credential-provider ssm --manifest-override ./manifest-1.31.2-ssm-arm64-darwin.yaml --private-mode
+
 Documentation:
   https://docs.aws.amazon.com/eks/latest/userguide/hybrid-nodes-nodeadm.html#_install`
 
@@ -42,6 +46,8 @@ func NewCommand() cli.Command {
 	fc.String(&cmd.credentialProvider, "p", "credential-provider", "Credential process to install. Allowed values: [ssm, iam-ra].")
 	fc.String(&cmd.containerdSource, "s", "containerd-source", "Source for containerd artifact. Allowed values: [none, distro, docker].")
 	fc.String(&cmd.region, "r", "region", "AWS region for downloading regional artifacts.")
+	fc.String(&cmd.manifestOverride, "m", "manifest-override", "Path to a local manifest file containing custom artifact URLs for private installation.")
+	fc.Bool(&cmd.privateMode, "", "private-mode", "Enable private installation mode (skips OS packages, requires --manifest-override).")
 	fc.Duration(&cmd.timeout, "t", "timeout", "Maximum install command duration. Input follows duration format. Example: 1h23s")
 	cmd.flaggy = fc
 
@@ -54,6 +60,8 @@ type command struct {
 	credentialProvider string
 	containerdSource   string
 	region             string
+	manifestOverride   string
+	privateMode        bool
 	timeout            time.Duration
 }
 
@@ -76,6 +84,12 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	if c.credentialProvider == "" {
 		flaggy.ShowHelpAndExit("--credential-provider is a required flag. Allowed values are ssm & iam-ra")
 	}
+
+	// Validate private mode requirements
+	if c.privateMode && c.manifestOverride == "" {
+		return fmt.Errorf("--private-mode requires --manifest-override to be specified")
+	}
+
 	credentialProvider, err := creds.GetCredentialProvider(c.credentialProvider)
 	if err != nil {
 		return err
@@ -89,22 +103,36 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return err
 	}
 
-	log.Info("Creating package manager...")
-	packageManager, err := packagemanager.New(containerdSource, log)
-	if err != nil {
-		return err
-	}
-
 	ctx, cancel := context.WithTimeout(ctx, c.timeout)
 	defer cancel()
 
-	log.Info("Validating Kubernetes version", zap.Reflect("kubernetes version", c.kubernetesVersion))
-	// Create a Source for all AWS managed artifacts.
-	awsSource, err := aws.GetLatestSource(ctx, c.kubernetesVersion, c.region)
-	if err != nil {
-		return err
+	var awsSource aws.Source
+	var packageManager *packagemanager.DistroPackageManager
+
+	// Handle manifest override vs normal installation
+	if c.manifestOverride != "" {
+		log.Info("Using manifest override for private installation", zap.String("manifest", c.manifestOverride))
+
+		awsSource, err = aws.GetLatestSourceFromManifest(ctx, c.kubernetesVersion, c.region, c.manifestOverride)
+		if err != nil {
+			return err
+		}
+		log.Info("Using Kubernetes version from manifest", zap.String("version", awsSource.Eks.Version))
+	} else {
+		log.Info("Validating Kubernetes version", zap.Reflect("kubernetes version", c.kubernetesVersion))
+		// Create a Source for all AWS managed artifacts.
+		awsSource, err = aws.GetLatestSource(ctx, c.kubernetesVersion, c.region)
+		if err != nil {
+			return err
+		}
+		log.Info("Using Kubernetes version", zap.String("version", awsSource.Eks.Version))
+
+		log.Info("Creating package manager...")
+		packageManager, err = packagemanager.New(containerdSource, log)
+		if err != nil {
+			return err
+		}
 	}
-	log.Info("Using Kubernetes version", zap.Reflect("kubernetes version", awsSource.Eks.Version))
 
 	installer := &flows.Installer{
 		AwsSource:          awsSource,
@@ -113,6 +141,7 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		SsmRegion:          c.region,
 		CredentialProvider: credentialProvider,
 		Logger:             log,
+		PrivateMode:        c.privateMode,
 	}
 
 	return installer.Run(ctx)

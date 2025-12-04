@@ -10,6 +10,7 @@ import (
 	"github.com/aws/eks-hybrid/cmd/nodeadm/debug"
 	initcmd "github.com/aws/eks-hybrid/cmd/nodeadm/init"
 	"github.com/aws/eks-hybrid/cmd/nodeadm/install"
+	"github.com/aws/eks-hybrid/cmd/nodeadm/sync_artifacts"
 	"github.com/aws/eks-hybrid/cmd/nodeadm/uninstall"
 	"github.com/aws/eks-hybrid/cmd/nodeadm/upgrade"
 	"github.com/aws/eks-hybrid/cmd/nodeadm/version"
@@ -32,6 +33,7 @@ func main() {
 
 	cmds := []cli.Command{
 		config.NewConfigCommand(),
+		sync_artifacts.NewCommand(),
 		initcmd.NewInitCommand(),
 		install.NewCommand(),
 		uninstall.NewCommand(),

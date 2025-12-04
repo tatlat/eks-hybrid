@@ -166,9 +166,11 @@ func getDefaultSecurityGroup(ctx context.Context, client *ec2.Client, vpcID stri
 		return "", err
 	}
 
-	if len(result.SecurityGroups) == 0 {
-		return "", fmt.Errorf("no default security group found for VPC %s", vpcID)
+	for _, group := range result.SecurityGroups {
+		if *group.GroupName == "default" {
+			return *group.GroupId, nil
+		}
 	}
 
-	return *result.SecurityGroups[0].GroupId, nil
+	return "", fmt.Errorf("no default security group found for VPC %s", vpcID)
 }
