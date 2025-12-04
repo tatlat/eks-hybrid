@@ -2,6 +2,7 @@ package aws
 
 import (
 	"context"
+	"os"
 
 	"github.com/pkg/errors"
 	"sigs.k8s.io/yaml"
@@ -56,8 +57,8 @@ type Artifact struct {
 	Arch        string `json:"arch"`
 	OS          string `json:"os"`
 	URI         string `json:"uri"`
-	ChecksumURI string `json:"checksum_uri"`
-	GzipURI     string `json:"gzip_uri"`
+	ChecksumURI string `json:"checksum_uri,omitempty"`
+	GzipURI     string `json:"gzip_uri,omitempty"`
 }
 
 // Read from the manifest file on s3 and parse into Manifest struct
@@ -65,6 +66,20 @@ func getReleaseManifest(ctx context.Context) (*Manifest, error) {
 	yamlFileData, err := util.GetHttpFile(ctx, manifestUrl)
 	if err != nil {
 		return nil, err
+	}
+	var manifest Manifest
+	err = yaml.Unmarshal(yamlFileData, &manifest)
+	if err != nil {
+		return nil, errors.Wrap(err, "invalid yaml data in release manifest")
+	}
+	return &manifest, nil
+}
+
+// Read from a local manifest file and parse into Manifest struct
+func getReleaseManifestFromFile(manifestPath string) (*Manifest, error) {
+	yamlFileData, err := os.ReadFile(manifestPath)
+	if err != nil {
+		return nil, errors.Wrapf(err, "reading manifest file %s", manifestPath)
 	}
 	var manifest Manifest
 	err = yaml.Unmarshal(yamlFileData, &manifest)
