@@ -27,7 +27,7 @@ const installHelpText = `Examples:
   nodeadm install 1.31 --credential-provider iam-ra --containerd-source docker
 
   # Install from a private installation using a custom manifest (for air-gapped environments)
-  nodeadm install 1.31 --credential-provider ssm --manifest-override ./manifest-1.31.2-ssm-arm64-darwin.yaml --private-mode
+  nodeadm install 1.31 --credential-provider ssm --manifest-override ./manifest-1.31.13-arm64-linux-1765487946.yaml --private-mode
 
 Documentation:
   https://docs.aws.amazon.com/eks/latest/userguide/hybrid-nodes-nodeadm.html#_install`
