@@ -37,11 +37,14 @@ type Upgrader struct {
 	DaemonManager      daemon.DaemonManager
 	SkipPhases         []string
 	Logger             *zap.Logger
+	PrivateMode        bool
 }
 
 func (u *Upgrader) Run(ctx context.Context) error {
-	if err := u.upgradeDistroPackages(ctx); err != nil {
-		return err
+	if !u.PrivateMode {
+		if err := u.upgradeDistroPackages(ctx); err != nil {
+			return err
+		}
 	}
 
 	if err := u.upgradeCredentialProvider(ctx); err != nil {

@@ -22,7 +22,8 @@ type Source struct {
 	RegionInfo RegionData
 }
 
-// GetLatestSource gets the source for latest version of aws provided artifacts
+// GetLatestSource gets the source for latest version of aws provided artifacts from the
+// hybrid nodes CDN manifest https://hybrid-assets.eks.amazonaws.com/manifest.yaml
 func GetLatestSource(ctx context.Context, eksVersion, region string) (Source, error) {
 	manifest, err := getReleaseManifest(ctx)
 	if err != nil {
@@ -32,7 +33,8 @@ func GetLatestSource(ctx context.Context, eksVersion, region string) (Source, er
 	return getSourceFromManifest(eksVersion, region, manifest)
 }
 
-// GetLatestSourceFromManifest gets the source for latest version from a local manifest file
+// GetLatestSourceFromManifest gets the source for latest version of aws provided artifacts
+// from a local manifest file
 func GetLatestSourceFromManifest(ctx context.Context, eksVersion, region, manifestPath string) (Source, error) {
 	manifest, err := getReleaseManifestFromFile(manifestPath)
 	if err != nil {
@@ -160,6 +162,20 @@ func getLatestDateEksPatchRelease(patchReleases []EksPatchRelease) (EksPatchRele
 
 func GetRegionConfig(ctx context.Context, region string) (*RegionData, error) {
 	manifest, err := getReleaseManifest(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	regionCfg, ok := manifest.RegionConfig[region]
+	if !ok {
+		return nil, fmt.Errorf("region %s not found in manifest", region)
+	}
+
+	return &regionCfg, nil
+}
+
+func GetRegionConfigFromManifest(ctx context.Context, region, manifestPath string) (*RegionData, error) {
+	manifest, err := getReleaseManifestFromFile(manifestPath)
 	if err != nil {
 		return nil, err
 	}

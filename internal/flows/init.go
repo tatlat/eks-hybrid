@@ -18,9 +18,11 @@ const (
 )
 
 type Initer struct {
-	NodeProvider nodeprovider.NodeProvider
-	SkipPhases   []string
-	Logger       *zap.Logger
+	NodeProvider     nodeprovider.NodeProvider
+	SkipPhases       []string
+	Logger           *zap.Logger
+	ManifestOverride string
+	PrivateMode      bool
 }
 
 func (i *Initer) Run(ctx context.Context) error {
@@ -35,11 +37,21 @@ func (i *Initer) Run(ctx context.Context) error {
 		return err
 	}
 
+	var regionConfig *aws.RegionData
+	var err error
+
 	// Get region config from manifest for ECR registry lookup
 	region := i.NodeProvider.GetNodeConfig().Spec.Cluster.Region
-	regionConfig, err := aws.GetRegionConfig(ctx, region)
-	if err != nil {
-		i.Logger.Warn("Failed to get region config from manifest", zap.Error(err))
+	if i.PrivateMode {
+		regionConfig, err = aws.GetRegionConfigFromManifest(ctx, region, i.ManifestOverride)
+		if err != nil {
+			i.Logger.Warn("Failed to get region config from local manifest", zap.Error(err))
+		}
+	} else {
+		regionConfig, err = aws.GetRegionConfig(ctx, region)
+		if err != nil {
+			i.Logger.Warn("Failed to get region config from manifest", zap.Error(err))
+		}
 	}
 
 	if err := i.NodeProvider.Enrich(ctx, configenricher.WithRegionConfig(regionConfig)); err != nil {

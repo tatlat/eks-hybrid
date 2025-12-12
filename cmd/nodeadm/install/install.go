@@ -85,7 +85,6 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		flaggy.ShowHelpAndExit("--credential-provider is a required flag. Allowed values are ssm & iam-ra")
 	}
 
-	// Validate private mode requirements
 	if c.privateMode && c.manifestOverride == "" {
 		return fmt.Errorf("--private-mode requires --manifest-override to be specified")
 	}
@@ -109,15 +108,14 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	var awsSource aws.Source
 	var packageManager *packagemanager.DistroPackageManager
 
-	// Handle manifest override vs normal installation
-	if c.manifestOverride != "" {
+	if c.privateMode {
 		log.Info("Using manifest override for private installation", zap.String("manifest", c.manifestOverride))
 
 		awsSource, err = aws.GetLatestSourceFromManifest(ctx, c.kubernetesVersion, c.region, c.manifestOverride)
 		if err != nil {
 			return err
 		}
-		log.Info("Using Kubernetes version from manifest", zap.String("version", awsSource.Eks.Version))
+		log.Info("Using Kubernetes version from local manifest", zap.String("version", awsSource.Eks.Version))
 	} else {
 		log.Info("Validating Kubernetes version", zap.Reflect("kubernetes version", c.kubernetesVersion))
 		// Create a Source for all AWS managed artifacts.

@@ -66,6 +66,8 @@ func NewUpgradeCommand() cli.Command {
 	fc.AddPositionalValue(&cmd.kubernetesVersion, "KUBERNETES_VERSION", 1, true, "The major[.minor[.patch]] version of Kubernetes to install.")
 	fc.String(&cmd.configSource, "c", "config-source", "Source of node configuration. The format is a URI with supported schemes: [file, imds].")
 	fc.StringSlice(&cmd.skipPhases, "s", "skip", fmt.Sprintf("Phases of the upgrade to skip. Allowed values: [%s].", strings.Join(upgradePhases(), ", ")))
+	fc.String(&cmd.manifestOverride, "m", "manifest-override", "Path to a local manifest file containing custom artifact URLs for private upgrade.")
+	fc.Bool(&cmd.privateMode, "", "private-mode", "Enable private upgrade mode (skips OS packages, requires --manifest-override).")
 	fc.Duration(&cmd.timeout, "t", "timeout", "Maximum upgrade command duration. Input follows duration format. Example: 1h23s")
 	cmd.flaggy = fc
 	return &cmd
@@ -76,6 +78,8 @@ type command struct {
 	configSource      string
 	skipPhases        []string
 	kubernetesVersion string
+	manifestOverride  string
+	privateMode       bool
 	timeout           time.Duration
 }
 
@@ -98,6 +102,10 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	if c.configSource == "" {
 		flaggy.ShowHelpAndExit("--config-source is a required flag. The format is a URI with supported schemes: [file, imds]." +
 			" For example on hybrid nodes --config-source file://nodeConfig.yaml")
+	}
+
+	if c.privateMode && c.manifestOverride == "" {
+		return fmt.Errorf("--private-mode requires --manifest-override to be specified")
 	}
 
 	log.Info("Loading installed components")
@@ -149,13 +157,24 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		return fmt.Errorf("upgrade does not support changing credential providers. Please uninstall and install with new credential provider")
 	}
 
-	log.Info("Validating Kubernetes version", zap.Reflect("kubernetes version", c.kubernetesVersion))
-	// Create a Source for all AWS managed artifacts.
-	awsSource, err := aws.GetLatestSource(ctx, c.kubernetesVersion, region)
-	if err != nil {
-		return err
+	var awsSource aws.Source
+	if c.privateMode {
+		log.Info("Using manifest override for private upgrade", zap.String("manifest", c.manifestOverride))
+
+		awsSource, err = aws.GetLatestSourceFromManifest(ctx, c.kubernetesVersion, region, c.manifestOverride)
+		if err != nil {
+			return err
+		}
+		log.Info("Using Kubernetes version from local manifest", zap.String("version", awsSource.Eks.Version))
+	} else {
+		log.Info("Validating Kubernetes version", zap.Reflect("kubernetes version", c.kubernetesVersion))
+		// Create a Source for all AWS managed artifacts.
+		awsSource, err = aws.GetLatestSource(ctx, c.kubernetesVersion, region)
+		if err != nil {
+			return err
+		}
+		log.Info("Using Kubernetes version", zap.Reflect("kubernetes version", awsSource.Eks.Version))
 	}
-	log.Info("Using Kubernetes version", zap.Reflect("kubernetes version", awsSource.Eks.Version))
 
 	log.Info("Creating daemon manager...")
 	daemonManager, err := daemon.NewDaemonManager()
@@ -188,12 +207,15 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		}
 	}
 
-	log.Info("Creating package manager...")
-	containerdSource := installed.Artifacts.Containerd
-	log.Info("Configuring package manager with", zap.Reflect("containerd source", string(containerdSource)))
-	packageManager, err := packagemanager.New(containerdSource, log)
-	if err != nil {
-		return err
+	var packageManager *packagemanager.DistroPackageManager
+	if !c.privateMode {
+		log.Info("Creating package manager...")
+		containerdSource := installed.Artifacts.Containerd
+		log.Info("Configuring package manager with", zap.Reflect("containerd source", string(containerdSource)))
+		packageManager, err = packagemanager.New(containerdSource, log)
+		if err != nil {
+			return err
+		}
 	}
 
 	upgrader := &flows.Upgrader{
@@ -205,6 +227,7 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 		DaemonManager:      daemonManager,
 		SkipPhases:         c.skipPhases,
 		Logger:             log,
+		PrivateMode:        c.privateMode,
 	}
 
 	return upgrader.Run(ctx)
