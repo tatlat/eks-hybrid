@@ -21,20 +21,19 @@ import (
 
 	"github.com/aws/eks-hybrid/internal/aws"
 	"github.com/aws/eks-hybrid/internal/cli"
-	"github.com/aws/eks-hybrid/internal/creds"
 	"github.com/aws/eks-hybrid/internal/logger"
 	"github.com/aws/eks-hybrid/internal/ssm"
 )
 
 const syncArtifactsHelpText = `Examples:
-  # Sync all dependencies for Kubernetes version 1.31 with SSM credential provider to S3
-  nodeadm sync-artifacts 1.31 --credential-provider ssm --s3-bucket my-private-bucket --s3-prefix eks-deps/v1.31/
+  # Sync all Linux ARM64 dependencies for Kubernetes version 1.31 to S3
+  nodeadm sync-artifacts 1.31 --arch arm64 --s3-bucket my-private-bucket --s3-prefix eks-deps/v1.31
 
-  # Sync all dependencies for Kubernetes version 1.31 with IAM Roles Anywhere to S3
-  nodeadm sync-artifacts 1.31 --credential-provider iam-ra --s3-bucket my-private-bucket --s3-prefix eks-deps/v1.31/ --arch amd64
+  # Sync all Linux AMD64 dependencies for Kubernetes version 1.33 to S3
+  nodeadm sync-artifacts 1.33 --arch arm64 --s3-bucket my-private-bucket --s3-prefix eks-deps/v1.33
 
-  # Sync dependencies for specific region to S3
-  nodeadm sync-artifacts 1.31 --credential-provider ssm --region us-west-2 --s3-bucket my-private-bucket --s3-prefix eks-deps/us-west-2/
+  # Sync all Linux dependencies corresponding to host system's architecture to a non-default region in S3
+  nodeadm sync-artifacts 1.34 --region ap-south-1 --s3-bucket my-private-bucket --s3-prefix eks-deps/ap-south-1/v1.34
 
 Documentation:
   https://docs.aws.amazon.com/eks/latest/userguide/hybrid-nodes-nodeadm.html#_syncartifacts`
@@ -43,17 +42,15 @@ func NewCommand() cli.Command {
 	cmd := command{
 		timeout: 30 * time.Minute,
 		arch:    runtime.GOARCH,
-		os:      runtime.GOOS,
+		os:      "linux",
+		region:  "us-west-2",
 	}
-	cmd.region = "us-west-2"
 
 	fc := flaggy.NewSubcommand("sync-artifacts")
 	fc.Description = "Sync EKS hybrid node dependencies directly to S3 for private installation"
 	fc.AdditionalHelpAppend = syncArtifactsHelpText
 	fc.AddPositionalValue(&cmd.kubernetesVersion, "KUBERNETES_VERSION", 1, true, "The major[.minor[.patch]] version of Kubernetes to sync dependencies for.")
-	fc.String(&cmd.credentialProvider, "p", "credential-provider", "Credential process dependencies to include. Allowed values: [ssm, iam-ra].")
 	fc.String(&cmd.arch, "a", "arch", "Target architecture for artifacts.")
-	fc.String(&cmd.os, "o", "os", "Target operating system for artifacts.")
 	fc.String(&cmd.region, "r", "region", "AWS region for downloading regional artifacts.")
 	fc.String(&cmd.s3Bucket, "", "s3-bucket", "S3 bucket to sync the dependencies to (required).")
 	fc.String(&cmd.s3Prefix, "", "s3-prefix", "S3 key prefix for the synced artifacts (required).")
@@ -64,15 +61,14 @@ func NewCommand() cli.Command {
 }
 
 type command struct {
-	flaggy             *flaggy.Subcommand
-	kubernetesVersion  string
-	credentialProvider string
-	arch               string
-	os                 string
-	region             string
-	s3Bucket           string
-	s3Prefix           string
-	timeout            time.Duration
+	flaggy            *flaggy.Subcommand
+	kubernetesVersion string
+	arch              string
+	os                string
+	region            string
+	s3Bucket          string
+	s3Prefix          string
+	timeout           time.Duration
 }
 
 func (c *command) Flaggy() *flaggy.Subcommand {
@@ -82,15 +78,6 @@ func (c *command) Flaggy() *flaggy.Subcommand {
 func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	ctx := context.Background()
 	ctx = logger.NewContext(ctx, log)
-
-	if c.credentialProvider == "" {
-		flaggy.ShowHelpAndExit("--credential-provider is a required flag. Allowed values are ssm & iam-ra")
-	}
-
-	credentialProvider, err := creds.GetCredentialProvider(c.credentialProvider)
-	if err != nil {
-		return err
-	}
 
 	ctx, cancel := context.WithTimeout(ctx, c.timeout)
 	defer cancel()
@@ -130,30 +117,30 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	log.Info("S3 bucket validation successful", zap.String("bucket", c.s3Bucket))
 
 	downloader := &Downloader{
-		AwsSource:          awsSource,
-		CredentialProvider: credentialProvider,
-		Arch:               c.arch,
-		OS:                 c.os,
-		Region:             c.region,
-		S3Bucket:           c.s3Bucket,
-		S3Prefix:           c.s3Prefix,
-		Logger:             log,
-		S3Client:           svc,
+		AwsSource:     awsSource,
+		Arch:          c.arch,
+		OS:            c.os,
+		Region:        c.region,
+		S3Bucket:      c.s3Bucket,
+		S3Prefix:      c.s3Prefix,
+		Logger:        log,
+		S3Client:      svc,
+		SyncTimestamp: time.Now().Unix(),
 	}
 
 	return downloader.Run(ctx)
 }
 
 type Downloader struct {
-	AwsSource          aws.Source
-	CredentialProvider creds.CredentialProvider
-	Arch               string
-	OS                 string
-	Region             string
-	S3Bucket           string
-	S3Prefix           string
-	Logger             *zap.Logger
-	S3Client           *s3.Client
+	AwsSource     aws.Source
+	Arch          string
+	OS            string
+	Region        string
+	S3Bucket      string
+	S3Prefix      string
+	Logger        *zap.Logger
+	S3Client      *s3.Client
+	SyncTimestamp int64
 }
 
 type ArtifactInfo struct {
@@ -213,8 +200,6 @@ func (d *Downloader) collectArtifacts() ([]ArtifactInfo, error) {
 		}
 	}
 
-	// Always include both SSM and IAM-RA artifacts regardless of selected credential provider
-
 	// IAM Roles Anywhere artifacts
 	if artifact := d.findArtifact(d.AwsSource.Iam.Artifacts, "aws_signing_helper"); artifact != nil {
 		artifacts = append(artifacts, ArtifactInfo{
@@ -269,7 +254,7 @@ func (d *Downloader) syncArtifactToS3(ctx context.Context, artifact ArtifactInfo
 		zap.String("url", artifact.URL))
 
 	// Download and upload main artifact
-	s3Key := strings.TrimSuffix(d.S3Prefix, "/") + "/" + artifact.LocalPath
+	s3Key := fmt.Sprintf("%s/%d/%s", strings.TrimSuffix(d.S3Prefix, "/"), d.SyncTimestamp, artifact.LocalPath)
 	if err := d.streamToS3(ctx, d.S3Client, artifact.URL, s3Key); err != nil {
 		return errors.Wrapf(err, "streaming %s to S3", artifact.Name)
 	}
@@ -342,8 +327,8 @@ func (d *Downloader) detectPlatformVariant() (string, error) {
 
 func (d *Downloader) generateCustomManifest(artifacts []ArtifactInfo) error {
 	// Create base S3 URL
-	baseS3URL := fmt.Sprintf("https://%s.s3.%s.amazonaws.com/%s",
-		d.S3Bucket, d.Region, strings.TrimSuffix(d.S3Prefix, "/"))
+	baseS3URL := fmt.Sprintf("https://%s.s3.%s.amazonaws.com/%s/%d",
+		d.S3Bucket, d.Region, strings.TrimSuffix(d.S3Prefix, "/"), d.SyncTimestamp)
 
 	// Build artifact list with custom S3 URIs
 	var eksArtifacts []aws.Artifact
@@ -424,7 +409,7 @@ func (d *Downloader) generateCustomManifest(artifacts []ArtifactInfo) error {
 	}
 
 	filename := fmt.Sprintf("manifest-%s-%s-%s-%d.yaml",
-		d.AwsSource.Eks.Version, d.Arch, d.OS, time.Now().Unix())
+		d.AwsSource.Eks.Version, d.Arch, d.OS, d.SyncTimestamp)
 
 	// Marshal to YAML
 	yamlData, err := yaml.Marshal(manifest)
