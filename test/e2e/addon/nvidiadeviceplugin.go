@@ -35,7 +35,7 @@ const (
 	testPodName              = "gpu-pod"
 )
 
-//go:embed testdata/nvidia-device-plugin-v0.17.1.yaml
+//go:embed testdata/nvidia-device-plugin-v0.18.2.yaml
 var devicePluginYaml []byte
 
 //go:embed testdata/gpu-pod.yaml
