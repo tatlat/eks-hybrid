@@ -20,6 +20,12 @@ set -o pipefail
 # https://docs.tigera.io/calico/latest/getting-started/kubernetes/quickstart
 VERSION="$1"
 
+SED=sed
+if [ "$(uname -s)" = "Darwin" ]; then
+    SED=gsed
+fi
+
+curl -s --retry 5 -o operator-crds.yaml https://raw.githubusercontent.com/projectcalico/calico/$VERSION/manifests/operator-crds.yaml
 curl -s --retry 5 -o tigera-operator.yaml https://raw.githubusercontent.com/projectcalico/calico/$VERSION/manifests/tigera-operator.yaml
 
 # the calico-operator by default tolerations all taints
@@ -29,5 +35,5 @@ curl -s --retry 5 -o tigera-operator.yaml https://raw.githubusercontent.com/proj
 # more info: https://github.com/projectcalico/calico/issues/6136
 yq -i '(select(.kind == "Deployment").spec.template.spec.tolerations[].key |= "node.kubernetes.io/not-ready")' tigera-operator.yaml  
 
-sed -i -e 's/quay.io/{{.ContainerRegistry}}/g' tigera-operator.yaml
+$SED -i -e 's/quay.io/{{.ContainerRegistry}}/g' tigera-operator.yaml
 echo "$VERSION" > VERSION
