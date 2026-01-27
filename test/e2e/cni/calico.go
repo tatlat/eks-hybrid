@@ -13,6 +13,9 @@ import (
 	"github.com/aws/eks-hybrid/test/e2e/kubernetes"
 )
 
+//go:embed testdata/calico/operator-crds.yaml
+var operatorCrds []byte
+
 //go:embed testdata/calico/tigera-operator.yaml
 var tigeraTemplate []byte
 
@@ -63,7 +66,7 @@ func (c Calico) Deploy(ctx context.Context) error {
 		return err
 	}
 
-	objs, err := kubernetes.YamlToUnstructured(append(tigera.Bytes(), installation.Bytes()...))
+	objs, err := kubernetes.YamlToUnstructured(append(operatorCrds, append(tigera.Bytes(), installation.Bytes()...)...))
 	if err != nil {
 		return err
 	}

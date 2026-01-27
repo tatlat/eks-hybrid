@@ -6,6 +6,11 @@ set -o pipefail
 ARTIFACTS_BUCKET="$1"
 BUCKET_PREFIX="$2"
 
+SED=sed
+if [ "$(uname -s)" = "Darwin" ]; then
+    SED=gsed
+fi
+
 # *********************************************************************
 # DO NOT EDIT this list unless you are sure you know what you are doing
 # *********************************************************************
@@ -44,7 +49,7 @@ fi
 S3_FILES_FILE=$(mktemp)
 # remove the bucket prefix from the list of files
 for file in ${S3_FILES[@]}; do
-    echo $file | sed -e "s#^${BUCKET_PREFIX}/##" >> ${S3_FILES_FILE}
+    echo $file | $SED -e "s#^${BUCKET_PREFIX}/##" >> ${S3_FILES_FILE}
 done
 
 sort -o ${S3_FILES_FILE} ${S3_FILES_FILE}

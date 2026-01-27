@@ -23,5 +23,9 @@ function build::create_git_tag(){
 
 # We only need to include dependencies outside of this repo
 function build::exclude_own(){
-    sed -i '/^github.com\/aws\/eks-hybrid/d' _output/attribution/go-license.csv
+    SED=sed
+    if [ "$(uname -s)" = "Darwin" ]; then
+        SED=gsed
+    fi
+    $SED -i '/^github.com\/aws\/eks-hybrid/d' _output/attribution/go-license.csv
 }
