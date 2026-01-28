@@ -1,6 +1,6 @@
 module github.com/aws/eks-hybrid
 
-go 1.25.0
+go 1.25.6
 
 require (
 	github.com/ProtonMail/gopenpgp/v3 v3.3.0
