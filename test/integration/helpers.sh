@@ -296,7 +296,7 @@ function mock::ssm() {
 EOF
 
   # mock ssm credentials
-  mkdir /root/.aws
+  mkdir -p /root/.aws
   cat > /root/.aws/credentials << EOF
 [default]
 aws_access_key_id     = $AWS_ACCESS_KEY_ID
