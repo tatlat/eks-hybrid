@@ -107,6 +107,7 @@ Resources:
   ClusterVPCPublicSubnet:
     Type: AWS::EC2::Subnet
     Properties:
+      AvailabilityZone: !Select [0, !GetAZs '']
       CidrBlock: !Ref ClusterPublicSubnetCidr
       MapPublicIpOnLaunch: true
       Tags:
@@ -121,6 +122,7 @@ Resources:
   ClusterVPCPrivateSubnet:
     Type: AWS::EC2::Subnet
     Properties:
+      AvailabilityZone: !Select [1, !GetAZs '']
       CidrBlock: !Ref ClusterPrivateSubnetCidr
       Tags:
         - Key: Name
@@ -348,8 +350,6 @@ Resources:
 
   TransitGatewayRouteTable:
     Type: AWS::EC2::TransitGatewayRouteTable
-    DependsOn:
-      - ClusterToHybridTGW
     Properties:
       TransitGatewayId: !Ref ClusterToHybridTGW
       Tags:
@@ -513,8 +513,6 @@ Resources:
 
   JumpboxLaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
-    DependsOn:
-      - JumpboxKeyPair
     Properties:
       LaunchTemplateName: !Sub "${AWS::StackName}-jumpbox-template"
       LaunchTemplateData:
@@ -569,10 +567,6 @@ Resources:
       ResourceSignal:
         Timeout: PT5M
     DeletionPolicy: Delete
-    DependsOn:
-      - HybridNodeVPCPublicSubnet
-      - JumpboxLaunchTemplate
-      - HybridNodeInternetGatewayAttachment
     Properties:
       LaunchTemplateConfigs:
         - LaunchTemplateSpecification:
