@@ -134,10 +134,6 @@ func (s *Stack) deployStack(ctx context.Context, logger logr.Logger) error {
 	}
 	params := []cfnTypes.Parameter{
 		{
-			ParameterKey:   aws.String("clusterName"),
-			ParameterValue: aws.String(s.ClusterName),
-		},
-		{
 			ParameterKey:   aws.String("clusterArn"),
 			ParameterValue: aws.String(s.ClusterArn),
 		},
