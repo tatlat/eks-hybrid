@@ -7,7 +7,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -471,11 +471,11 @@ func getRandomElements[E any](elems []E) (E, E) {
 		elems[i], elems[j] = elems[j], elems[i]
 	})
 
-	first := rand.Intn(length)
-	second := rand.Intn(length)
+	first := rand.IntN(length)
+	second := rand.IntN(length)
 
 	for second == first {
-		second = rand.Intn(length)
+		second = rand.IntN(length)
 	}
 
 	return elems[first], elems[second]

@@ -284,3 +284,25 @@ func LogEC2InstanceDescribe(ctx context.Context, ec2Client *ec2.Client, instance
 	logger.Info("Instance status", "instanceID", instanceID, "describeInstanceStatusResponse", describeStatusOutput.InstanceStatuses)
 	return nil
 }
+
+func GetAvailabilityZonesForInstanceType(ctx context.Context, ec2Client *ec2.Client, instanceType string) ([]string, error) {
+	availabilityZonesForInstanceType := []string{}
+	describeInstanceTypeOfferingsOutput, err := ec2Client.DescribeInstanceTypeOfferings(ctx, &ec2.DescribeInstanceTypeOfferingsInput{
+		LocationType: types.LocationTypeAvailabilityZone,
+		Filters: []types.Filter{
+			{
+				Name:   aws.String("instance-type"),
+				Values: []string{instanceType},
+			},
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("describing available offerings for instance type %s: %w", instanceType, err)
+	}
+
+	for _, offering := range describeInstanceTypeOfferingsOutput.InstanceTypeOfferings {
+		availabilityZonesForInstanceType = append(availabilityZonesForInstanceType, *offering.Location)
+	}
+
+	return availabilityZonesForInstanceType, nil
+}

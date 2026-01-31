@@ -14,7 +14,7 @@ Parameters:
   ClusterVPCCidr:
     Type: String
     Description: EKS Hybrid Cluster VPC CIDR block
-  
+
   ClusterPublicSubnetCidr:
     Type: String
     Description: EKS Hybrid Cluster public subnet VPC CIDR block
@@ -22,14 +22,18 @@ Parameters:
   ClusterPrivateSubnetCidr:
     Type: String
     Description: EKS Hybrid Cluster private subnet VPC CIDR block
-  
+
   HybridNodeVPCCidr:
     Type: String
     Description: EC2 Hybrid Nodes VPC CIDR block
-  
+
   HybridNodePodCidr:
     Type: String
     Description: EKS Hybrid Nodes Pod CIDR block
+
+  HybridNodeVPCPublicSubnetAvailabilityZone:
+    Type: String
+    Description: EKS Hybrid Nodes public subnet Availability Zone
 
   HybridNodePublicSubnetCidr:
     Type: String
@@ -88,7 +92,7 @@ Resources:
         - Key: !Ref TestClusterTagKey
           Value: !Ref ClusterName
       Path: !Ref RolePathPrefix
-  
+
   ClusterVPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -118,7 +122,7 @@ Resources:
         - Key: !Ref CreationTimeTagKey
           Value: !Ref CreationTime
       VpcId: !Ref ClusterVPC
-  
+
   ClusterVPCPrivateSubnet:
     Type: AWS::EC2::Subnet
     Properties:
@@ -164,7 +168,7 @@ Resources:
 
   ClusterRouteToInternet:
     Type: AWS::EC2::Route
-    DependsOn: 
+    DependsOn:
       - ClusterInternetGatewayAttachment
     Properties:
       DestinationCidrBlock: 0.0.0.0/0
@@ -227,10 +231,11 @@ Resources:
           Value: !Ref ClusterName
         - Key: !Ref CreationTimeTagKey
           Value: !Ref CreationTime
-  
+
   HybridNodeVPCPublicSubnet:
     Type: AWS::EC2::Subnet
     Properties:
+      AvailabilityZone: !Ref HybridNodeVPCPublicSubnetAvailabilityZone
       CidrBlock: !Ref HybridNodePublicSubnetCidr
       MapPublicIpOnLaunch: true
       Tags:
@@ -313,21 +318,21 @@ Resources:
         Properties:
           GroupId: !GetAtt HybridNodeVPC.DefaultSecurityGroup
           IpProtocol: tcp
-          FromPort: 
-            Fn::Select: 
+          FromPort:
+            Fn::Select:
               - 0
               - Fn::Split:
                   - "|"
                   - !Ref PortWithDescription
-          ToPort: 
-            Fn::Select: 
+          ToPort:
+            Fn::Select:
               - 0
               - Fn::Split:
                   - "|"
                   - !Ref PortWithDescription
           CidrIp: !Ref ClusterVPCCidr
-          Description: 
-            Fn::Select: 
+          Description:
+            Fn::Select:
               - 1
               - Fn::Split:
                   - "|"
@@ -430,7 +435,7 @@ Resources:
       RouteTableId: !Ref ClusterRouteTable
       DestinationCidrBlock: !Ref HybridNodeVPCCidr
       TransitGatewayId: !Ref ClusterToHybridTGW
-  
+
   ClusterPrivateRouteToHybridNode:
     Type: AWS::EC2::Route
     # This explicit dep is needed to ensure the TransitGatewayAttachment is created before the route is created
@@ -478,15 +483,15 @@ Resources:
   JumpboxInstanceRole:
     Type: AWS::IAM::Role
     Properties:
-      AssumeRolePolicyDocument: 
+      AssumeRolePolicyDocument:
         Version: '2012-10-17'
-        Statement: 
+        Statement:
           - Effect: Allow
-            Principal: 
+            Principal:
               Service: ssm.amazonaws.com
             Action: sts:AssumeRole
           - Effect: Allow
-            Principal: 
+            Principal:
               Service: ec2.amazonaws.com
             Action: sts:AssumeRole
       ManagedPolicyArns:
@@ -499,13 +504,13 @@ Resources:
   JumpboxInstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      Roles: 
+      Roles:
         - !Ref JumpboxInstanceRole
       Path: !Ref RolePathPrefix
 
   JumpboxKeyPair:
     Type: 'AWS::EC2::KeyPair'
-    Properties: 
+    Properties:
       KeyName: !Sub "${AWS::StackName}-jumpbox-key"
       Tags:
         - Key: !Ref TestClusterTagKey
@@ -563,7 +568,7 @@ Resources:
 
   JumpboxFleet:
     Type: AWS::EC2::EC2Fleet
-    CreationPolicy:   
+    CreationPolicy:
       ResourceSignal:
         Timeout: PT5M
     DeletionPolicy: Delete
@@ -573,19 +578,22 @@ Resources:
             LaunchTemplateId: !Ref JumpboxLaunchTemplate
             Version: !GetAtt JumpboxLaunchTemplate.LatestVersionNumber
           Overrides:
-            # use t4g.micro if available, otherwise try other instance types
+            # use t4g.micro if available, otherwise try other T4g instance types
             - InstanceType: t4g.micro
               SubnetId: !Ref HybridNodeVPCPublicSubnet
               Priority: 1
             - InstanceType: t4g.small
               SubnetId: !Ref HybridNodeVPCPublicSubnet
               Priority: 2
-            - InstanceType: t4g.large
+            - InstanceType: t4g.medium
               SubnetId: !Ref HybridNodeVPCPublicSubnet
               Priority: 3
-            - InstanceType: t4g.nano
+            - InstanceType: t4g.large
               SubnetId: !Ref HybridNodeVPCPublicSubnet
               Priority: 4
+            - InstanceType: t4g.nano
+              SubnetId: !Ref HybridNodeVPCPublicSubnet
+              Priority: 5
       OnDemandOptions:
         AllocationStrategy: prioritized
         SingleAvailabilityZone: true
@@ -739,7 +747,7 @@ Outputs:
   ClusterVPCPrivateSubnet:
     Description: The ID of the EKS Hybrid Cluster VPC Private Subnet.
     Value: !Ref ClusterVPCPrivateSubnet
-  
+
   ClusterSecurityGroup:
     Description: The ID of the EKS Hybrid Cluster Security Group.
     Value: !GetAtt ClusterVPC.DefaultSecurityGroup

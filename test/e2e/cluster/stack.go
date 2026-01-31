@@ -5,6 +5,8 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
+	"math/rand/v2"
+	"slices"
 	"strings"
 	"time"
 
@@ -24,6 +26,7 @@ import (
 	"github.com/aws/eks-hybrid/test/e2e/cleanup"
 	e2eCommands "github.com/aws/eks-hybrid/test/e2e/commands"
 	"github.com/aws/eks-hybrid/test/e2e/constants"
+	e2eEC2 "github.com/aws/eks-hybrid/test/e2e/ec2"
 	e2eErrors "github.com/aws/eks-hybrid/test/e2e/errors"
 	"github.com/aws/eks-hybrid/test/e2e/os"
 	"github.com/aws/eks-hybrid/test/e2e/peered"
@@ -39,6 +42,14 @@ const (
 	stackWaitTimeout         = 15 * time.Minute
 	stackWaitInterval        = 10 * time.Second
 )
+
+var jumpboxAllowedInstanceTypes = []string{
+	"t4g.nano",
+	"t4g.micro",
+	"t4g.small",
+	"t4g.medium",
+	"t4g.large",
+}
 
 type vpcConfig struct {
 	vpcID         string
@@ -70,12 +81,14 @@ type stack struct {
 func (s *stack) deploy(ctx context.Context, test TestResources) (*resourcesStackOutput, error) {
 	stackName := stackName(test.ClusterName)
 
-	params := s.prepareStackParameters(test, test.EKS)
+	params, err := s.prepareStackParameters(ctx, test, test.EKS)
+	if err != nil {
+		return nil, fmt.Errorf("preparing stack parameters: %w", err)
+	}
 
 	// There are occasional race conditions when creating the cfn stack
 	// retrying once allows to potentially resolve them on the second attempt
 	// avoiding the need to retry the entire test suite.
-	var err error
 	for range 2 {
 		err = s.createOrUpdateStack(ctx, stackName, params, test)
 		if err == nil {
@@ -111,7 +124,7 @@ func (s *stack) deploy(ctx context.Context, test TestResources) (*resourcesStack
 	return result, nil
 }
 
-func (s *stack) prepareStackParameters(test TestResources, eks EKSConfig) []cfnTypes.Parameter {
+func (s *stack) prepareStackParameters(ctx context.Context, test TestResources, eks EKSConfig) ([]cfnTypes.Parameter, error) {
 	params := []cfnTypes.Parameter{
 		{
 			ParameterKey:   aws.String("ClusterName"),
@@ -193,7 +206,29 @@ func (s *stack) prepareStackParameters(test TestResources, eks EKSConfig) []cfnT
 	// Add addon parameters
 	ingressConfig := securitygroup.DefaultIngress()
 	params = append(params, s.prepareAddonParameters(ingressConfig)...)
-	return params
+
+	jumpboxAllowedAvailabilityZones := []string{}
+	for _, instanceType := range jumpboxAllowedInstanceTypes {
+		availabilityZonesForInstanceType, err := e2eEC2.GetAvailabilityZonesForInstanceType(ctx, s.ec2Client, instanceType)
+		if err != nil {
+			return nil, fmt.Errorf("getting availability zones for instance type %s: %w", instanceType, err)
+		}
+
+		for _, zone := range availabilityZonesForInstanceType {
+			if !slices.Contains(jumpboxAllowedAvailabilityZones, zone) {
+				jumpboxAllowedAvailabilityZones = append(jumpboxAllowedAvailabilityZones, zone)
+			}
+		}
+	}
+
+	randIndex := rand.IntN(len(jumpboxAllowedAvailabilityZones))
+
+	params = append(params, cfnTypes.Parameter{
+		ParameterKey:   aws.String("HybridNodeVPCPublicSubnetAvailabilityZone"),
+		ParameterValue: aws.String(jumpboxAllowedAvailabilityZones[randIndex]),
+	})
+
+	return params, nil
 }
 
 func (s *stack) prepareAddonParameters(ingressConfig []securitygroup.IngessConfig) []cfnTypes.Parameter {

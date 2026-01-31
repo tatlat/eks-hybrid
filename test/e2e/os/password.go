@@ -2,7 +2,7 @@ package os
 
 import (
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 
 	"github.com/tredoe/osutil/user/crypt"
 	"github.com/tredoe/osutil/user/crypt/sha512_crypt"
@@ -14,7 +14,7 @@ func GenerateOSPassword() (string, string, error) {
 	const length = 8
 	password := make([]byte, length)
 	for i := range password {
-		password[i] = letters[rand.Intn(len(letters))]
+		password[i] = letters[rand.IntN(len(letters))]
 	}
 	c := crypt.New(crypt.SHA512)
 	s := sha512_crypt.GetSalt()
