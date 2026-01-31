@@ -6,7 +6,7 @@ package conformance
 import (
 	"context"
 	"flag"
-	"math/rand"
+	"math/rand/v2"
 	"os"
 	"path/filepath"
 	"testing"

@@ -8,7 +8,7 @@ import (
 	"flag"
 	"fmt"
 	"maps"
-	"math/rand"
+	"math/rand/v2"
 	"strings"
 	"testing"
 	"time"
@@ -91,7 +91,7 @@ var _ = SynchronizedBeforeSuite(
 		test := suite.BeforeVPCTest(ctx, &suiteConfig)
 		credentialProviders := suite.AddClientsToCredentialProviders(suite.CredentialProviders(), test)
 		osProviderList := suite.OSProviderList(credentialProviders)
-		randomOSProvider := osProviderList[rand.Intn(len(osProviderList))]
+		randomOSProvider := osProviderList[rand.IntN(len(osProviderList))]
 
 		// Generate unique identifiers for this test run
 		timestamp := time.Now().Format("20060102-150405")
@@ -146,7 +146,7 @@ var _ = SynchronizedBeforeSuite(
 	// This function runs on all processes
 	func(ctx context.Context, data []byte) {
 		// add a small sleep to add jitter to the start of each test
-		randomSleep := rand.Intn(10)
+		randomSleep := rand.IntN(10)
 		err := smithyTime.SleepWithContext(ctx, time.Duration(randomSleep)*time.Second)
 		Expect(err).NotTo(HaveOccurred(), "failed to sleep")
 

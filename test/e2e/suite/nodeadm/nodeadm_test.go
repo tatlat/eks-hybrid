@@ -7,7 +7,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"os"
 	"testing"
 	"time"
@@ -61,7 +61,7 @@ var _ = SynchronizedBeforeSuite(
 	// for the per tests setup code.
 	func(ctx context.Context, data []byte) {
 		// add a small sleep to add jitter to the start of each test
-		randomSleep := rand.Intn(10)
+		randomSleep := rand.IntN(10)
 		err := smithyTime.SleepWithContext(ctx, time.Duration(randomSleep)*time.Second)
 		Expect(err).NotTo(HaveOccurred(), "failed to sleep")
 		suiteConfig = suite.BeforeSuiteCredentialUnmarshal(ctx, data)
