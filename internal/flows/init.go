@@ -42,10 +42,11 @@ func (i *Initer) Run(ctx context.Context) error {
 
 	// Get region config for ECR registry lookup
 	region := i.NodeProvider.GetNodeConfig().Spec.Cluster.Region
-	if i.PrivateMode {
+	// Use manifest override if provided, otherwise use default AWS source
+	if i.ManifestOverride != "" {
 		regionConfig, err = aws.GetRegionConfigFromManifest(ctx, region, i.ManifestOverride)
 		if err != nil {
-			i.Logger.Warn("Failed to get region config from local file", zap.Error(err))
+			i.Logger.Warn("Failed to get region config from manifest", zap.Error(err))
 		}
 	} else {
 		regionConfig, err = aws.GetRegionConfig(ctx, region)

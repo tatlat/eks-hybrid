@@ -77,12 +77,33 @@ func getReleaseManifest(ctx context.Context) (*Manifest, error) {
 	return &manifest, nil
 }
 
-// Read from a local manifest file and parse into Manifest struct
-func getReleaseManifestFromFile(manifestPath string) (*Manifest, error) {
-	yamlFileData, err := os.ReadFile(manifestPath)
-	if err != nil {
-		return nil, errors.Wrapf(err, "reading manifest file %s", manifestPath)
+// getReleaseManifestFromURI reads from a URI (file:// or https://) and parses into Manifest struct
+func getReleaseManifestFromURI(ctx context.Context, manifestURI string) (*Manifest, error) {
+	var yamlFileData []byte
+	var err error
+
+	// Check if the URI uses file:// protocol
+	if len(manifestURI) >= 7 && manifestURI[:7] == "file://" {
+		// Strip file:// prefix and read from local file
+		filePath := manifestURI[7:]
+		yamlFileData, err = os.ReadFile(filePath)
+		if err != nil {
+			return nil, errors.Wrapf(err, "reading manifest file from file:// URI: %s", manifestURI)
+		}
+	} else if len(manifestURI) >= 8 && manifestURI[:8] == "https://" {
+		// Download from HTTPS URL
+		yamlFileData, err = util.GetHttpFile(ctx, manifestURI)
+		if err != nil {
+			return nil, errors.Wrapf(err, "downloading manifest file from https:// URI: %s", manifestURI)
+		}
+	} else {
+		// For backward compatibility, treat as a plain file path
+		yamlFileData, err = os.ReadFile(manifestURI)
+		if err != nil {
+			return nil, errors.Wrapf(err, "reading manifest file: %s (hint: use file:// or https:// prefix)", manifestURI)
+		}
 	}
+
 	var manifest Manifest
 	err = yaml.Unmarshal(yamlFileData, &manifest)
 	if err != nil {
