@@ -96,6 +96,9 @@ type PeeredVPCTest struct {
 
 	PodIdentityS3Bucket string
 
+	DNSSuffix  string
+	EcrAccount string
+
 	// failureMessageLogged tracks if a terminal error due to a failed gomega
 	// expectation has already been registered and logged . It avoids logging
 	// the same multiple times.
@@ -116,6 +119,8 @@ func BuildPeeredVPCTestForSuite(ctx context.Context, suite *SuiteConfiguration) 
 		setRootPassword:        suite.TestConfig.SetRootPassword,
 		SkipCleanup:            suite.SkipCleanup,
 		JumpboxInstanceId:      suite.JumpboxInstanceId,
+		DNSSuffix:              suite.TestConfig.DNSSuffix,
+		EcrAccount:             suite.TestConfig.EcrAccount,
 	}
 
 	aws, err := e2e.NewAWSConfig(ctx, awsconfig.WithRegion(suite.TestConfig.ClusterRegion),
