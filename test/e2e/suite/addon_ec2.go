@@ -58,6 +58,8 @@ func (a *AddonEc2Test) NewVerifyPodIdentityAddon(nodeName string) *addon.VerifyP
 		Logger:              a.Logger,
 		K8SConfig:           a.K8sClientConfig,
 		Region:              a.Cluster.Region,
+		DNSSuffix:           a.DNSSuffix,
+		EcrAccount:          a.EcrAccount,
 	}
 }
 
@@ -150,6 +152,8 @@ func (a *AddonEc2Test) NewSecretsStoreCSIDriverTest(ctx context.Context) (*addon
 		Logger:               a.Logger.WithName("SecretsStoreCSIDriverTest"),
 		PodIdentityRoleArn:   podIdentityRoleArn,
 		Region:               a.Cluster.Region,
+		DNSSuffix:            a.DNSSuffix,
+		EcrAccount:           a.EcrAccount,
 	}, nil
 }
 
@@ -223,6 +227,8 @@ func (a *AddonEc2Test) NewExternalDNSTest(ctx context.Context) (*addon.ExternalD
 		Logger:             a.Logger.WithName("ExternalDNSTest"),
 		PodIdentityRoleArn: podIdentityRoleArn,
 		Region:             a.Cluster.Region,
+		DNSSuffix:          a.DNSSuffix,
+		EcrAccount:         a.EcrAccount,
 	}, nil
 }
 

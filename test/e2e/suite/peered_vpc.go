@@ -289,6 +289,8 @@ func (t *PeeredVPCTest) NewVerifyPodIdentityAddon(nodeName string) *addon.Verify
 		Logger:              t.Logger,
 		K8SConfig:           t.K8sClientConfig,
 		Region:              t.Cluster.Region,
+		DNSSuffix:           t.DNSSuffix,
+		EcrAccount:          t.EcrAccount,
 	}
 }
 
@@ -322,6 +324,8 @@ func (t *PeeredVPCTest) NewTestNode(ctx context.Context, instanceName, nodeName,
 		Provider:        provider,
 		Region:          t.Cluster.Region,
 		ComputeType:     computeType,
+		DNSSuffix:       t.DNSSuffix,
+		EcrAccount:      t.EcrAccount,
 	}
 
 	for _, opt := range opts {
