@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/aws/eks-hybrid/test/e2e/constants"
 	"gopkg.in/yaml.v2"
+
+	"github.com/aws/eks-hybrid/test/e2e/constants"
 )
 
 type TestConfig struct {
