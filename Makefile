@@ -1,7 +1,7 @@
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
 ENVTEST_K8S_VERSION = 1.27.1
 
-GOLANG_VERSION?="1.25"
+GOLANG_VERSION?="1.26"
 GO ?= $(shell source ./scripts/common.sh && get_go_path $(GOLANG_VERSION))/go
 
 # Setting SHELL to bash allows bash commands to be executed by recipes.
@@ -153,7 +153,7 @@ GOFUMPT ?= $(LOCALBIN)/gofumpt
 ## Tool Versions
 KUSTOMIZE_VERSION ?= v5.0.1
 CONTROLLER_TOOLS_VERSION ?= v0.16.3
-CODE_GENERATOR_VERSION ?= v0.30.6
+CODE_GENERATOR_VERSION ?= v0.33.4
 CRD_REF_DOCS_VERSION ?= v0.1.0
 GINKGO_VERSION ?= $(word 2,$(shell $(GO) list -m all | grep github.com/onsi/ginkgo/v2 | tail -1))
 GOFUMPT_VERSION ?= v0.8.0

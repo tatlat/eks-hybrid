@@ -96,6 +96,9 @@ type PeeredVPCTest struct {
 
 	PodIdentityS3Bucket string
 
+	DNSSuffix  string
+	EcrAccount string
+
 	// failureMessageLogged tracks if a terminal error due to a failed gomega
 	// expectation has already been registered and logged . It avoids logging
 	// the same multiple times.
@@ -116,6 +119,8 @@ func BuildPeeredVPCTestForSuite(ctx context.Context, suite *SuiteConfiguration) 
 		setRootPassword:        suite.TestConfig.SetRootPassword,
 		SkipCleanup:            suite.SkipCleanup,
 		JumpboxInstanceId:      suite.JumpboxInstanceId,
+		DNSSuffix:              suite.TestConfig.DNSSuffix,
+		EcrAccount:             suite.TestConfig.EcrAccount,
 	}
 
 	aws, err := e2e.NewAWSConfig(ctx, awsconfig.WithRegion(suite.TestConfig.ClusterRegion),
@@ -272,18 +277,28 @@ func (t *PeeredVPCTest) InstanceName(testName, osName, providerName string) stri
 	)
 }
 
+// addonTestConfig returns a common configuration for addon tests.
+// This centralizes the common fields that most addon tests need.
+func (t *PeeredVPCTest) addonTestConfig() addon.AddonTestConfig {
+	return addon.AddonTestConfig{
+		Cluster:    t.Cluster.Name,
+		K8S:        t.K8sClient,
+		EKSClient:  t.EKSClient,
+		K8SConfig:  t.K8sClientConfig,
+		Logger:     t.Logger,
+		Region:     t.Cluster.Region,
+		EcrAccount: t.EcrAccount,
+		DNSSuffix:  t.DNSSuffix,
+	}
+}
+
 func (t *PeeredVPCTest) NewVerifyPodIdentityAddon(nodeName string) *addon.VerifyPodIdentityAddon {
 	return &addon.VerifyPodIdentityAddon{
-		Cluster:             t.Cluster.Name,
+		AddonTestConfig:     t.addonTestConfig(),
 		NodeName:            nodeName,
 		PodIdentityS3Bucket: t.PodIdentityS3Bucket,
-		K8S:                 t.K8sClient,
-		EKSClient:           t.EKSClient,
 		IAMClient:           t.IAMClient,
 		S3Client:            t.S3Client,
-		Logger:              t.Logger,
-		K8SConfig:           t.K8sClientConfig,
-		Region:              t.Cluster.Region,
 	}
 }
 
@@ -317,6 +332,8 @@ func (t *PeeredVPCTest) NewTestNode(ctx context.Context, instanceName, nodeName,
 		Provider:        provider,
 		Region:          t.Cluster.Region,
 		ComputeType:     computeType,
+		DNSSuffix:       t.DNSSuffix,
+		EcrAccount:      t.EcrAccount,
 	}
 
 	for _, opt := range opts {
