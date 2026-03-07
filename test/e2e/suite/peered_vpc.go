@@ -277,20 +277,28 @@ func (t *PeeredVPCTest) InstanceName(testName, osName, providerName string) stri
 	)
 }
 
+// addonTestConfig returns a common configuration for addon tests.
+// This centralizes the common fields that most addon tests need.
+func (t *PeeredVPCTest) addonTestConfig() addon.AddonTestConfig {
+	return addon.AddonTestConfig{
+		Cluster:    t.Cluster.Name,
+		K8S:        t.K8sClient,
+		EKSClient:  t.EKSClient,
+		K8SConfig:  t.K8sClientConfig,
+		Logger:     t.Logger,
+		Region:     t.Cluster.Region,
+		EcrAccount: t.EcrAccount,
+		DNSSuffix:  t.DNSSuffix,
+	}
+}
+
 func (t *PeeredVPCTest) NewVerifyPodIdentityAddon(nodeName string) *addon.VerifyPodIdentityAddon {
 	return &addon.VerifyPodIdentityAddon{
-		Cluster:             t.Cluster.Name,
+		AddonTestConfig:     t.addonTestConfig(),
 		NodeName:            nodeName,
 		PodIdentityS3Bucket: t.PodIdentityS3Bucket,
-		K8S:                 t.K8sClient,
-		EKSClient:           t.EKSClient,
 		IAMClient:           t.IAMClient,
 		S3Client:            t.S3Client,
-		Logger:              t.Logger,
-		K8SConfig:           t.K8sClientConfig,
-		Region:              t.Cluster.Region,
-		DNSSuffix:           t.DNSSuffix,
-		EcrAccount:          t.EcrAccount,
 	}
 }
 

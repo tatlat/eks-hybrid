@@ -12,14 +12,11 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/eks/types"
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 	smtypes "github.com/aws/aws-sdk-go-v2/service/secretsmanager/types"
-	"github.com/go-logr/logr"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/rest"
 
 	"github.com/aws/eks-hybrid/test/e2e/constants"
 	"github.com/aws/eks-hybrid/test/e2e/errors"
 	"github.com/aws/eks-hybrid/test/e2e/kubernetes"
-	peeredtypes "github.com/aws/eks-hybrid/test/e2e/peered/types"
 )
 
 const (
@@ -36,17 +33,10 @@ var secretsStoreStaticProvisioningYaml string
 
 // SecretsStoreCSIDriverTest tests the Secrets Store CSI driver addon
 type SecretsStoreCSIDriverTest struct {
-	Cluster              string
+	AddonTestConfig
 	addon                *Addon
-	K8S                  peeredtypes.K8s
-	EKSClient            *eks.Client
 	SecretsManagerClient *secretsmanager.Client
-	K8SConfig            *rest.Config
-	Logger               logr.Logger
 	PodIdentityRoleArn   string
-	Region               string
-	EcrAccount           string
-	DNSSuffix            string
 
 	secretName  string
 	secretValue string

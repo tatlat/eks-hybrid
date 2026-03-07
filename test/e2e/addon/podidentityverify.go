@@ -8,14 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/service/eks"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	clientgo "k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
 
 	"github.com/aws/eks-hybrid/test/e2e/kubernetes"
 )
@@ -26,18 +22,11 @@ const (
 )
 
 type VerifyPodIdentityAddon struct {
-	Cluster             string
+	AddonTestConfig
 	NodeName            string
 	PodIdentityS3Bucket string
-	K8S                 clientgo.Interface
-	EKSClient           *eks.Client
 	IAMClient           *iam.Client
 	S3Client            *s3.Client
-	Logger              logr.Logger
-	K8SConfig           *rest.Config
-	Region              string
-	DNSSuffix           string
-	EcrAccount          string
 }
 
 func (v VerifyPodIdentityAddon) Run(ctx context.Context) error {
