@@ -17,6 +17,34 @@ phases:
         fi
       - export BUILD_NUMBER=${CODEBUILD_BUILD_NUMBER:-1}
       - export VERSION="build-${BUILD_NUMBER}"
+      
+      # Download test artifacts from S3 if USE_S3_TEST_BINARIES is set
+      # This is used for regions where building from source is not possible
+      - |
+        if [ "${USE_S3_TEST_BINARIES:-false}" = "true" ]; then
+          echo "Downloading test artifacts from S3..."
+          
+          # Download all test artifacts (binaries, buildspecs, scripts) from S3
+          aws s3 sync --no-progress s3://$ARTIFACTS_BUCKET/${S3_TEST_BINARIES_PATH:-latest}/ ./
+          
+          # S3 structure is bin/linux/{amd64,arm64}/* but scripts expect _bin/{amd64,arm64}/*
+          # Create the expected directory structure and copy files
+          mkdir -p _bin/amd64 _bin/arm64
+          
+          # Copy nodeadm binaries (both amd64 and arm64 needed for test nodes)
+          cp bin/linux/amd64/nodeadm* _bin/amd64/
+          cp bin/linux/arm64/nodeadm* _bin/arm64/
+          
+          # Copy test binariess
+          cp bin/linux/amd64/{nodeadm.test,conformance.test,addons.test,mixed_mode.test,e2e-test,ginkgo} _bin/amd64/
+          
+          # Make test binaries executable
+          chmod +x _bin/amd64/{nodeadm.test,conformance.test,addons.test,mixed_mode.test,e2e-test,ginkgo}
+          
+          echo "Test artifacts downloaded and reorganized successfully from S3"
+        else
+          echo "Using locally built test binaries from CodePipeline artifacts"
+        fi
 
   build:
     commands:
