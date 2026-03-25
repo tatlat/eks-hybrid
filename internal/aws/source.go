@@ -25,7 +25,7 @@ type Source struct {
 // GetLatestSource gets the source for latest version of aws provided artifacts from the
 // hybrid nodes CDN manifest https://hybrid-assets.eks.amazonaws.com/manifest.yaml
 func GetLatestSource(ctx context.Context, eksVersion, region string) (Source, error) {
-	manifest, err := getReleaseManifest(ctx)
+	manifest, err := getReleaseManifest(ctx, region)
 	if err != nil {
 		return Source{}, err
 	}
@@ -161,7 +161,7 @@ func getLatestDateEksPatchRelease(patchReleases []EksPatchRelease) (EksPatchRele
 }
 
 func GetRegionConfig(ctx context.Context, region string) (*RegionData, error) {
-	manifest, err := getReleaseManifest(ctx)
+	manifest, err := getReleaseManifest(ctx, region)
 	if err != nil {
 		return nil, err
 	}

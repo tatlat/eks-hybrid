@@ -14,6 +14,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/aws/retry"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/ecr"
 	"github.com/aws/aws-sdk-go-v2/service/ecrpublic"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	"github.com/blang/semver/v4"
@@ -49,6 +50,7 @@ type brSettingsTomlInitData struct {
 	ClusterCertificate      string
 	HybridContainerUserData string
 	IamRA                   bool
+	BottlerocketRegistry    string
 }
 
 type BottleRocket struct {
@@ -123,32 +125,44 @@ credential_process = %s credential-process --certificate %s --private-key %s --p
 		bootstrapContainerCommand = fmt.Sprintf("%s --activation-id=%q --activation-code=%q --region=%q", ssmSetupBootstrapCommand, userDataInput.NodeadmConfig.Spec.Hybrid.SSM.ActivationID, userDataInput.NodeadmConfig.Spec.Hybrid.SSM.ActivationCode, userDataInput.Region)
 	}
 
-	// This is essentially the same AWS config used in the tests, but for the us-east-1 region.
-	// We need to do this since ECR Public is only supported in us-east-1.
-	awsConfig, err := e2e.NewAWSConfig(ctx, config.WithRegion("us-east-1"),
-		config.WithAppID("bottlerocket-e2e-test"),
-		config.WithRetryer(func() aws.Retryer {
-			return retry.AddWithMaxBackoffDelay(
-				retry.AddWithMaxAttempts(
-					retry.NewStandard(),
-					10, // Max 10 attempts
-				),
-				10*time.Second, // Max backoff delay
-			)
-		}),
-	)
-	if err != nil {
-		return nil, err
-	}
+	var adminContainerLatestTag, bootstrapContainerLatestTag, controlContainerLatestTag string
+	var bottlerocketRegistry string
 
-	authToken, err := getAuthToken(ctx, ecrpublic.NewFromConfig(awsConfig))
-	if err != nil {
-		return nil, err
-	}
+	if strings.HasPrefix(userDataInput.Region, "cn-") {
+		// Use China private ECR mirrors
+		var err error
+		adminContainerLatestTag, bootstrapContainerLatestTag, controlContainerLatestTag, bottlerocketRegistry, err = getLatestImageTagsFromChinaECR(ctx, userDataInput.Region)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		bottlerocketRegistry = "public.ecr.aws/bottlerocket"
+		// Use ECR Public for commercial regions
+		awsConfig, err := e2e.NewAWSConfig(ctx, config.WithRegion("us-east-1"),
+			config.WithAppID("bottlerocket-e2e-test"),
+			config.WithRetryer(func() aws.Retryer {
+				return retry.AddWithMaxBackoffDelay(
+					retry.AddWithMaxAttempts(
+						retry.NewStandard(),
+						10, // Max 10 attempts
+					),
+					10*time.Second, // Max backoff delay
+				)
+			}),
+		)
+		if err != nil {
+			return nil, err
+		}
 
-	adminContainerLatestTag, bootstrapContainerLatestTag, controlContainerLatestTag, err := getLatestImageTags(authToken)
-	if err != nil {
-		return nil, err
+		authToken, err := getAuthToken(ctx, ecrpublic.NewFromConfig(awsConfig))
+		if err != nil {
+			return nil, err
+		}
+
+		adminContainerLatestTag, bootstrapContainerLatestTag, controlContainerLatestTag, err = getLatestImageTags(authToken)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	data := brSettingsTomlInitData{
@@ -161,6 +175,7 @@ credential_process = %s credential-process --certificate %s --private-key %s --p
 		ClusterCertificate:      base64.StdEncoding.EncodeToString(userDataInput.ClusterCert),
 		IamRA:                   userDataInput.NodeadmConfig.Spec.Hybrid.SSM == nil,
 		HybridContainerUserData: base64.StdEncoding.EncodeToString([]byte(bootstrapContainerCommand)),
+		BottlerocketRegistry:    bottlerocketRegistry,
 	}
 
 	return executeTemplate(brSettingsToml, data)
@@ -241,4 +256,107 @@ func getLatestImageTags(authToken string) (string, string, string, error) {
 	}
 
 	return latestTags[0], latestTags[1], latestTags[2], nil
+}
+
+// getLatestImageTagsFromChinaECR gets Bottlerocket container tags and registry from China ECR mirrors
+// Returns: adminTag, bootstrapTag, controlTag, registry, error
+func getLatestImageTagsFromChinaECR(ctx context.Context, region string) (string, string, string, string, error) {
+	// China ECR registry account mapping
+	chinaECRAccounts := map[string]string{
+		"cn-north-1":     "183470599484",
+		"cn-northwest-1": "183901325759",
+	}
+
+	account, ok := chinaECRAccounts[region]
+	if !ok {
+		return "", "", "", "", fmt.Errorf("no China ECR account found for region %s", region)
+	}
+
+	// Construct registry URL
+	registry := fmt.Sprintf("%s.dkr.ecr.%s.amazonaws.com.cn", account, region)
+
+	// Create ECR client for the China region
+	awsConfig, err := e2e.NewAWSConfig(ctx, config.WithRegion(region),
+		config.WithAppID("bottlerocket-e2e-test-china"),
+		config.WithRetryer(func() aws.Retryer {
+			return retry.AddWithMaxBackoffDelay(
+				retry.AddWithMaxAttempts(
+					retry.NewStandard(),
+					10, // Max 10 attempts
+				),
+				10*time.Second, // Max backoff delay
+			)
+		}),
+	)
+	if err != nil {
+		return "", "", "", "", err
+	}
+
+	ecrClient := ecr.NewFromConfig(awsConfig)
+
+	bottlerocketRepos := []string{
+		"bottlerocket-admin",
+		"bottlerocket-bootstrap",
+		"bottlerocket-control",
+	}
+	latestTags := []string{}
+
+	for _, repo := range bottlerocketRepos {
+		// Describe images in the China ECR repository
+		repoName := fmt.Sprintf("%s/%s", account, repo)
+
+		result, err := ecrClient.DescribeImages(ctx, &ecr.DescribeImagesInput{
+			RegistryId:     aws.String(account),
+			RepositoryName: aws.String(repo),
+		})
+		if err != nil {
+			// If describe fails, fall back to "latest" tag
+			latestTags = append(latestTags, "latest")
+			continue
+		}
+
+		if len(result.ImageDetails) == 0 {
+			latestTags = append(latestTags, "latest")
+			continue
+		}
+
+		// Find the latest semantic version tag
+		latest := "latest"
+		var latestSemver semver.Version
+		hasValidSemver := false
+
+		for _, image := range result.ImageDetails {
+			if image.ImageTags == nil || len(image.ImageTags) == 0 {
+				continue
+			}
+
+			for _, tag := range image.ImageTags {
+				if tag == "latest" {
+					latest = "latest"
+					break
+				}
+
+				// Try to parse as semver
+				tagSemver, err := semver.Parse(strings.TrimPrefix(tag, "v"))
+				if err != nil {
+					continue
+				}
+
+				if !hasValidSemver || tagSemver.GT(latestSemver) {
+					latest = tag
+					latestSemver = tagSemver
+					hasValidSemver = true
+				}
+			}
+		}
+
+		latestTags = append(latestTags, latest)
+		_ = repoName // For debugging if needed
+	}
+
+	if len(latestTags) != 3 {
+		return "", "", "", "", fmt.Errorf("failed to get tags for all Bottlerocket containers")
+	}
+
+	return latestTags[0], latestTags[1], latestTags[2], registry, nil
 }

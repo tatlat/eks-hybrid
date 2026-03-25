@@ -27,8 +27,8 @@ KUBERNETES_VERSION="${3?Please specify the Kubernetes version}"
 CNI="${4?Please specify the cni}"
 NODEADM_AMD_URL="${5?Please specify the nodeadm amd url}"
 NODEADM_ARM_URL="${6?Please specify the nodeadm arm url}"
-LOGS_BUCKET="${7-?Please specify the bucket for logs}"
-ARTIFACTS_FOLDER="${8-?Please specify the folder for artifacts}"
+LOGS_BUCKET="${7:?Please specify the bucket for logs}"
+ARTIFACTS_FOLDER="${8:?Please specify the folder for artifacts}"
 
 PARALLEL_TEST_PROCESSES=64
 

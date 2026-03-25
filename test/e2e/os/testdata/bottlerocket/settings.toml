@@ -28,16 +28,16 @@ config = "{{ .AWSConfig }}"
 
 [settings.bootstrap-containers.eks-hybrid-setup]
 mode = "always"
-source = "public.ecr.aws/bottlerocket/bottlerocket-bootstrap:{{ .BootstrapContainerTag }}"
+source = "{{ .BottlerocketRegistry }}/bottlerocket-bootstrap:{{ .BootstrapContainerTag }}"
 user-data = "{{ .HybridContainerUserData }}"
 
 [settings.host-containers.admin]
 enabled = true
-source = "public.ecr.aws/bottlerocket/bottlerocket-admin:{{ .AdminContainerTag }}"
+source = "{{ .BottlerocketRegistry }}/bottlerocket-admin:{{ .AdminContainerTag }}"
 user-data = "{{ .AdminContainerUserData }}"
 
 {{- if not .IamRA }}
 [settings.host-containers.control]
 enabled = true
-source = "public.ecr.aws/bottlerocket/bottlerocket-control:{{ .ControlContainerTag }}"
+source = "{{ .BottlerocketRegistry }}/bottlerocket-control:{{ .ControlContainerTag }}"
 {{- end }}

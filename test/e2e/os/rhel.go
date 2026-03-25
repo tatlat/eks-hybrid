@@ -15,7 +15,10 @@ import (
 	"github.com/aws/eks-hybrid/test/e2e"
 )
 
-const rhelAWSAccount = "309956199498"
+const (
+	rhelAWSAccount      = "309956199498" // Commercial regions
+	rhelChinaAWSAccount = "841258680906" // China regions
+)
 
 //go:embed testdata/rhel/8/cloud-init.txt
 var rhel8CloudInit []byte
@@ -74,7 +77,11 @@ func (r RedHat8) InstanceType(region string, instanceSize e2e.InstanceSize, comp
 func (r RedHat8) AMIName(ctx context.Context, awsConfig aws.Config, _ string, _ e2e.ComputeType) (string, error) {
 	// there is no rhel ssm parameter
 	// aws ec2 describe-images --owners 309956199498 --query 'sort_by(Images, &CreationDate)[-1].[ImageId]' --filters "Name=name,Values=RHEL-8*" "Name=architecture,Values=x86_64" --region us-west-2
-	return findLatestImage(ctx, ec2.NewFromConfig(awsConfig), "RHEL-8*", r.amiArchitecture)
+	account := rhelAWSAccount
+	if strings.HasPrefix(awsConfig.Region, "cn-") {
+		account = rhelChinaAWSAccount
+	}
+	return findLatestImageWithAccount(ctx, ec2.NewFromConfig(awsConfig), "RHEL-8*", r.amiArchitecture, account)
 }
 
 func (r RedHat8) BuildUserData(_ context.Context, userDataInput e2e.UserDataInput) ([]byte, error) {
@@ -153,7 +160,11 @@ func (r RedHat9) InstanceType(region string, instanceSize e2e.InstanceSize, comp
 func (r RedHat9) AMIName(ctx context.Context, awsConfig aws.Config, _ string, _ e2e.ComputeType) (string, error) {
 	// there is no rhel ssm parameter
 	// aws ec2 describe-images --owners 309956199498 --query 'sort_by(Images, &CreationDate)[-1].[ImageId]' --filters "Name=name,Values=RHEL-9*" "Name=architecture,Values=x86_64" --region us-west-2
-	return findLatestImage(ctx, ec2.NewFromConfig(awsConfig), "RHEL-9*", r.amiArchitecture)
+	account := rhelAWSAccount
+	if strings.HasPrefix(awsConfig.Region, "cn-") {
+		account = rhelChinaAWSAccount
+	}
+	return findLatestImageWithAccount(ctx, ec2.NewFromConfig(awsConfig), "RHEL-9*", r.amiArchitecture, account)
 }
 
 func (r RedHat9) BuildUserData(_ context.Context, userDataInput e2e.UserDataInput) ([]byte, error) {
@@ -199,10 +210,15 @@ type AMI struct {
 // this assumes that the return ami names follow the pattern `{amiPrefix}.<minor>.<patch?>_`
 // ex: amiPrefix: RHEL-8*, amiName: RHEL-8.8.0_HVM-20250116-x86_64-2339-Hourly2-GP3 or RHEL-8.8_HVM-20250116-x86_64-2339-Hourly2-GP3
 func findLatestImage(ctx context.Context, client *ec2.Client, amiPrefix, arch string) (string, error) {
+	return findLatestImageWithAccount(ctx, client, amiPrefix, arch, rhelAWSAccount)
+}
+
+// findLatestImageWithAccount returns the most recent redhat image matching the amiPrefix, arch, and owner account
+func findLatestImageWithAccount(ctx context.Context, client *ec2.Client, amiPrefix, arch, ownerAccount string) (string, error) {
 	var latestAMI AMI
 
 	in := &ec2.DescribeImagesInput{
-		Owners:     []string{rhelAWSAccount},
+		Owners:     []string{ownerAccount},
 		Filters:    []types.Filter{{Name: aws.String("name"), Values: []string{amiPrefix}}, {Name: aws.String("architecture"), Values: []string{arch}}},
 		MaxResults: aws.Int32(100),
 	}

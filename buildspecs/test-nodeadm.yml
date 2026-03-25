@@ -17,6 +17,21 @@ phases:
         fi
       - export BUILD_NUMBER=${CODEBUILD_BUILD_NUMBER:-1}
       - export VERSION="build-${BUILD_NUMBER}"
+      
+      - |
+        if [ "${USE_S3_TEST_BINARIES:-false}" = "true" ]; then
+          echo "Downloading test artifacts from S3 (China region workflow)..."
+          
+          # Download artifacts.zip created by upload-dev-release-artifacts.sh
+          aws s3 cp --no-progress s3://$ARTIFACTS_BUCKET/${S3_TEST_BINARIES_PATH:-test-release/latest}/artifacts.zip ./artifacts.zip
+          
+          # Extract to get _bin/ structure directly
+          unzip -q artifacts.zip
+          
+          echo "Test artifacts downloaded and extracted from S3"
+        else
+          echo "Using locally built test binaries from previous build phase (commercial region workflow)"
+        fi
 
   build:
     commands:
