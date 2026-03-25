@@ -206,13 +206,6 @@ type AMI struct {
 	Version   string
 }
 
-// findLatestImage returns the most recent redhat image matching the amiPrefix and and arch
-// this assumes that the return ami names follow the pattern `{amiPrefix}.<minor>.<patch?>_`
-// ex: amiPrefix: RHEL-8*, amiName: RHEL-8.8.0_HVM-20250116-x86_64-2339-Hourly2-GP3 or RHEL-8.8_HVM-20250116-x86_64-2339-Hourly2-GP3
-func findLatestImage(ctx context.Context, client *ec2.Client, amiPrefix, arch string) (string, error) {
-	return findLatestImageWithAccount(ctx, client, amiPrefix, arch, rhelAWSAccount)
-}
-
 // findLatestImageWithAccount returns the most recent redhat image matching the amiPrefix, arch, and owner account
 func findLatestImageWithAccount(ctx context.Context, client *ec2.Client, amiPrefix, arch, ownerAccount string) (string, error) {
 	var latestAMI AMI

@@ -326,7 +326,7 @@ func getLatestImageTagsFromChinaECR(ctx context.Context, region string) (string,
 		hasValidSemver := false
 
 		for _, image := range result.ImageDetails {
-			if image.ImageTags == nil || len(image.ImageTags) == 0 {
+			if len(image.ImageTags) == 0 {
 				continue
 			}
 
