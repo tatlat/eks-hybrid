@@ -61,6 +61,7 @@ func NewCommand() *command {
 		clusterName:       fmt.Sprintf("%s-%s", defaultClusterNamePrefix, strings.ReplaceAll(defaultK8sVersion, ".", "-")),
 		cni:               defaultCNI,
 		k8sVersion:        defaultK8sVersion,
+		region:            defaultRegion,
 		nodeadmAMDURL:     defaultNodeadmAMDURL,
 		nodeadmARMURL:     defaultNodeadmARMURL,
 		skipCleanup:       false,
@@ -103,8 +104,15 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	ctx := context.Background()
 	logger := e2e.NewLogger(e2e.LoggerConfig{NoColor: c.noColor})
 
+	// Load test resources first to get the correct region from config file
+	testResources, err := c.loadSetupConfig(logger)
+	if err != nil {
+		return fmt.Errorf("loading test resources configuration: %w", err)
+	}
+
+	// Use the region from test resources (which may come from config file)
 	awsCfg, err := e2e.NewAWSConfig(ctx,
-		config.WithRegion(c.region),
+		config.WithRegion(testResources.ClusterRegion),
 		// We use a custom AppId so the requests show that they were
 		// made by this command in the user-agent
 		config.WithAppID("nodeadm-e2e-test-run-cmd"),
@@ -123,11 +131,6 @@ func (c *command) Run(log *zap.Logger, opts *cli.GlobalOptions) error {
 	}
 	if c.region == "" {
 		c.region = awsCfg.Region
-	}
-
-	testResources, err := c.loadSetupConfig(logger)
-	if err != nil {
-		return fmt.Errorf("loading test resources configuration: %w", err)
 	}
 
 	testConfig, err := c.loadTestConfig(&testResources, logger)
@@ -215,6 +218,8 @@ func (c *command) loadSetupConfig(logger logr.Logger) (cluster.TestResources, er
 			c.region != defaultRegion ||
 			c.k8sVersion != defaultK8sVersion ||
 			c.cni != defaultCNI {
+			logger.Info("setup config", "clusterName", c.clusterName, "region", c.region, "k8sVersion", c.k8sVersion, "CNI", c.cni)
+			logger.Info("defaults", "clusterName", defaultClusterName, "region", defaultRegion, "k8sVersion", defaultK8sVersion, "CNI", defaultCNI)
 			return testResources, fmt.Errorf("cannot specify both setup-config file and individual cluster resource flags (name, region, kubernetes-version, cni, eks-endpoint)")
 		}
 

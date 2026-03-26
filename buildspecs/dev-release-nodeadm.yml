@@ -7,4 +7,7 @@ phases:
 
   post_build:
     commands:
-    - ./hack/validate-release-artifacts.sh $ARTIFACTS_BUCKET latest
+    - |
+      if [ "${SKIP_LATEST_UPLOAD:-false}" != "true" ]; then
+        ./hack/validate-release-artifacts.sh $ARTIFACTS_BUCKET latest
+      fi

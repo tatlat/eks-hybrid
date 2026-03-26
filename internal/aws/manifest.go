@@ -14,6 +14,27 @@ import (
 // set build time
 var manifestUrl string
 
+// getManifestURL returns the appropriate manifest URL based on the region/partition
+// If the region is in aws-cn partition, it uses a China-specific URL
+// Otherwise, it defaults to the embedded manifestUrl
+func getManifestURL(region string) string {
+	if region == "" {
+		// No region provided, use default embedded URL
+		return manifestUrl
+	}
+
+	// Detect partition from region
+	partition := GetPartitionFromRegionFallback(region)
+
+	// For aws-cn partition, use China-specific manifest host
+	if partition == "aws-cn" {
+		return "https://eks-hybrid-assets.awsstatic.cn/manifest.yaml"
+	}
+
+	// For all other partitions, use the embedded default URL
+	return manifestUrl
+}
+
 type Manifest struct {
 	SupportedEksReleases     []SupportedEksRelease     `json:"supported_eks_releases"`
 	IamRolesAnywhereReleases []IamRolesAnywhereRelease `json:"iam_roles_anywhere_releases"`
@@ -65,8 +86,10 @@ type Artifact struct {
 }
 
 // Read from the manifest file on s3 and parse into Manifest struct
-func getReleaseManifest(ctx context.Context) (*Manifest, error) {
-	yamlFileData, err := util.GetHttpFile(ctx, manifestUrl)
+// region is used to determine the appropriate manifest URL for different partitions (e.g., aws-cn)
+func getReleaseManifest(ctx context.Context, region string) (*Manifest, error) {
+	manifestURL := getManifestURL(region)
+	yamlFileData, err := util.GetHttpFile(ctx, manifestURL)
 	if err != nil {
 		return nil, err
 	}
