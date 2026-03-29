@@ -7,6 +7,7 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -19,6 +20,7 @@ import (
 	clientgo "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
+	internalaws "github.com/aws/eks-hybrid/internal/aws"
 	"github.com/aws/eks-hybrid/test/e2e"
 	"github.com/aws/eks-hybrid/test/e2e/cleanup"
 	"github.com/aws/eks-hybrid/test/e2e/commands"
@@ -63,10 +65,11 @@ type NodeCreate struct {
 	Logger              logr.Logger
 	RemoteCommandRunner commands.RemoteCommandRunner
 
-	SetRootPassword bool
-	NodeadmURLs     e2e.NodeadmURLs
-	PublicKey       string
-	ManifestURL     string
+	SetRootPassword    bool
+	NodeadmURLs        e2e.NodeadmURLs
+	PublicKey          string
+	ManifestURL        string
+	InstanceProfileARN string
 }
 
 // PeeredInstance represents a Hybrid node running as an EC2 instance in a peered VPC
@@ -144,6 +147,15 @@ func (c NodeCreate) Create(ctx context.Context, spec *NodeSpec) (PeeredInstance,
 		instanceType = spec.OS.InstanceType(c.Cluster.Region, spec.InstanceSize, spec.ComputeType)
 	}
 
+	// Use the spec-level instance profile if explicitly provided.
+	// Otherwise, for Bottlerocket in China regions, attach the node-level instance profile
+	// since host-ctr attempts to authenticate to the private ECR via IMDS.
+	// (Commercial Bottlerocket uses public.ecr.aws which needs no auth; other OSes don't use host-ctr.)
+	instanceProfileARN := spec.InstanceProfileARN
+	if instanceProfileARN == "" && os.IsBottlerocket(spec.OS.Name()) && strings.HasPrefix(c.Cluster.Region, "cn-") {
+		instanceProfileARN = c.InstanceProfileARN
+	}
+
 	ec2Input := ec2.InstanceConfig{
 		ClusterName:        c.Cluster.Name,
 		InstanceName:       spec.InstanceName,
@@ -153,7 +165,7 @@ func (c NodeCreate) Create(ctx context.Context, spec *NodeSpec) (PeeredInstance,
 		SubnetID:           c.Cluster.SubnetID,
 		SecurityGroupID:    c.Cluster.SecurityGroupID,
 		UserData:           userdata,
-		InstanceProfileARN: spec.InstanceProfileARN,
+		InstanceProfileARN: instanceProfileARN,
 		OS:                 spec.OS.Name(),
 	}
 
@@ -206,7 +218,10 @@ func (c *NodeCreate) SerialConsole(ctx context.Context, instanceId string) (*ssh
 		return nil, fmt.Errorf("adding ssh key via instance connect: %w", err)
 	}
 
-	return ssh.NewSerialConsole("tcp", "serial-console.ec2-instance-connect."+c.AWS.Region+".aws:22", config), nil
+	partition := internalaws.GetPartitionFromRegionFallback(c.AWS.Region)
+	endpoint := internalaws.GetSerialConsoleEndpoint(c.AWS.Region, partition)
+
+	return ssh.NewSerialConsole("tcp", endpoint, config), nil
 }
 
 func generateKeyPair() ([]byte, []byte, error) {

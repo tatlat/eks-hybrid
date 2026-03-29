@@ -14,7 +14,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/aws/retry"
 	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/service/ecr"
 	"github.com/aws/aws-sdk-go-v2/service/ecrpublic"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	"github.com/blang/semver/v4"
@@ -125,20 +124,24 @@ credential_process = %s credential-process --certificate %s --private-key %s --p
 		bootstrapContainerCommand = fmt.Sprintf("%s --activation-id=%q --activation-code=%q --region=%q", ssmSetupBootstrapCommand, userDataInput.NodeadmConfig.Spec.Hybrid.SSM.ActivationID, userDataInput.NodeadmConfig.Spec.Hybrid.SSM.ActivationCode, userDataInput.Region)
 	}
 
-	var adminContainerLatestTag, bootstrapContainerLatestTag, controlContainerLatestTag string
-	var bottlerocketRegistry string
+	bottlerocketRegistry := "public.ecr.aws/bottlerocket"
 
+	// ECR Public GetAuthorizationToken is only available in us-east-1 via the AWS SDK and is not
+	// available in China partitions. For China regions we fetch an anonymous bearer token from the
+	// public ECR token endpoint directly (no AWS credentials required). For all other regions we
+	// use the SDK call which returns a more privileged token.
+	var authToken string
 	if strings.HasPrefix(userDataInput.Region, "cn-") {
-		// Use China private ECR mirrors
-		var err error
-		adminContainerLatestTag, bootstrapContainerLatestTag, controlContainerLatestTag, bottlerocketRegistry, err = getLatestImageTagsFromChinaECR(ctx, userDataInput.Region)
-		if err != nil {
-			return nil, err
+		// ECR Public GetAuthorizationToken SDK call is only available in us-east-1 and cannot be
+		// called from China partitions. Fetch an anonymous bearer token from the public ECR token
+		// endpoint directly — no AWS credentials required, works from any network.
+		var tokenErr error
+		authToken, tokenErr = getAnonymousECRPublicToken(ctx)
+		if tokenErr != nil {
+			return nil, fmt.Errorf("getting anonymous ECR public token for China region: %w", tokenErr)
 		}
 	} else {
-		bottlerocketRegistry = "public.ecr.aws/bottlerocket"
-		// Use ECR Public for commercial regions
-		awsConfig, err := e2e.NewAWSConfig(ctx, config.WithRegion("us-east-1"),
+		awsCfg, cfgErr := e2e.NewAWSConfig(ctx, config.WithRegion("us-east-1"),
 			config.WithAppID("bottlerocket-e2e-test"),
 			config.WithRetryer(func() aws.Retryer {
 				return retry.AddWithMaxBackoffDelay(
@@ -150,19 +153,19 @@ credential_process = %s credential-process --certificate %s --private-key %s --p
 				)
 			}),
 		)
-		if err != nil {
-			return nil, err
+		if cfgErr != nil {
+			return nil, cfgErr
 		}
+		var tokenErr error
+		authToken, tokenErr = getAuthToken(ctx, ecrpublic.NewFromConfig(awsCfg))
+		if tokenErr != nil {
+			return nil, tokenErr
+		}
+	}
 
-		authToken, err := getAuthToken(ctx, ecrpublic.NewFromConfig(awsConfig))
-		if err != nil {
-			return nil, err
-		}
-
-		adminContainerLatestTag, bootstrapContainerLatestTag, controlContainerLatestTag, err = getLatestImageTags(authToken)
-		if err != nil {
-			return nil, err
-		}
+	adminContainerLatestTag, bootstrapContainerLatestTag, controlContainerLatestTag, err := getLatestImageTags(authToken)
+	if err != nil {
+		return nil, err
 	}
 
 	data := brSettingsTomlInitData{
@@ -258,105 +261,40 @@ func getLatestImageTags(authToken string) (string, string, string, error) {
 	return latestTags[0], latestTags[1], latestTags[2], nil
 }
 
-// getLatestImageTagsFromChinaECR gets Bottlerocket container tags and registry from China ECR mirrors
-// Returns: adminTag, bootstrapTag, controlTag, registry, error
-func getLatestImageTagsFromChinaECR(ctx context.Context, region string) (string, string, string, string, error) {
-	// China ECR registry account mapping
-	chinaECRAccounts := map[string]string{
-		"cn-north-1":     "183470599484",
-		"cn-northwest-1": "183901325759",
-	}
-
-	account, ok := chinaECRAccounts[region]
-	if !ok {
-		return "", "", "", "", fmt.Errorf("no China ECR account found for region %s", region)
-	}
-
-	// Construct registry URL
-	registry := fmt.Sprintf("%s.dkr.ecr.%s.amazonaws.com.cn", account, region)
-
-	// Create ECR client for the China region
-	awsConfig, err := e2e.NewAWSConfig(ctx, config.WithRegion(region),
-		config.WithAppID("bottlerocket-e2e-test-china"),
-		config.WithRetryer(func() aws.Retryer {
-			return retry.AddWithMaxBackoffDelay(
-				retry.AddWithMaxAttempts(
-					retry.NewStandard(),
-					10, // Max 10 attempts
-				),
-				10*time.Second, // Max backoff delay
-			)
-		}),
-	)
+// getAnonymousECRPublicToken fetches an anonymous bearer token from the public ECR token endpoint.
+// This endpoint is publicly accessible without AWS credentials and works from regions where
+// the ecrpublic.GetAuthorizationToken SDK API is not available.
+func getAnonymousECRPublicToken(ctx context.Context) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", "https://public.ecr.aws/token", nil)
 	if err != nil {
-		return "", "", "", "", err
+		return "", fmt.Errorf("creating request for ECR public token: %w", err)
 	}
 
-	ecrClient := ecr.NewFromConfig(awsConfig)
-
-	bottlerocketRepos := []string{
-		"bottlerocket-admin",
-		"bottlerocket-bootstrap",
-		"bottlerocket-control",
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("fetching ECR public token: %w", err)
 	}
-	latestTags := []string{}
+	defer resp.Body.Close()
 
-	for _, repo := range bottlerocketRepos {
-		// Describe images in the China ECR repository
-		repoName := fmt.Sprintf("%s/%s", account, repo)
-
-		result, err := ecrClient.DescribeImages(ctx, &ecr.DescribeImagesInput{
-			RegistryId:     aws.String(account),
-			RepositoryName: aws.String(repo),
-		})
-		if err != nil {
-			// If describe fails, fall back to "latest" tag
-			latestTags = append(latestTags, "latest")
-			continue
-		}
-
-		if len(result.ImageDetails) == 0 {
-			latestTags = append(latestTags, "latest")
-			continue
-		}
-
-		// Find the latest semantic version tag
-		latest := "latest"
-		var latestSemver semver.Version
-		hasValidSemver := false
-
-		for _, image := range result.ImageDetails {
-			if len(image.ImageTags) == 0 {
-				continue
-			}
-
-			for _, tag := range image.ImageTags {
-				if tag == "latest" {
-					latest = "latest"
-					break
-				}
-
-				// Try to parse as semver
-				tagSemver, err := semver.Parse(strings.TrimPrefix(tag, "v"))
-				if err != nil {
-					continue
-				}
-
-				if !hasValidSemver || tagSemver.GT(latestSemver) {
-					latest = tag
-					latestSemver = tagSemver
-					hasValidSemver = true
-				}
-			}
-		}
-
-		latestTags = append(latestTags, latest)
-		_ = repoName // For debugging if needed
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("unexpected status code from ECR public token endpoint: %d", resp.StatusCode)
 	}
 
-	if len(latestTags) != 3 {
-		return "", "", "", "", fmt.Errorf("failed to get tags for all Bottlerocket containers")
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("reading ECR public token response: %w", err)
 	}
 
-	return latestTags[0], latestTags[1], latestTags[2], registry, nil
+	var tokenResp struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(body, &tokenResp); err != nil {
+		return "", fmt.Errorf("parsing ECR public token response: %w", err)
+	}
+
+	if tokenResp.Token == "" {
+		return "", fmt.Errorf("ECR public token endpoint returned empty token")
+	}
+
+	return tokenResp.Token, nil
 }
