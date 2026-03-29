@@ -81,6 +81,18 @@ func GetServiceEndpointForPartition(service, region, partition string) string {
 	return fmt.Sprintf("%s.%s.%s", service, region, dnsSuffix)
 }
 
+// GetSerialConsoleEndpoint returns the EC2 Instance Connect serial console SSH endpoint for a given region and partition.
+// The endpoint format differs between commercial and China partitions.
+func GetSerialConsoleEndpoint(region, partition string) string {
+	switch partition {
+	case "aws-cn":
+		// China uses a different endpoint format
+		return fmt.Sprintf("ec2-serial-console.%s.api.amazonwebservices.com.cn:22", region)
+	default:
+		return fmt.Sprintf("serial-console.ec2-instance-connect.%s.aws:22", region)
+	}
+}
+
 // GetEC2ServicePrincipal returns the correct EC2 service principal for a partition.
 // AWS China (aws-cn) uses ec2.amazonaws.com.cn
 // All other partitions use ec2.amazonaws.com
