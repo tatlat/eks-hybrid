@@ -40,6 +40,8 @@ type ExternalDNSTest struct {
 }
 
 // Create installs the external-dns addon
+func (e *ExternalDNSTest) AddonName() string { return externalDNS }
+
 func (e *ExternalDNSTest) Create(ctx context.Context) error {
 	hostedZoneId, err := e.getHostedZoneId(ctx)
 	if err != nil {

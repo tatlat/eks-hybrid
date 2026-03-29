@@ -2,6 +2,7 @@ package addon
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -52,9 +53,12 @@ type PCAIssuerTest struct {
 	PodIdentityRoleArn string
 	Logger             logr.Logger
 	addon              *Addon
+	available          bool
 }
 
-// Setup installs the AWS PCA Issuer add-on
+// Setup installs the AWS PCA Issuer add-on. If the addon is not available in the
+// current region/partition, Setup returns nil and marks the issuer as unavailable
+// so that Validate can skip the PCA-specific steps without failing the whole test.
 func (p *PCAIssuerTest) Setup(ctx context.Context) error {
 	p.Logger.Info("Setting up AWS PCA Issuer test")
 
@@ -72,6 +76,11 @@ func (p *PCAIssuerTest) Setup(ctx context.Context) error {
 	}
 
 	if err := p.addon.CreateAndWaitForActive(ctx, p.EKSClient, p.K8S, p.Logger); err != nil {
+		if errors.Is(err, ErrAddonNotAvailable) {
+			p.Logger.Info("AWS PCA Issuer addon is not available in this region, skipping PCA validation")
+			p.available = false
+			return nil
+		}
 		return fmt.Errorf("failed to create AWS PCA Issuer addon: %v", err)
 	}
 
@@ -80,12 +89,19 @@ func (p *PCAIssuerTest) Setup(ctx context.Context) error {
 		return fmt.Errorf("error waiting for AWS PCA Issuer deployment to be ready: %v", err)
 	}
 
+	p.available = true
 	p.Logger.Info("AWS PCA Issuer deployment is ready")
 	return nil
 }
 
-// Validate tests the AWS PCA Issuer by creating and validating certificates
+// Validate tests the AWS PCA Issuer by creating and validating certificates.
+// If the addon was not available (Setup returned without installing it), this is a no-op.
 func (p *PCAIssuerTest) Validate(ctx context.Context) error {
+	if !p.available {
+		p.Logger.Info("AWS PCA Issuer not available in this region, skipping PCA validation")
+		return nil
+	}
+
 	p.Logger.Info("Validating AWS PCA Issuer")
 
 	// Create and activate a Private CA

@@ -162,9 +162,33 @@ func (cw CloudWatchAddon) VerifyCloudWatchLogGroups(ctx context.Context, cwLogsC
 	return fmt.Errorf("no CloudWatch log groups found - expected %d log groups but found %d", len(logGroups), foundLogGroups)
 }
 
+// latestAddonVersion returns the most recent available version for an addon by querying the EKS API.
+func latestAddonVersion(ctx context.Context, eksClient *eks.Client, addonName string) (string, error) {
+	out, err := eksClient.DescribeAddonVersions(ctx, &eks.DescribeAddonVersionsInput{
+		AddonName: &addonName,
+	})
+	if err != nil {
+		return "", fmt.Errorf("describing addon versions for %s: %w", addonName, err)
+	}
+	if len(out.Addons) == 0 || len(out.Addons[0].AddonVersions) == 0 {
+		return "", fmt.Errorf("no versions found for addon %s", addonName)
+	}
+	// The first addon version returned is the latest.
+	return *out.Addons[0].AddonVersions[0].AddonVersion, nil
+}
+
 // SetupCwAddon handles CloudWatch addon installation and setup
 func (cw *CloudWatchAddon) SetupCwAddon(ctx context.Context, eksClient *eks.Client, k8sClient clientgo.Interface, cwLogsClient *cloudwatchlogs.Client, logger logr.Logger) error {
 	logger.Info("Setting up CloudWatch addon for mixed mode", "cluster", cw.Cluster)
+
+	// Use the latest available version so Pod Identity associations are more likely to be supported.
+	latestVersion, err := latestAddonVersion(ctx, eksClient, cw.Name)
+	if err != nil {
+		logger.Info("Could not determine latest addon version, using EKS default", "error", err.Error())
+	} else {
+		logger.Info("Using latest addon version", "version", latestVersion)
+		cw.Version = latestVersion
+	}
 
 	// Clean up existing log groups for fresh test environment
 	if err := cw.cleanupLogGroups(ctx, cwLogsClient, logger); err != nil {

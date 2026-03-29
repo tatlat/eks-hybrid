@@ -33,6 +33,8 @@ type MetricsServerTest struct {
 }
 
 // Create installs the metrics-server addon
+func (m *MetricsServerTest) AddonName() string { return metricsServerName }
+
 func (m *MetricsServerTest) Create(ctx context.Context) error {
 	m.addon = &Addon{
 		Cluster:   m.Cluster,
