@@ -43,6 +43,8 @@ type SecretsStoreCSIDriverTest struct {
 }
 
 // Create installs the Secrets Store CSI driver addon
+func (s *SecretsStoreCSIDriverTest) AddonName() string { return secretsStoreCSIDriver }
+
 func (s *SecretsStoreCSIDriverTest) Create(ctx context.Context) error {
 	s.addon = &Addon{
 		Cluster:   s.Cluster,

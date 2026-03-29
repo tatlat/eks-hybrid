@@ -49,11 +49,14 @@ type FsxCSIDriverTest struct {
 	PodIdentityRoleArn string
 	SubnetID           string
 	SecurityGroupID    string
+	Region             string
 	manifests          []unstructured.Unstructured
 	fileSystemID       string
 }
 
 // Create installs the AWS FSX CSI driver addon
+func (f *FsxCSIDriverTest) AddonName() string { return fsxCSIDriver }
+
 func (f *FsxCSIDriverTest) Create(ctx context.Context) error {
 	f.addon = &Addon{
 		Cluster:   f.Cluster,
@@ -67,9 +70,7 @@ func (f *FsxCSIDriverTest) Create(ctx context.Context) error {
 		},
 	}
 
-	f.Logger.Info("Creating AWS FSX CSI driver addon (assuming success for hybrid nodes)")
-
-	if err := f.addon.Create(ctx, f.EKSClient, f.Logger); err != nil {
+	if err := f.addon.CreateAndWaitForActive(ctx, f.EKSClient, f.K8S, f.Logger); err != nil {
 		return fmt.Errorf("failed to create AWS FSX CSI driver addon: %w", err)
 	}
 
@@ -83,6 +84,8 @@ func (f *FsxCSIDriverTest) Validate(ctx context.Context) error {
 	uniqueTestPod := fsxTestPod + uniqueSuffix
 	pvcName := "fsx-claim" + uniqueSuffix
 
+	deploymentType, throughput, extraParams := fsxLustreDeploymentConfig(f.Region)
+
 	replacer := strings.NewReplacer(
 		"{{NAMESPACE}}", defaultNamespace,
 		"{{FSX_TEST_POD}}", uniqueTestPod,
@@ -90,12 +93,27 @@ func (f *FsxCSIDriverTest) Validate(ctx context.Context) error {
 		"{{SECURITY_GROUP_ID}}", f.SecurityGroupID,
 		"{{FSX_TEST_STRING}}", fsxTestString,
 		"{{UNIQUE_SUFFIX}}", uniqueSuffix,
+		"{{DEPLOYMENT_TYPE}}", deploymentType,
+		"{{PER_UNIT_STORAGE_THROUGHPUT}}", throughput,
 	)
 
 	replacedYaml := replacer.Replace(fsxDynamicProvisioningYaml)
 	objs, err := kubernetes.YamlToUnstructured([]byte(replacedYaml))
 	if err != nil {
 		return fmt.Errorf("failed to read FSX CSI dynamic provisioning yaml file: %w", err)
+	}
+
+	// Patch the StorageClass with extra parameters required for this region.
+	if len(extraParams) > 0 {
+		for i := range objs {
+			if objs[i].GetKind() == "StorageClass" {
+				for k, v := range extraParams {
+					if err := unstructured.SetNestedField(objs[i].Object, v, "parameters", k); err != nil {
+						return fmt.Errorf("setting StorageClass parameter %s: %w", k, err)
+					}
+				}
+			}
+		}
 	}
 
 	f.manifests = objs
@@ -196,6 +214,19 @@ func (f *FsxCSIDriverTest) Delete(ctx context.Context) error {
 	}
 
 	return f.addon.Delete(ctx, f.EKSClient, f.Logger)
+}
+
+// fsxLustreDeploymentConfig returns the deploymentType, perUnitStorageThroughput, and
+// any extra StorageClass parameters required for the given region.
+// China regions only support PERSISTENT_1 with SSD (50, 100, 200 MB/s/TiB) and require
+// fileSystemTypeVersion "2.12" to match the Lustre client on the node.
+// https://docs.amazonaws.cn/en_us/fsx/latest/LustreGuide/using-fsx-lustre.html
+// For other regions, see here: https://docs.aws.amazon.com/fsx/latest/LustreGuide/using-fsx-lustre.html
+func fsxLustreDeploymentConfig(region string) (deploymentType, perUnitStorageThroughput string, extraParams map[string]string) {
+	if strings.HasPrefix(region, "cn-") {
+		return "PERSISTENT_1", "200", map[string]string{"fileSystemTypeVersion": "2.12"}
+	}
+	return "PERSISTENT_2", "125", nil
 }
 
 func (f *FsxCSIDriverTest) waitForFileSystemDeletion(ctx context.Context) error {

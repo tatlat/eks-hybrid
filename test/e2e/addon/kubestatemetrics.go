@@ -35,6 +35,8 @@ type KubeStateMetricsTest struct {
 }
 
 // Create installs the kube-state-metrics addon
+func (k *KubeStateMetricsTest) AddonName() string { return kubeStateMetricsName }
+
 func (k *KubeStateMetricsTest) Create(ctx context.Context) error {
 	k.addon = &Addon{
 		Cluster:   k.Cluster,

@@ -36,15 +36,24 @@ type CertManagerTest struct {
 	Logger                                              logr.Logger
 	CertClient                                          certmanagerclientset.Interface
 	PCAIssuer                                           *PCAIssuerTest
+	ADOT                                                *ADOTTest
 	CertName, CertNamespace, CertSecretName, IssuerName string
 }
 
+func (c *CertManagerTest) AddonName() string { return certManagerName }
+
 // Create installs the cert-manager addon
 func (c *CertManagerTest) Create(ctx context.Context) error {
+	// Override the default affinity for all three cert-manager components (controller,
+	// webhook, cainjector) to remove the NodeAffinity term that excludes hybrid nodes
+	// (eks.amazonaws.com/compute-type != hybrid). The schema requires a non-null object
+	// so we provide the OS/arch requirements without the hybrid exclusion.
+	const certManagerAffinity = `{"nodeAffinity":{"requiredDuringSchedulingIgnoredDuringExecution":{"nodeSelectorTerms":[{"matchExpressions":[{"key":"kubernetes.io/os","operator":"In","values":["linux"]},{"key":"kubernetes.io/arch","operator":"In","values":["amd64","arm64"]}]}]}}}`
 	c.addon = &Addon{
-		Cluster:   c.Cluster,
-		Namespace: certManagerNamespace,
-		Name:      certManagerName,
+		Cluster:       c.Cluster,
+		Namespace:     certManagerNamespace,
+		Name:          certManagerName,
+		Configuration: `{"affinity":` + certManagerAffinity + `,"webhook":{"affinity":` + certManagerAffinity + `},"cainjector":{"affinity":` + certManagerAffinity + `}}`,
 	}
 
 	if err := c.addon.CreateAndWaitForActive(ctx, c.EKSClient, c.K8S, c.Logger); err != nil {
@@ -68,6 +77,10 @@ func (c *CertManagerTest) Create(ctx context.Context) error {
 
 	if err := c.PCAIssuer.Setup(ctx); err != nil {
 		return fmt.Errorf("failed to setup AWS PCA Issuer: %v", err)
+	}
+
+	if err := c.ADOT.Setup(ctx); err != nil {
+		return fmt.Errorf("failed to setup ADOT: %w", err)
 	}
 
 	c.Logger.Info("Cert-manager setup is complete")
@@ -98,14 +111,19 @@ func (c *CertManagerTest) Validate(ctx context.Context) error {
 		return fmt.Errorf("failed to validate certificate: %w", err)
 	}
 
-	// AWS PCA Issuer validation if it's configured
+	// AWS PCA Issuer validation
 	c.Logger.Info("Starting AWS PCA Issuer validation")
-
 	if err := c.PCAIssuer.Validate(ctx); err != nil {
 		return fmt.Errorf("AWS PCA Issuer validation failed: %w", err)
 	}
-
 	c.Logger.Info("AWS PCA Issuer validation completed successfully")
+
+	// ADOT validation
+	c.Logger.Info("Starting ADOT validation")
+	if err := c.ADOT.Validate(ctx); err != nil {
+		return fmt.Errorf("ADOT validation failed: %w", err)
+	}
+	c.Logger.Info("ADOT validation completed successfully")
 
 	c.Logger.Info("Cert-manager validation completed successfully")
 	return nil
@@ -113,7 +131,6 @@ func (c *CertManagerTest) Validate(ctx context.Context) error {
 
 // PrintLogs collects and prints logs for debugging
 func (c *CertManagerTest) PrintLogs(ctx context.Context) error {
-	// Fetch cert-manager logs
 	logs, err := kubernetes.FetchLogs(ctx, c.K8S, c.addon.Name, c.addon.Namespace)
 	if err != nil {
 		return fmt.Errorf("failed to collect logs for %s: %w", c.addon.Name, err)
@@ -123,18 +140,26 @@ func (c *CertManagerTest) PrintLogs(ctx context.Context) error {
 		c.Logger.Error(err, "Failed to collect AWS PCA Issuer logs")
 	}
 
+	if err := c.ADOT.PrintLogs(ctx); err != nil {
+		c.Logger.Error(err, "Failed to collect ADOT logs")
+	}
+
 	c.Logger.Info("Logs for cert-manager", "controller", logs)
 	return nil
 }
 
 // Delete removes the addon and cleans up test resources
 func (c *CertManagerTest) Delete(ctx context.Context) error {
-	// Clean up test resources
 	c.Logger.Info("Cleaning up cert-manager test resources")
 
 	c.Logger.Info("Cleaning up AWS PCA Issuer resources")
 	if err := c.PCAIssuer.Cleanup(ctx); err != nil {
 		c.Logger.Error(err, "Failed to clean up AWS PCA Issuer resources")
+	}
+
+	c.Logger.Info("Cleaning up ADOT resources")
+	if err := c.ADOT.Cleanup(ctx); err != nil {
+		c.Logger.Error(err, "Failed to clean up ADOT resources")
 	}
 
 	// Delete certificate
@@ -172,8 +197,7 @@ func createSelfSignedIssuer(ctx context.Context, logger logr.Logger, certClient 
 		},
 	}
 
-	err := ik8s.IdempotentCreate(ctx, certClient.CertmanagerV1().Issuers(namespace), issuer)
-	if err != nil {
+	if err := ik8s.IdempotentCreate(ctx, certClient.CertmanagerV1().Issuers(namespace), issuer); err != nil {
 		return err
 	}
 
@@ -190,9 +214,7 @@ func createCertificate(ctx context.Context, logger logr.Logger, certClient certm
 			Namespace: namespace,
 		},
 		Spec: certmanagerv1.CertificateSpec{
-			DNSNames: []string{
-				"example.com",
-			},
+			DNSNames:   []string{"example.com"},
 			SecretName: secretName,
 			IssuerRef: cmmeta.ObjectReference{
 				Name: issuerName,
@@ -200,8 +222,7 @@ func createCertificate(ctx context.Context, logger logr.Logger, certClient certm
 		},
 	}
 
-	err := ik8s.IdempotentCreate(ctx, certClient.CertmanagerV1().Certificates(namespace), cert)
-	if err != nil {
+	if err := ik8s.IdempotentCreate(ctx, certClient.CertmanagerV1().Certificates(namespace), cert); err != nil {
 		return err
 	}
 

@@ -2,6 +2,7 @@ package addon
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -11,8 +12,11 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientgo "k8s.io/client-go/kubernetes"
 
-	"github.com/aws/eks-hybrid/test/e2e/errors"
+	e2eerrors "github.com/aws/eks-hybrid/test/e2e/errors"
 )
+
+// ErrAddonNotAvailable is returned when an addon is not available in the current region/partition.
+var ErrAddonNotAvailable = errors.New("addon not available in this region")
 
 type Addon struct {
 	Name                    string
@@ -33,6 +37,22 @@ const (
 	addonPollTimeout  = 5 * time.Minute
 	defaultNamespace  = "default"
 )
+
+// IsAvailable returns true if the addon has at least one version available via DescribeAddonVersions.
+// This is used to skip tests in regions/partitions where the addon is not offered.
+func (a Addon) IsAvailable(ctx context.Context, client *eks.Client) (bool, error) {
+	out, err := client.DescribeAddonVersions(ctx, &eks.DescribeAddonVersionsInput{
+		AddonName: &a.Name,
+	})
+	if err != nil {
+		// ResourceNotFoundException means the addon name is unknown in this partition.
+		if e2eerrors.IsType(err, &types.ResourceNotFoundException{}) {
+			return false, nil
+		}
+		return false, fmt.Errorf("describing addon versions for %s: %w", a.Name, err)
+	}
+	return len(out.Addons) > 0, nil
+}
 
 func (a Addon) Create(ctx context.Context, client *eks.Client, logger logr.Logger) error {
 	logger.Info("Create cluster add-on", "ClusterAddon", a.Name)
@@ -63,7 +83,7 @@ func (a Addon) Create(ctx context.Context, client *eks.Client, logger logr.Logge
 
 	_, err := client.CreateAddon(ctx, params)
 
-	if err == nil || errors.IsType(err, &types.ResourceInUseException{}) {
+	if err == nil || e2eerrors.IsType(err, &types.ResourceInUseException{}) {
 		// Ignore if add-on is already created
 		return nil
 	}
@@ -115,6 +135,15 @@ func (a Addon) WaitUntilActive(ctx context.Context, client *eks.Client, logger l
 }
 
 func (a Addon) CreateAndWaitForActive(ctx context.Context, eksClient *eks.Client, k8s clientgo.Interface, logger logr.Logger) error {
+	available, err := a.IsAvailable(ctx, eksClient)
+	if err != nil {
+		return err
+	}
+	if !available {
+		logger.Info("Addon not available in this region, skipping", "addon", a.Name)
+		return fmt.Errorf("%w: %s", ErrAddonNotAvailable, a.Name)
+	}
+
 	if err := a.Create(ctx, eksClient, logger); err != nil {
 		return err
 	}
@@ -137,14 +166,14 @@ func (a Addon) Delete(ctx context.Context, client *eks.Client, logger logr.Logge
 	_, err := client.DeleteAddon(ctx, params)
 
 	// Add-on is deleted already
-	if errors.IsType(err, &types.ResourceNotFoundException{}) {
+	if e2eerrors.IsType(err, &types.ResourceNotFoundException{}) {
 		return nil
 	}
 
 	// Otherwise let's poll until it's deleted
 	err = wait.PollUntilContextTimeout(ctx, addonPollInterval, addonPollTimeout, true, func(ctx context.Context) (bool, error) {
 		_, err := a.describe(ctx, client)
-		if errors.IsType(err, &types.ResourceNotFoundException{}) {
+		if e2eerrors.IsType(err, &types.ResourceNotFoundException{}) {
 			return true, nil
 		}
 

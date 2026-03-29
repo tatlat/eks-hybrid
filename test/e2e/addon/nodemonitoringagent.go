@@ -40,6 +40,8 @@ type NodeMonitoringAgentTest struct {
 	NodeFilter    labels.Selector
 }
 
+func (n *NodeMonitoringAgentTest) AddonName() string { return nodeMonitoringAgentName }
+
 func (n *NodeMonitoringAgentTest) Create(ctx context.Context) error {
 	n.addon = &Addon{
 		Cluster:   n.Cluster,
