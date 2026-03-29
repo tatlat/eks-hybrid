@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	ec2v2 "github.com/aws/aws-sdk-go-v2/service/ec2"
 	ec2v2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/aws/aws-sdk-go-v2/service/eks"
@@ -24,6 +25,7 @@ import (
 
 	"github.com/aws/eks-hybrid/test/e2e"
 	"github.com/aws/eks-hybrid/test/e2e/addon"
+	"github.com/aws/eks-hybrid/test/e2e/constants"
 	"github.com/aws/eks-hybrid/test/e2e/kubernetes"
 	"github.com/aws/eks-hybrid/test/e2e/suite"
 )
@@ -44,15 +46,16 @@ var (
 	// Namespace constants
 	testNamespace = "default"
 
-	// Network CIDR constants (match defaults from create.go)
-	cloudVPCCIDR  = "10.20.0.0/16"
-	hybridVPCCIDR = "10.80.0.0/16"
-	podCIDR       = "10.87.0.0/16"
-
 	// Port constants
 	httpPort    int32 = 80
 	dnsPort     int32 = 53
 	webhookPort int32 = 443
+	// vxlanPort is the VXLAN UDP port used by Cilium for pod-to-pod tunneling.
+	// Cloud→hybrid traffic requires this port to be open on the hybrid node's security group.
+	vxlanPort int32 = 8472
+	// certManagerWebhookPort is the port used by cert-manager admission webhooks.
+	// The API server must be able to reach cert-manager webhook pods on this port across VPCs.
+	certManagerWebhookPort int32 = 10260
 
 	// Timing constants
 	crossVPCPropagationWait = 180 * time.Second
@@ -90,7 +93,7 @@ var _ = SynchronizedBeforeSuite(
 
 		test := suite.BeforeVPCTest(ctx, &suiteConfig)
 		credentialProviders := suite.AddClientsToCredentialProviders(suite.CredentialProviders(), test)
-		osProviderList := suite.OSProviderList(credentialProviders)
+		osProviderList := suite.OSProviderList(credentialProviders, test.Cluster.Region)
 		randomOSProvider := osProviderList[rand.IntN(len(osProviderList))]
 
 		// Generate unique identifiers for this test run
@@ -346,8 +349,13 @@ var _ = Describe("Mixed Mode Testing", func() {
 
 				test.Logger.Info("Pod Identity test on hybrid node completed successfully")
 
-				// Step 3: Test Pod Identity on cloud node
+				// Step 3: Test Pod Identity on cloud node.
+				// Cloud managed nodes don't automatically get the test.eks-hybrid.amazonaws.com/node-name
+				// label that WaitForNode uses to find nodes, so we apply it before running the verifier.
 				cloudNodeName, _ := kubernetes.FindNodeWithLabel(ctx, test.K8sClient.Interface, cloudNodeLabelKey, cloudNodeLabelValue, test.Logger)
+				e2eLabelPatch := fmt.Sprintf(`{"metadata":{"labels":{"%s":"%s"}}}`, constants.TestInstanceNameKubernetesLabel, cloudNodeName)
+				err = kubernetes.PatchNode(ctx, test.K8sClient.Interface, cloudNodeName, []byte(e2eLabelPatch), test.Logger)
+				Expect(err).NotTo(HaveOccurred(), "labeling cloud node with e2e label")
 				cloudVerifier := test.NewVerifyPodIdentityAddon(cloudNodeName)
 				err = cloudVerifier.Run(ctx)
 				Expect(err).NotTo(HaveOccurred(), "Pod Identity should work on cloud node")
@@ -468,10 +476,20 @@ func cleanupTestResources(ctx context.Context, test *suite.PeeredVPCTest, labels
 
 // ensureMixedModeConnectivity adds required security group rules for mixed mode testing
 func ensureMixedModeConnectivity(ctx context.Context, test *suite.PeeredVPCTest, hybridNodeName string) error {
-	clusterSG, hybridSG, err := getSecurityGroupsForMixedMode(ctx, test, hybridNodeName)
+	clusterSG, hybridSG, cloudNodeSGs, err := getSecurityGroupsForMixedMode(ctx, test, hybridNodeName)
 	if err != nil {
 		return fmt.Errorf("failed to get security groups: %w", err)
 	}
+
+	cloudVPCCIDR := test.Cluster.CloudVPCCIDR
+	hybridVPCCIDR := test.Cluster.HybridVPCCIDR
+	podCIDR := test.Cluster.PodCIDR
+
+	test.Logger.Info("Using network CIDRs for security group rules",
+		"cloudVPCCIDR", cloudVPCCIDR,
+		"hybridVPCCIDR", hybridVPCCIDR,
+		"podCIDR", podCIDR,
+	)
 
 	rules := []struct {
 		protocol string
@@ -494,10 +512,26 @@ func ensureMixedModeConnectivity(ctx context.Context, test *suite.PeeredVPCTest,
 		{"tcp", webhookPort, cloudVPCCIDR, "HTTPS webhook from cloud VPC"},
 		{"tcp", webhookPort, podCIDR, "HTTPS webhook from pod CIDR"},
 		{"tcp", webhookPort, hybridVPCCIDR, "HTTPS webhook from hybrid subnet"},
+		// VXLAN tunneling for Cilium pod-to-pod traffic (UDP 8472)
+		// Required for cloud→hybrid direction: cloud Cilium agent encapsulates pod traffic
+		// in VXLAN and sends it to the hybrid node's IP.
+		{"udp", vxlanPort, cloudVPCCIDR, "VXLAN UDP from cloud VPC"},
+		{"udp", vxlanPort, podCIDR, "VXLAN UDP from pod CIDR"},
+		{"udp", vxlanPort, hybridVPCCIDR, "VXLAN UDP from hybrid subnet"},
+		// cert-manager webhook port (10260) - the Kubernetes API server calls admission webhooks
+		// on cert-manager pods at this port when creating cert-manager CRDs and resources.
+		{"tcp", certManagerWebhookPort, cloudVPCCIDR, "cert-manager webhook from cloud VPC"},
+		{"tcp", certManagerWebhookPort, podCIDR, "cert-manager webhook from pod CIDR"},
+		{"tcp", certManagerWebhookPort, hybridVPCCIDR, "cert-manager webhook from hybrid subnet"},
 	}
 
-	// Apply rules to both cluster security group and hybrid node security group
+	// Apply rules to cluster SG, hybrid node SG, and any cloud node SGs.
+	// Cloud managed nodes have a separate node-level SG (different from the cluster SG)
+	// that also needs the VXLAN and other cross-VPC rules.
 	securityGroups := []*string{clusterSG, hybridSG}
+	for i := range cloudNodeSGs {
+		securityGroups = append(securityGroups, &cloudNodeSGs[i])
+	}
 
 	for _, sg := range securityGroups {
 		test.Logger.Info("Adding security group rules", "sgId", *sg)
@@ -536,30 +570,82 @@ func ensureMixedModeConnectivity(ctx context.Context, test *suite.PeeredVPCTest,
 	return nil
 }
 
-// getSecurityGroupsForMixedMode returns both cluster and hybrid node security groups
-func getSecurityGroupsForMixedMode(ctx context.Context, test *suite.PeeredVPCTest, hybridNodeName string) (*string, *string, error) {
+// getSecurityGroupsForMixedMode returns the cluster SG, hybrid node SG, and cloud node SGs.
+func getSecurityGroupsForMixedMode(ctx context.Context, test *suite.PeeredVPCTest, hybridNodeName string) (*string, *string, []string, error) {
 	clusterName := test.Cluster.Name
 	cluster, err := test.EKSClient.DescribeCluster(ctx, &eks.DescribeClusterInput{
 		Name: &clusterName,
 	})
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to describe cluster: %w", err)
+		return nil, nil, nil, fmt.Errorf("failed to describe cluster: %w", err)
 	}
 
 	clusterSG := cluster.Cluster.ResourcesVpcConfig.ClusterSecurityGroupId
 	if clusterSG == nil {
-		return nil, nil, fmt.Errorf("cluster security group ID not found")
+		return nil, nil, nil, fmt.Errorf("cluster security group ID not found")
 	}
 
 	test.Logger.Info("Found EKS cluster security group", "sgId", *clusterSG)
 
 	hybridSG, err := findHybridNodeSecurityGroup(ctx, test, hybridNodeName)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to find hybrid node security group: %w", err)
+		return nil, nil, nil, fmt.Errorf("failed to find hybrid node security group: %w", err)
+	}
+	test.Logger.Info("Found hybrid node security group", "sgId", hybridSG)
+
+	cloudSGs, err := findCloudNodeSecurityGroups(ctx, test, *clusterSG)
+	if err != nil {
+		// Non-fatal: log and continue with just cluster + hybrid SGs
+		test.Logger.Info("Could not find cloud node security groups, continuing without them", "error", err.Error())
+		cloudSGs = nil
 	}
 
-	test.Logger.Info("Found hybrid node security group", "sgId", hybridSG)
-	return clusterSG, &hybridSG, nil
+	return clusterSG, &hybridSG, cloudSGs, nil
+}
+
+// findCloudNodeSecurityGroups finds security groups attached to cloud-managed node instances.
+// EKS managed nodes get their own node SG (separate from the cluster SG) that needs rules too.
+func findCloudNodeSecurityGroups(ctx context.Context, test *suite.PeeredVPCTest, clusterSGID string) ([]string, error) {
+	// Find instances in the cloud VPC (10.0.0.0/16 subnets) that are EKS worker nodes
+	// tagged with this cluster name and are NOT hybrid (no "hybrid" in Name tag).
+	instances, err := test.EC2Client.DescribeInstances(ctx, &ec2v2.DescribeInstancesInput{
+		Filters: []ec2v2types.Filter{
+			{
+				Name:   aws.String("tag:eks:cluster-name"),
+				Values: []string{test.Cluster.Name},
+			},
+			{
+				Name:   aws.String("instance-state-name"),
+				Values: []string{"running"},
+			},
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to describe cloud node instances: %w", err)
+	}
+
+	sgSet := make(map[string]struct{})
+	for _, reservation := range instances.Reservations {
+		for _, instance := range reservation.Instances {
+			for _, sg := range instance.SecurityGroups {
+				if sg.GroupId == nil || *sg.GroupId == clusterSGID {
+					continue // skip the cluster SG — already handled
+				}
+				sgSet[*sg.GroupId] = struct{}{}
+			}
+		}
+	}
+
+	if len(sgSet) == 0 {
+		return nil, fmt.Errorf("no additional cloud node security groups found")
+	}
+
+	var sgs []string
+	for sg := range sgSet {
+		sgs = append(sgs, sg)
+		test.Logger.Info("Found cloud node security group", "sgId", sg)
+	}
+	return sgs, nil
 }
 
 // findHybridNodeSecurityGroup finds the security group of the hybrid node

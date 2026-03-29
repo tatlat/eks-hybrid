@@ -19,6 +19,16 @@ type HybridCluster struct {
 	SubnetID          string
 	SecurityGroupID   string
 	SubnetIds         []string
+
+	// Network CIDRs populated dynamically from the AWS APIs at cluster lookup time.
+	// CloudVPCCIDR is the CIDR of the EKS cluster VPC.
+	// HybridVPCCIDR is the CIDR of the hybrid (on-prem) VPC, taken from the
+	// cluster's RemoteNodeNetworks configuration.
+	// PodCIDR is the CIDR used for hybrid node pods, taken from the cluster's
+	// RemotePodNetworks configuration.
+	CloudVPCCIDR  string
+	HybridVPCCIDR string
+	PodCIDR       string
 }
 
 // GetHybridCluster returns the hybrid cluster details.
@@ -37,7 +47,26 @@ func GetHybridCluster(ctx context.Context, eksClient *eks.Client, ec2Client *ec2
 	cluster.Arn = *clusterDetails.Arn
 	cluster.SubnetIds = clusterDetails.ResourcesVpcConfig.SubnetIds
 
-	hybridVpcID, err := findHybridVPC(ctx, ec2Client, *clusterDetails.ResourcesVpcConfig.VpcId)
+	clusterVpcID := *clusterDetails.ResourcesVpcConfig.VpcId
+
+	cloudVPCCIDR, err := getVPCCIDR(ctx, ec2Client, clusterVpcID)
+	if err != nil {
+		return nil, fmt.Errorf("getting cloud VPC CIDR for cluster VPC %s: %w", clusterVpcID, err)
+	}
+	cluster.CloudVPCCIDR = cloudVPCCIDR
+
+	if clusterDetails.RemoteNetworkConfig != nil {
+		if len(clusterDetails.RemoteNetworkConfig.RemoteNodeNetworks) > 0 &&
+			len(clusterDetails.RemoteNetworkConfig.RemoteNodeNetworks[0].Cidrs) > 0 {
+			cluster.HybridVPCCIDR = clusterDetails.RemoteNetworkConfig.RemoteNodeNetworks[0].Cidrs[0]
+		}
+		if len(clusterDetails.RemoteNetworkConfig.RemotePodNetworks) > 0 &&
+			len(clusterDetails.RemoteNetworkConfig.RemotePodNetworks[0].Cidrs) > 0 {
+			cluster.PodCIDR = clusterDetails.RemoteNetworkConfig.RemotePodNetworks[0].Cidrs[0]
+		}
+	}
+
+	hybridVpcID, err := findHybridVPC(ctx, ec2Client, clusterVpcID)
 	if err != nil {
 		return nil, fmt.Errorf("getting peered VPC for the given cluster %s: %w", clusterName, err)
 	}
@@ -53,6 +82,23 @@ func GetHybridCluster(ctx context.Context, eksClient *eks.Client, ec2Client *ec2
 	}
 
 	return cluster, nil
+}
+
+// getVPCCIDR returns the primary IPv4 CIDR block of the specified VPC.
+func getVPCCIDR(ctx context.Context, client *ec2.Client, vpcID string) (string, error) {
+	result, err := client.DescribeVpcs(ctx, &ec2.DescribeVpcsInput{
+		VpcIds: []string{vpcID},
+	})
+	if err != nil {
+		return "", fmt.Errorf("describing VPC %s: %w", vpcID, err)
+	}
+	if len(result.Vpcs) == 0 {
+		return "", fmt.Errorf("VPC %s not found", vpcID)
+	}
+	if result.Vpcs[0].CidrBlock == nil {
+		return "", fmt.Errorf("VPC %s has no CIDR block", vpcID)
+	}
+	return *result.Vpcs[0].CidrBlock, nil
 }
 
 func getClusterDetails(ctx context.Context, client *eks.Client, clusterName string) (ekstypes.Cluster, error) {

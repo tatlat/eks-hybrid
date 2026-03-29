@@ -222,6 +222,7 @@ func (t *PeeredVPCTest) NewPeeredNode(logger logr.Logger) *peered.Node {
 			PublicKey:           t.publicKey,
 			SetRootPassword:     t.setRootPassword,
 			RemoteCommandRunner: remoteCommandRunner,
+			InstanceProfileARN:  t.StackOut.InstanceProfileARN,
 		},
 		NodeCleanup: peered.NodeCleanup{
 			EC2:        t.EC2Client,
@@ -473,7 +474,7 @@ type OSProvider struct {
 	Provider e2e.NodeadmCredentialsProvider
 }
 
-func OSProviderList(credentialProviders []e2e.NodeadmCredentialsProvider) []OSProvider {
+func OSProviderList(credentialProviders []e2e.NodeadmCredentialsProvider, region string) []OSProvider {
 	osList := []e2e.NodeadmOS{
 		// Ubuntu 20.04 removed - kernel 5.4 doesn't support Cilium v1.18.3 (requires 5.10+)
 		osystem.NewUbuntu2204AMD(),
@@ -492,6 +493,11 @@ func OSProviderList(credentialProviders []e2e.NodeadmCredentialsProvider) []OSPr
 	}
 	osProviderList := []OSProvider{}
 	for _, nodeOS := range osList {
+		// Docker containerd source requires download.docker.com which is not accessible
+		// from China regions. Skip docker-source OS variants for China.
+		if strings.HasPrefix(region, "cn-") && strings.HasSuffix(nodeOS.Name(), "-docker") {
+			continue
+		}
 	providerLoop:
 		for _, provider := range credentialProviders {
 			if notSupported.Matches(nodeOS.Name(), provider.Name()) {

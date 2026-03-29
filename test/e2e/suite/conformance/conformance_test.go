@@ -5,10 +5,13 @@ package conformance
 
 import (
 	"context"
+	_ "embed"
 	"flag"
+	"fmt"
 	"math/rand/v2"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -23,6 +26,9 @@ import (
 	"github.com/aws/eks-hybrid/test/e2e/suite"
 )
 
+//go:embed testdata/repo-list.yaml
+var repoListTemplate string
+
 var (
 	filePath    string
 	suiteConfig *suite.SuiteConfiguration
@@ -36,6 +42,25 @@ const (
 
 func init() {
 	flag.StringVar(&filePath, "filepath", "", "Path to configuration")
+}
+
+// generateRepoListFile generates a repo-list.yaml file from the template with actual values
+func generateRepoListFile(region, ecrAccount, dnsSuffix, outputDir string) (string, error) {
+	// Replace template placeholders with actual values
+	replacer := strings.NewReplacer(
+		"{{ECR_ACCOUNT_ID}}", ecrAccount,
+		"{{REGION}}", region,
+		"{{DNS_SUFFIX}}", dnsSuffix,
+	)
+	content := replacer.Replace(repoListTemplate)
+
+	// Write the generated file to the output directory
+	repoListPath := filepath.Join(outputDir, "repo-list.yaml")
+	if err := os.WriteFile(repoListPath, []byte(content), 0o644); err != nil {
+		return "", fmt.Errorf("failed to write repo-list.yaml: %w", err)
+	}
+
+	return repoListPath, nil
 }
 
 func TestE2E(t *testing.T) {
@@ -54,7 +79,7 @@ var _ = SynchronizedBeforeSuite(
 		suiteConfig := suite.BeforeSuiteCredentialSetup(ctx, filePath)
 		test := suite.BeforeVPCTest(ctx, &suiteConfig)
 		credentialProviders := suite.AddClientsToCredentialProviders(suite.CredentialProviders(), test)
-		osList := suite.OSProviderList(credentialProviders)
+		osList := suite.OSProviderList(credentialProviders, test.Cluster.Region)
 
 		// pick 3 random OS/Version/Provider combinations for conformance tests worker nodes
 		nodesToCreate := []suite.NodeCreate{}
@@ -112,7 +137,15 @@ var _ = Describe("Hybrid Nodes", func() {
 				conformanceReportPath := filepath.Join(outputFolder, conformanceReport)
 				Expect(os.MkdirAll(outputFolder, 0o755)).To(Succeed(), "should create output folder successfully")
 				AddReportEntry(constants.TestConformancePath, conformanceReportPath)
-				conformance := kubernetes.NewConformanceTest(test.K8sClientConfig, k8sClient, test.Logger, kubernetes.WithOutputDir(outputFolder))
+
+				// Configure registry mappings for conformance tests
+				// Generate repo-list.yaml dynamically based on test configuration
+				repoListPath, err := generateRepoListFile(test.Cluster.Region, test.EcrAccount, test.DNSSuffix, outputFolder)
+				Expect(err).NotTo(HaveOccurred(), "should generate repo-list.yaml successfully")
+
+				conformance := kubernetes.NewConformanceTest(test.K8sClientConfig, k8sClient, test.Logger, test.Cluster.Region, test.EcrAccount, test.DNSSuffix,
+					kubernetes.WithOutputDir(outputFolder),
+					kubernetes.WithTestRepoList(repoListPath))
 				DeferCleanup(func(ctx context.Context) {
 					Expect(conformance.CollectLogs(ctx)).To(Succeed(), "should collect logs successfully")
 					Expect(os.Rename(filepath.Join(outputFolder, defaultConformanceReport), conformanceReportPath)).To(Succeed(), "should rename conformance report successfully")

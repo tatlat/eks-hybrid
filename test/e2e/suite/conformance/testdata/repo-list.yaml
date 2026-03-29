@@ -1,0 +1,30 @@
+# Registry mappings for conformance tests
+# This file maps public registries to your mirror registry
+# Template placeholders: {{ECR_ACCOUNT_ID}}, {{REGION}}, {{DNS_SUFFIX}}
+
+# Main e2e test images registry (registry.k8s.io/e2e-test-images/*)
+promoterE2eRegistry: {{ECR_ACCOUNT_ID}}.dkr.ecr.{{REGION}}.{{DNS_SUFFIX}}/e2e-test-images
+
+# Build images (registry.k8s.io/build-image/*)
+buildImageRegistry: {{ECR_ACCOUNT_ID}}.dkr.ecr.{{REGION}}.{{DNS_SUFFIX}}/build-image
+
+# Invalid registry (for negative tests)
+invalidRegistry: invalid.registry.k8s.io/invalid
+
+# GC etcd registry (registry.k8s.io/etcd)
+gcEtcdRegistry: {{ECR_ACCOUNT_ID}}.dkr.ecr.{{REGION}}.{{DNS_SUFFIX}}
+
+# GC registry (gcr.io)
+gcRegistry: {{ECR_ACCOUNT_ID}}.dkr.ecr.{{REGION}}.{{DNS_SUFFIX}}
+
+# Sig-storage registry (registry.k8s.io/sig-storage/*)
+sigStorageRegistry: {{ECR_ACCOUNT_ID}}.dkr.ecr.{{REGION}}.{{DNS_SUFFIX}}/sig-storage
+
+# Private registry (gcr.io/authenticated-image-pulling)
+privateRegistry: {{ECR_ACCOUNT_ID}}.dkr.ecr.{{REGION}}.{{DNS_SUFFIX}}/authenticated-image-pulling
+
+# Docker library registry (for busybox, etc)
+dockerLibraryRegistry: {{ECR_ACCOUNT_ID}}.dkr.ecr.{{REGION}}.{{DNS_SUFFIX}}
+
+# Cloud provider GCP registry (registry.k8s.io/cloud-provider-gcp/*)
+cloudProviderGcpRegistry: {{ECR_ACCOUNT_ID}}.dkr.ecr.{{REGION}}.{{DNS_SUFFIX}}/cloud-provider-gcp

@@ -25,6 +25,9 @@ type ConformanceTest struct {
 	conformanceRunner *conformance.TestRunner
 	k8s               *kubernetes.Clientset
 	logger            logr.Logger
+	region            string
+	ecrAccount        string
+	dnsSuffix         string
 }
 
 type ConformanceOption func(*types.Configuration)
@@ -35,7 +38,19 @@ func WithOutputDir(outputDir string) ConformanceOption {
 	}
 }
 
-func NewConformanceTest(clientConfig *rest.Config, k8s *kubernetes.Clientset, logger logr.Logger, opts ...ConformanceOption) ConformanceTest {
+func WithTestRepoList(repoListPath string) ConformanceOption {
+	return func(c *types.Configuration) {
+		c.TestRepoList = repoListPath
+	}
+}
+
+func WithBusyboxImage(busyboxImage string) ConformanceOption {
+	return func(c *types.Configuration) {
+		c.BusyboxImage = busyboxImage
+	}
+}
+
+func NewConformanceTest(clientConfig *rest.Config, k8s *kubernetes.Clientset, logger logr.Logger, region, ecrAccount, dnsSuffix string, opts ...ConformanceOption) ConformanceTest {
 	config := types.NewDefaultConfiguration()
 	config.Parallel = 64
 
@@ -43,8 +58,13 @@ func NewConformanceTest(clientConfig *rest.Config, k8s *kubernetes.Clientset, lo
 		opt(&config)
 	}
 
-	conformanceImage, _ := getConformanceImage(k8s)
+	conformanceImage, _ := getConformanceImage(k8s, region, ecrAccount, dnsSuffix)
 	config.ConformanceImage = conformanceImage
+
+	// Only set the busybox image if it was not already overridden via opts
+	if config.BusyboxImage == types.DefaultBusyboxImage {
+		config.BusyboxImage = getBusyboxImage(region, ecrAccount, dnsSuffix)
+	}
 
 	testRunner := conformance.NewTestRunner(config, k8s)
 	testClient := client.NewClient(clientConfig, k8s, config.Namespace)
@@ -57,6 +77,9 @@ func NewConformanceTest(clientConfig *rest.Config, k8s *kubernetes.Clientset, lo
 		conformanceRunner: testRunner,
 		k8s:               k8s,
 		logger:            logger,
+		region:            region,
+		ecrAccount:        ecrAccount,
+		dnsSuffix:         dnsSuffix,
 	}
 }
 
@@ -107,7 +130,7 @@ func (c ConformanceTest) Run(ctx context.Context) error {
 	return nil
 }
 
-func getConformanceImage(clientset *kubernetes.Clientset) (string, error) {
+func getConformanceImage(clientset *kubernetes.Clientset, region, ecrAccount, dnsSuffix string) (string, error) {
 	serverVersion, err := clientset.ServerVersion()
 	if err != nil {
 		return "", fmt.Errorf("failed fetching server version: %w", err)
@@ -118,9 +141,27 @@ func getConformanceImage(clientset *kubernetes.Clientset) (string, error) {
 		return "", fmt.Errorf("failed parsing server version: %w", err)
 	}
 
-	conformanceImage := fmt.Sprintf("registry.k8s.io/conformance:%s", normalized)
+	// Use China ECR for China regions, otherwise use public registry.k8s.io
+	var conformanceImage string
+	if strings.HasPrefix(region, "cn-") {
+		// Use China ECR registry
+		conformanceImage = fmt.Sprintf("%s.dkr.ecr.%s.%s/conformance:%s", ecrAccount, region, dnsSuffix, normalized)
+	} else {
+		// Use public Kubernetes registry
+		conformanceImage = fmt.Sprintf("registry.k8s.io/conformance:%s", normalized)
+	}
 
 	return conformanceImage, nil
+}
+
+// getBusyboxImage returns the appropriate busybox image for the given region.
+// For China regions, it uses the ECR-mirrored image to avoid pulling from public registries.
+func getBusyboxImage(region, ecrAccount, dnsSuffix string) string {
+	if strings.HasPrefix(region, "cn-") {
+		return fmt.Sprintf("%s.dkr.ecr.%s.%s/e2e-test-images/busybox:1.36.1-1", ecrAccount, region, dnsSuffix)
+	}
+
+	return types.DefaultBusyboxImage
 }
 
 func normalizeVersion(ver string) (string, error) {
