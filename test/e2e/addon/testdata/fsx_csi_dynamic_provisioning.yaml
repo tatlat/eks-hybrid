@@ -10,9 +10,9 @@ provisioner: fsx.csi.aws.com
 parameters:
   subnetId: {{SUBNET_ID}}
   securityGroupIds: {{SECURITY_GROUP_ID}}
-  deploymentType: PERSISTENT_2
+  deploymentType: {{DEPLOYMENT_TYPE}}
   storageType: SSD
-  perUnitStorageThroughput: "125"
+  perUnitStorageThroughput: "{{PER_UNIT_STORAGE_THROUGHPUT}}"
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim

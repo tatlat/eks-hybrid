@@ -39,6 +39,9 @@ type ExternalDNSTest struct {
 	hostedZoneName *string
 }
 
+// AddonName returns the name of the external-dns addon
+func (e *ExternalDNSTest) AddonName() string { return externalDNS }
+
 // Create installs the external-dns addon
 func (e *ExternalDNSTest) Create(ctx context.Context) error {
 	hostedZoneId, err := e.getHostedZoneId(ctx)

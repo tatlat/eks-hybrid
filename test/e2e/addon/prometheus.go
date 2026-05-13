@@ -34,6 +34,8 @@ type PrometheusNodeExporterTest struct {
 	Logger    logr.Logger
 }
 
+func (p *PrometheusNodeExporterTest) AddonName() string { return prometheusName }
+
 // Create installs the node exporter addon
 func (p *PrometheusNodeExporterTest) Create(ctx context.Context) error {
 	p.addon = &Addon{
