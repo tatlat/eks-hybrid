@@ -34,6 +34,9 @@ type KubeStateMetricsTest struct {
 	Logger    logr.Logger
 }
 
+// AddonName returns the name of the kube-state-metrics addon
+func (k *KubeStateMetricsTest) AddonName() string { return kubeStateMetricsName }
+
 // Create installs the kube-state-metrics addon
 func (k *KubeStateMetricsTest) Create(ctx context.Context) error {
 	k.addon = &Addon{

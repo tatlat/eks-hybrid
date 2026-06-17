@@ -32,6 +32,9 @@ type MetricsServerTest struct {
 	Logger        logr.Logger
 }
 
+// AddonName returns the name of the metrics-server addon
+func (m *MetricsServerTest) AddonName() string { return metricsServerName }
+
 // Create installs the metrics-server addon
 func (m *MetricsServerTest) Create(ctx context.Context) error {
 	m.addon = &Addon{
