@@ -5,9 +5,11 @@ package addons
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"math/rand/v2"
+	"strings"
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -18,6 +20,7 @@ import (
 	"k8s.io/apimachinery/pkg/selection"
 
 	"github.com/aws/eks-hybrid/test/e2e"
+	"github.com/aws/eks-hybrid/test/e2e/addon"
 	"github.com/aws/eks-hybrid/test/e2e/ssm"
 	"github.com/aws/eks-hybrid/test/e2e/suite"
 )
@@ -28,8 +31,9 @@ const (
 )
 
 var (
-	filePath    string
-	suiteConfig *suite.SuiteConfiguration
+	filePath        string
+	suiteConfig     *suite.SuiteConfiguration
+	gpuNodesCreated bool
 )
 
 const numberOfNodes = 1
@@ -48,7 +52,7 @@ var _ = SynchronizedBeforeSuite(
 		suiteConfig := suite.BeforeSuiteCredentialSetup(ctx, filePath)
 		test := suite.BeforeVPCTest(ctx, &suiteConfig)
 		credentialProviders := suite.AddClientsToCredentialProviders(suite.CredentialProviders(), test)
-		osList := suite.OSProviderList(credentialProviders)
+		osList := suite.OSProviderList(credentialProviders, test.Cluster.Region)
 		bottlerocketList := suite.BottlerocketOSProviderList(credentialProviders)
 		nodesToCreate := make([]suite.NodeCreate, 0, numberOfNodes*4)
 
@@ -87,34 +91,40 @@ var _ = SynchronizedBeforeSuite(
 			})
 		}
 
-		// Create Standard Linux GPU node
-		for i := range numberOfNodes {
-			os := standardLinuxGPUCombination.OS
-			provider := standardLinuxGPUCombination.Provider
-			test.Logger.Info(fmt.Sprintf("Creating GPU Node %d with OS %s and Credential Provider %s", i+1, os.Name(), string(provider.Name())))
-			nodesToCreate = append(nodesToCreate, suite.NodeCreate{
-				OS:           os,
-				Provider:     provider,
-				InstanceName: test.InstanceName("addon-nvidia-test", os.Name(), string(provider.Name())),
-				InstanceSize: e2e.Large,
-				ComputeType:  e2e.GPUInstance,
-				NodeName:     standardLinuxGPUNodeName,
-			})
-		}
+		// Temporarily skip testing in China since default limits are 0.
+		if !strings.HasPrefix(suiteConfig.TestConfig.ClusterRegion, "cn-") {
+			// Create Standard Linux GPU node
+			for i := range numberOfNodes {
+				os := standardLinuxGPUCombination.OS
+				provider := standardLinuxGPUCombination.Provider
+				test.Logger.Info(fmt.Sprintf("Creating GPU Node %d with OS %s and Credential Provider %s", i+1, os.Name(), string(provider.Name())))
+				nodesToCreate = append(nodesToCreate, suite.NodeCreate{
+					OS:           os,
+					Provider:     provider,
+					InstanceName: test.InstanceName("addon-nvidia-test", os.Name(), string(provider.Name())),
+					InstanceSize: e2e.Large,
+					ComputeType:  e2e.GPUInstance,
+					NodeName:     standardLinuxGPUNodeName,
+				})
+			}
 
-		// Create Bottlerocket GPU node
-		for i := range numberOfNodes {
-			os := bottlerocketGPUCombination.OS
-			provider := bottlerocketGPUCombination.Provider
-			test.Logger.Info(fmt.Sprintf("Creating Bottlerocket GPU Node %d with OS %s and Credential Provider %s", i+1, os.Name(), string(provider.Name())))
-			nodesToCreate = append(nodesToCreate, suite.NodeCreate{
-				OS:           os,
-				Provider:     provider,
-				InstanceName: test.InstanceName("addon-nvidia-bottlerocket-test", os.Name(), string(provider.Name())),
-				InstanceSize: e2e.Large,
-				ComputeType:  e2e.GPUInstance,
-				NodeName:     bottlerocketGPUNodeName,
-			})
+			// Create Bottlerocket GPU node
+			for i := range numberOfNodes {
+				os := bottlerocketGPUCombination.OS
+				provider := bottlerocketGPUCombination.Provider
+				test.Logger.Info(fmt.Sprintf("Creating Bottlerocket GPU Node %d with OS %s and Credential Provider %s", i+1, os.Name(), string(provider.Name())))
+				nodesToCreate = append(nodesToCreate, suite.NodeCreate{
+					OS:           os,
+					Provider:     provider,
+					InstanceName: test.InstanceName("addon-nvidia-bottlerocket-test", os.Name(), string(provider.Name())),
+					InstanceSize: e2e.Large,
+					ComputeType:  e2e.GPUInstance,
+					NodeName:     bottlerocketGPUNodeName,
+				})
+			}
+			gpuNodesCreated = true
+		} else {
+			test.Logger.Info("Skipping GPU node creation: G-family instances require service quotas limit increase")
 		}
 
 		suite.CreateNodes(ctx, test, nodesToCreate)
@@ -150,9 +160,7 @@ var _ = Describe("Hybrid Nodes", func() {
 						Expect(nodeMonitoringAgent.Delete(ctx)).To(Succeed(), "should cleanup node monitoring agent successfully")
 					})
 
-					Expect(nodeMonitoringAgent.Create(ctx)).To(
-						Succeed(), "node monitoring agent should have created successfully",
-					)
+					skipIfAddonNotAvailable(nodeMonitoringAgent.Create(ctx), nodeMonitoringAgent.AddonName())
 
 					DeferCleanup(func(ctx context.Context) {
 						// only print logs after addon successfully created
@@ -183,9 +191,7 @@ var _ = Describe("Hybrid Nodes", func() {
 						Expect(nodeMonitoringAgent.Delete(ctx)).To(Succeed(), "should cleanup node monitoring agent successfully")
 					})
 
-					Expect(nodeMonitoringAgent.Create(ctx)).To(
-						Succeed(), "node monitoring agent should have created successfully",
-					)
+					skipIfAddonNotAvailable(nodeMonitoringAgent.Create(ctx), nodeMonitoringAgent.AddonName())
 
 					DeferCleanup(func(ctx context.Context) {
 						// only print logs after addon successfully created
@@ -213,9 +219,7 @@ var _ = Describe("Hybrid Nodes", func() {
 						Expect(kubeStateMetrics.Delete(ctx)).To(Succeed(), "should cleanup kube state metrics successfully")
 					})
 
-					Expect(kubeStateMetrics.Create(ctx)).To(
-						Succeed(), "kube state metrics should have created successfully",
-					)
+					skipIfAddonNotAvailable(kubeStateMetrics.Create(ctx), kubeStateMetrics.AddonName())
 
 					DeferCleanup(func(ctx context.Context) {
 						// only print logs after addon successfully created
@@ -243,9 +247,7 @@ var _ = Describe("Hybrid Nodes", func() {
 						Expect(metricsServer.Delete(ctx)).To(Succeed(), "should cleanup metrics server successfully")
 					})
 
-					Expect(metricsServer.Create(ctx)).To(
-						Succeed(), "metrics server should have created successfully",
-					)
+					skipIfAddonNotAvailable(metricsServer.Create(ctx), metricsServer.AddonName())
 
 					DeferCleanup(func(ctx context.Context) {
 						// only print logs after addon successfully created
@@ -273,9 +275,7 @@ var _ = Describe("Hybrid Nodes", func() {
 						Expect(prometheusNodeExporter.Delete(ctx)).To(Succeed(), "should cleanup prometheus node exporter successfully")
 					})
 
-					Expect(prometheusNodeExporter.Create(ctx)).To(
-						Succeed(), "prometheus node exporter should have created successfully",
-					)
+					skipIfAddonNotAvailable(prometheusNodeExporter.Create(ctx), prometheusNodeExporter.AddonName())
 
 					DeferCleanup(func(ctx context.Context) {
 						// only print logs after addon successfully created
@@ -297,6 +297,9 @@ var _ = Describe("Hybrid Nodes", func() {
 
 			Context("runs nvidia device plugin tests", Ordered, func() {
 				It("uses regular OS (Ubuntu, AL, RHEL)", func(ctx context.Context) {
+					if !gpuNodesCreated {
+						Skip("GPU nodes were not created, skipping nvidia device plugin test")
+					}
 					// wait for nvidia drivers to be installed
 					addonEc2Test.Logger.Info("Checking NVIDIA drivers on pre-created GPU node", "nodeName", standardLinuxGPUNodeName)
 					devicePluginTest := addonEc2Test.NewNvidiaDevicePluginTest(standardLinuxGPUNodeName)
@@ -307,6 +310,9 @@ var _ = Describe("Hybrid Nodes", func() {
 				}, Label("regular-os"))
 
 				It("uses Bottlerocket OS", func(ctx context.Context) {
+					if !gpuNodesCreated {
+						Skip("GPU nodes were not created, skipping nvidia device plugin test")
+					}
 					// wait for nvidia drivers to be installed
 					addonEc2Test.Logger.Info("Checking NVIDIA drivers on pre-created Bottlerocket GPU node", "nodeName", bottlerocketGPUNodeName)
 					devicePluginTest := addonEc2Test.NewNvidiaDevicePluginTest(bottlerocketGPUNodeName)
@@ -326,9 +332,7 @@ var _ = Describe("Hybrid Nodes", func() {
 						Expect(certManager.Delete(ctx)).To(Succeed(), "should cleanup cert manager successfully")
 					})
 
-					Expect(certManager.Create(ctx)).To(
-						Succeed(), "cert manager should have created successfully",
-					)
+					skipIfAddonNotAvailable(certManager.Create(ctx), certManager.AddonName())
 
 					DeferCleanup(func(ctx context.Context) {
 						// only print logs after addon successfully created
@@ -360,9 +364,7 @@ var _ = Describe("Hybrid Nodes", func() {
 						Expect(certManager.Delete(ctx)).To(Succeed(), "should cleanup cert manager successfully")
 					})
 
-					Expect(certManager.Create(ctx)).To(
-						Succeed(), "cert manager should have created successfully",
-					)
+					skipIfAddonNotAvailable(certManager.Create(ctx), certManager.AddonName())
 
 					DeferCleanup(func(ctx context.Context) {
 						// only print logs after addon successfully created
@@ -410,9 +412,7 @@ var _ = Describe("Hybrid Nodes", func() {
 						Expect(secretsStoreTest.Delete(ctx)).To(Succeed(), "should cleanup Secrets Store CSI driver successfully")
 					})
 
-					Expect(secretsStoreTest.Create(ctx)).To(
-						Succeed(), "Secrets Store CSI driver should have been created successfully",
-					)
+					skipIfAddonNotAvailable(secretsStoreTest.Create(ctx), secretsStoreTest.AddonName())
 
 					Expect(secretsStoreTest.Validate(ctx)).To(
 						Succeed(), "Secrets Store CSI driver should have been validated successfully",
@@ -429,9 +429,7 @@ var _ = Describe("Hybrid Nodes", func() {
 						Expect(externalDNSTest.Delete(ctx)).To(Succeed(), "should cleanup external-dns successfully")
 					})
 
-					Expect(externalDNSTest.Create(ctx)).To(
-						Succeed(), "external-dns should have been created successfully",
-					)
+					skipIfAddonNotAvailable(externalDNSTest.Create(ctx), externalDNSTest.AddonName())
 
 					Expect(externalDNSTest.Validate(ctx)).To(
 						Succeed(), "external-dns should have been validated successfully",
@@ -448,9 +446,7 @@ var _ = Describe("Hybrid Nodes", func() {
 						Expect(fsxCSITest.Delete(ctx)).To(Succeed(), "should cleanup FSx CSI driver successfully")
 					})
 
-					Expect(fsxCSITest.Create(ctx)).To(
-						Succeed(), "FSx CSI driver should have been created successfully",
-					)
+					skipIfAddonNotAvailable(fsxCSITest.Create(ctx), fsxCSITest.AddonName())
 
 					Expect(fsxCSITest.Validate(ctx)).To(
 						Succeed(), "FSx CSI driver should have been validated successfully",
@@ -460,6 +456,15 @@ var _ = Describe("Hybrid Nodes", func() {
 		})
 	})
 })
+
+// skipIfAddonNotAvailable skips the current test if err wraps ErrAddonNotAvailable,
+// otherwise it fails the test with the error.
+func skipIfAddonNotAvailable(err error, addonName string) {
+	if errors.Is(err, addon.ErrAddonNotAvailable) {
+		Skip(fmt.Sprintf("Addon %q is not available in this region, skipping test", addonName))
+	}
+	Expect(err).To(Succeed(), fmt.Sprintf("%s should have been created successfully", addonName))
+}
 
 func getRandomElements[E any](elems []E) (E, E) {
 	length := len(elems)

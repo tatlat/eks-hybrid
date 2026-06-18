@@ -54,7 +54,7 @@ var _ = SynchronizedBeforeSuite(
 		suiteConfig := suite.BeforeSuiteCredentialSetup(ctx, filePath)
 		test := suite.BeforeVPCTest(ctx, &suiteConfig)
 		credentialProviders := suite.AddClientsToCredentialProviders(suite.CredentialProviders(), test)
-		osList := suite.OSProviderList(credentialProviders)
+		osList := suite.OSProviderList(credentialProviders, suiteConfig.TestConfig.ClusterRegion)
 
 		// pick 3 random OS/Version/Provider combinations for conformance tests worker nodes
 		nodesToCreate := []suite.NodeCreate{}
