@@ -189,6 +189,15 @@ func (a *AddonEc2Test) NewCertManagerTest(ctx context.Context) (*addon.CertManag
 		Logger:             a.Logger,
 	}
 
+	adot := &addon.ADOTTest{
+		Cluster:            a.Cluster.Name,
+		K8S:                a.K8sClient,
+		EKSClient:          a.EKSClient,
+		CloudWatchClient:   a.CloudWatchLogsClient,
+		PodIdentityRoleArn: podIdentityRoleArn,
+		Logger:             a.Logger,
+	}
+
 	return &addon.CertManagerTest{
 		Cluster:        a.Cluster.Name,
 		K8S:            a.K8sClient,
@@ -197,6 +206,7 @@ func (a *AddonEc2Test) NewCertManagerTest(ctx context.Context) (*addon.CertManag
 		Logger:         a.Logger,
 		CertClient:     certClient,
 		PCAIssuer:      pcaIssuer,
+		ADOT:           adot,
 		CertName:       defaultCertName,
 		CertNamespace:  defaultCertNamespace,
 		CertSecretName: defaultCertSecretName,
@@ -240,5 +250,6 @@ func (a *AddonEc2Test) NewFsxCSIDriverTest(ctx context.Context) (*addon.FsxCSIDr
 		PodIdentityRoleArn: podIdentityRoleArn,
 		SubnetID:           a.Cluster.SubnetID,
 		SecurityGroupID:    a.Cluster.SecurityGroupID,
+		Region:             a.Cluster.Region,
 	}, nil
 }

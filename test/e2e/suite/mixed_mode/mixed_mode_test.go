@@ -90,7 +90,7 @@ var _ = SynchronizedBeforeSuite(
 
 		test := suite.BeforeVPCTest(ctx, &suiteConfig)
 		credentialProviders := suite.AddClientsToCredentialProviders(suite.CredentialProviders(), test)
-		osProviderList := suite.OSProviderList(credentialProviders)
+		osProviderList := suite.OSProviderList(credentialProviders, test.Cluster.Region)
 		randomOSProvider := osProviderList[rand.IntN(len(osProviderList))]
 
 		// Generate unique identifiers for this test run
